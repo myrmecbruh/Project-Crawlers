@@ -1,3 +1,3 @@
 /* The single source of truth for the version.
    build.py reads it from this line; nothing else may declare a version. */
-const VERSION = '0.8.0';
+const VERSION = '0.9.0';

@@ -34,7 +34,111 @@ const Render = {
     return true;
   },
 
-  ensure() { if (!this.buf) this.resize(CFG.maxBufW, CFG.maxBufH); },
+  ensure() {
+    if (!this.buf) this.resize(CFG.maxBufW, CFG.maxBufH);
+    if (!this.grainCoarse) this.makeGrain();
+  },
+
+  /* ---- the grain ---------------------------------------------------------
+   * Grit, rust and mottling, generated once into two small tiles: a coarse one
+   * for the ground and a finer one for crawlers and what they build, because a
+   * face is only about eight pixels across and the floor is sixty-four.
+   *
+   * It is a transparent OVERLAY rather than a coloured texture, so one tile
+   * works over every material and the lighting underneath still shows through.
+   * Seeded, so the same grit comes back every time.
+   */
+  makeGrain() {
+    const build = (px) => {
+      const c = document.createElement('canvas');
+      c.width = px; c.height = px;
+      const g = c.getContext('2d');
+      const img = g.createImageData(px, px);
+      const rand = makeRand(CFG.texSeed + px);
+
+      /* A low-frequency lattice, wrapped so the tile has no seam, gives soft
+         blotches -- damp, soot, wear. Per-pixel white noise gives a dither
+         checkerboard instead, which is what the first attempt looked like. */
+      const lo = 4;
+      const lat = new Float32Array(lo * lo);
+      for (let i = 0; i < lat.length; i++) lat[i] = rand();
+      const at = (x, y) => lat[((y % lo) + lo) % lo * lo + ((x % lo) + lo) % lo];
+      const smooth = (t) => t * t * (3 - 2 * t);
+
+      for (let y = 0; y < px; y++) {
+        for (let x = 0; x < px; x++) {
+          const fx = x / px * lo, fy = y / px * lo;
+          const x0 = Math.floor(fx), y0 = Math.floor(fy);
+          const tx = smooth(fx - x0), ty = smooth(fy - y0);
+          const top = at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx;
+          const bot = at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx;
+          const m = top * (1 - ty) + bot * ty;
+
+          /* Mostly grime, with the occasional hard fleck of grit or rust. */
+          let v = (m - 0.5) * 0.8 - 0.10;
+          const roll = rand();
+          if (roll < CFG.texSpeck) v -= 0.45 + rand() * 0.55;
+          else if (roll < CFG.texSpeck * 1.35) v += 0.40 + rand() * 0.35;
+
+          const i = (y * px + x) * 4;
+          const dark = v < 0;
+          img.data[i] = dark ? 6 : 255;
+          img.data[i + 1] = dark ? 5 : 246;
+          img.data[i + 2] = dark ? 4 : 226;
+          img.data[i + 3] = Math.min(255, Math.abs(v) * 255 * CFG.texStrength);
+        }
+      }
+      g.putImageData(img, 0, 0);
+      return c;
+    };
+    this.grainCoarse = build(Math.max(2, Math.round(CFG.floorPx)));
+    this.grainFine = build(Math.max(2, Math.round(CFG.finePx)));
+    this.patCache = {};
+    this.grainOn = CFG.texStrength > 0;
+  },
+
+  /* A surface colour with the grain already baked into it, cached.
+   *
+   * Filling every face twice -- once for colour, once for grain -- cost eight
+   * milliseconds a frame, which is half the budget. Baking the two together and
+   * keeping the result means one fill again, at the price of quantising the
+   * lighting so the cache stays small. The banding that costs is not a loss:
+   * at this resolution it reads as paint.
+   */
+  grainPattern(colour, fine) {
+    const key = (fine ? 'f|' : 'c|') + colour;
+    let pat = this.patCache[key];
+    if (pat) return pat;
+    const tile = fine ? this.grainFine : this.grainCoarse;
+    const c = document.createElement('canvas');
+    c.width = tile.width; c.height = tile.height;
+    const g = c.getContext('2d');
+    g.fillStyle = colour;
+    g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(tile, 0, 0);
+    pat = this.bctx.createPattern(c, 'repeat');
+    pat._pinned = '';
+    this.patCache[key] = pat;
+    return pat;
+  },
+
+  /* Pin the grain to something so it does not swim: the world's is pinned to
+     the world, a crawler's to the crawler. Each pattern is moved at most once
+     per frame per anchor. */
+  pin(pat, ox, oy, stamp) {
+    if (!pat || !pat.setTransform) return pat;
+    if (pat._pinned === stamp) return pat;
+    pat.setTransform(new DOMMatrix([1, 0, 0, 1, Math.round(ox), Math.round(oy)]));
+    pat._pinned = stamp;
+    return pat;
+  },
+
+  /* The finished fill for one surface: colour, or colour-with-grain pinned to
+     its anchor. */
+  surface(colour, fine, ox, oy, stamp) {
+    if (!this.grainOn) return colour;
+    return this.pin(this.grainPattern(colour, fine), ox, oy, stamp);
+  },
 
   /* Grid corner (gxx, gyy) at elevation h metres -> game pixels.
      The grid is turned by the camera's yaw first, which is what lets the view
@@ -84,7 +188,10 @@ const Render = {
   lightOn(nx, ny, nz) {
     const len = Math.hypot(nx, ny, nz) || 1;
     const d = (nx * 0.30 + ny * -0.42 + nz * 0.86) / len;
-    return CFG.lightAmbient + CFG.lightDiffuse * Math.max(0, d);
+    const lit = CFG.lightAmbient + CFG.lightDiffuse * Math.max(0, d);
+    /* Stepped, not continuous: it keeps the grain cache small and it reads as
+       paint rather than as a gradient. */
+    return Math.round(lit * 14) / 14;
   },
 
   /* One posed crawler, as real boxes on real bones. */
@@ -99,32 +206,51 @@ const Render = {
       const f = parts[i].part;
       const bone = bones[f.bone];
       if (!bone) continue;
-      const pts = partCorners(bone, f, scale);
-      const scr = new Array(8);
+      const mesh = partMesh(bone, f, scale);
+      const pts = mesh.verts;
+      const n8 = pts.length;
+      const scr = new Array(n8);
       let cx = 0, cy = 0, cz = 0;
-      for (let c = 0; c < 8; c++) {
+      for (let c = 0; c < n8; c++) {
         const q = pts[c];
         scr[c] = this.project(s, gx + q[0], gy + q[1], ground + q[2]);
         cx += q[0]; cy += q[1]; cz += q[2];
       }
       const faces = [];
-      for (let k = 0; k < BOX_FACES.length; k++) {
-        const fa = BOX_FACES[k];
+      let biggest = null, biggestArea = 0;
+      for (let k = 0; k < mesh.faces.length; k++) {
+        const fa = mesh.faces[k];
         const a = pts[fa[0]], b2 = pts[fa[1]], c2 = pts[fa[2]];
         const ux = b2[0] - a[0], uy = b2[1] - a[1], uz = b2[2] - a[2];
         const vx = c2[0] - b2[0], vy = c2[1] - b2[1], vz = c2[2] - b2[2];
         const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
         if (this.towardCamera(s, nx, ny, nz) <= 0) continue;   /* facing away */
-        faces.push({ pts: [scr[fa[0]], scr[fa[1]], scr[fa[2]], scr[fa[3]]],
-                     lit: this.lightOn(nx, ny, nz) });
+        const poly = new Array(fa.length);
+        for (let q = 0; q < fa.length; q++) poly[q] = scr[fa[q]];
+        /* A rounded limb has a lot of surfaces that never cover a whole pixel.
+           Drawing them costs real time and changes nothing anyone can see. */
+        let area = 0;
+        for (let q = 0; q < poly.length; q++) {
+          const a1 = poly[q], b1 = poly[(q + 1) % poly.length];
+          area += a1.x * b1.y - b1.x * a1.y;
+        }
+        const lit = this.lightOn(nx, ny, nz);
+        const size = Math.abs(area) * 0.5;
+        if (size > biggestArea) { biggestArea = size; biggest = { pts: poly, lit: lit }; }
+        if (size < CFG.minFacePx) continue;
+        faces.push({ pts: poly, lit: lit });
       }
+      /* Rule 4: a part that is worn is a part that is drawn. If every one of its
+         faces came out too small to bother with, keep the largest anyway rather
+         than letting a piece of gear silently vanish. */
+      if (!faces.length && biggest) faces.push(biggest);
       if (!faces.length) continue;
       this.bounds(scr, box);
       out.push({ id: parts[i].id, slot: f.slot, item: f.item, colour: f.colour,
                  faces: faces,
-                 depth: this.towardCamera(s, gx + cx / 8, gy + cy / 8, ground + cz / 8) });
+                 depth: this.towardCamera(s, gx + cx / n8, gy + cy / n8, ground + cz / n8) });
     }
-    /* Nearest last. Twelve-odd convex boxes sort reliably by their middles. */
+    /* Nearest last. Two dozen convex parts sort reliably by their middles. */
     out.sort(function (a, b) { return a.depth - b.depth; });
     return { parts: out, box: box };
   },
@@ -246,13 +372,16 @@ const Render = {
     return b;
   },
 
-  poly(ctx, pts, fill) {
+  /* One path, filled with the surface colour and then again with the grain --
+     which costs a second fill but not a second path. */
+  poly(ctx, pts, fill, grain) {
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
     for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
     ctx.closePath();
     ctx.fillStyle = fill;
     ctx.fill();
+    if (grain) { ctx.fillStyle = grain; ctx.fill(); }
   },
 
   /* Every polygon a thing is made of, so it can be haloed as one shape. */
@@ -333,6 +462,7 @@ const Render = {
     let outlined = false;
 
     const outlineColour = N('ui.colour_outline');
+    const worldStamp = 'w' + s.cam.ox + ',' + s.cam.oy;
 
     for (let k = 0; k < b.length; k++) {
       const it = b[k];
@@ -358,10 +488,14 @@ const Render = {
       ctx.globalAlpha = alpha;
 
       if (it.kind === 'actor') {
+        /* A crawler's grain travels with them rather than sliding underneath. */
+        const aStamp = 'a' + it.i + ',' + Math.round(it.minX) + ',' + Math.round(it.minY);
         for (let r = 0; r < it.parts.length; r++) {
           const pt = it.parts[r];
           for (let g = 0; g < pt.faces.length; g++) {
-            this.poly(ctx, pt.faces[g].pts, shade(pt.colour, pt.faces[g].lit));
+            this.poly(ctx, pt.faces[g].pts,
+              this.surface(shade(pt.colour, pt.faces[g].lit), true,
+                           it.minX, it.minY, aStamp));
           }
           if (pt.slot !== 'body') wornDrawn.push(pt.item);
         }
@@ -383,9 +517,11 @@ const Render = {
         const def = STRUCT(it.site.structure);
         const done = it.site.built;
         const col = done ? def.colour : shade(def.colour, 0.45);
-        this.poly(ctx, it.shape.left, shade(col, CFG.shadeLeft));
-        this.poly(ctx, it.shape.right, shade(col, CFG.shadeRight));
-        this.poly(ctx, it.shape.top, col);
+        const sStamp = 's' + it.i + ',' + Math.round(it.minX) + ',' + Math.round(it.minY);
+        const sk = (c) => this.surface(c, true, it.minX, it.minY, sStamp);
+        this.poly(ctx, it.shape.left, sk(shade(col, CFG.shadeLeft)));
+        this.poly(ctx, it.shape.right, sk(shade(col, CFG.shadeRight)));
+        this.poly(ctx, it.shape.top, sk(col));
         if (!done) this.outline(ctx, it.shape.top, 'rgba(255,233,168,0.35)');
         structures++; drawn++;
         if (items) {
@@ -398,12 +534,17 @@ const Render = {
       }
 
       const def = TILE(it.cell.tile);
-      const lift = 1 + it.cell.h * CFG.heightTint;
+      const lift = Math.round((1 + it.cell.h * CFG.heightTint) * 100) / 100;
+      /* Grain goes on the ground, which is most of what you look at, and on
+         anything that stands on it. The two side walls of a block are in shadow
+         and edge-on; grain there costs a third of the frame and reads as almost
+         nothing, so they stay flat. */
       if (it.solid) {
         this.poly(ctx, it.left, shade(def.side, CFG.shadeLeft * lift));
         this.poly(ctx, it.right, shade(def.side, CFG.shadeRight * lift));
       }
-      this.poly(ctx, it.top, shade(def.top, lift));
+      this.poly(ctx, it.top,
+        this.surface(shade(def.top, lift), false, -s.cam.ox, -s.cam.oy, worldStamp));
 
       kinds[it.cell.tile] = (kinds[it.cell.tile] || 0) + 1;
       drawn++;

@@ -340,16 +340,26 @@ them.
 - `bones` in the sheet is a skeleton, seventeen bones, measured in metres from
   the parent. The character's own space has **+Y forward, +Z up**, and the root
   carries the facing.
-- `figure` rows are **tapered boxes** hung off a bone: `from_m`/`to_m` along the
+- `figure` rows are **lathed shapes** hung off a bone: `from_m`/`to_m` along the
   bone, `w_top`/`w_bot` and `d_top`/`d_bot` across it, `ox`/`oy` to sit a pack
-  behind a chest. The taper is what makes a figure read as a person rather than
-  a stack.
+  behind a chest, and then `sides` round the part, `rings` along it, `bulge` to
+  swell the middle and `cap_top`/`cap_bot` to round an end off along a circle.
+  Four sides and two rings is exactly the tapered box this replaced.
+  **A rounded end needs at least 3 rings** -- with 2, both rings sit inside the
+  cap, both collapse to a point, and the whole part disappears. The build
+  refuses that combination, because it took a missing pelvis to notice.
+- Rule 4 has a floor: if every face of a worn part comes out smaller than
+  `render.min_face_px`, the largest is drawn anyway rather than letting a piece
+  of gear silently vanish. Small gear (a charm, a rope coil) is also drawn
+  **larger than life** -- at 32 pixels to the metre a true-scale charm is under
+  one pixel wide.
 - A row is drawn if its slot is `body`, or if the item it names is the one worn
   in its slot. **There is no other path to the screen**, and the build refuses
   any piece of gear that no row draws (rule 4) or any slot nothing can fill.
-- Back faces are dropped and each face is lit by its own normal against a light
-  fixed in the WORLD, so the sun does not spin when the view does. A convex box
-  shows at most three faces; a test asserts exactly that.
+- Back faces are dropped, faces too small to see are dropped, and each face is
+  lit by its own normal against a light fixed in the WORLD, so the sun does not
+  spin when the view does. Lighting is **stepped, not continuous** -- which
+  keeps the texture cache small and reads as paint rather than gradient.
 - Parts are depth-sorted within a figure along the camera axis, which swings
   with the view.
 
@@ -360,6 +370,33 @@ Crawlers turn the short way round to face where they are going.
 
 Animation runs off `state.tick`, so it follows the player's clock: it stops
 when they pause and runs fast when they speed up.
+
+---
+
+## The grain (textures)
+
+Everything has grit on it, generated rather than painted: two small tiles, a
+coarse one for the ground (`texture.floor_px`, 16) and a finer one for crawlers
+and what they build (`texture.fine_px`, 8), both seeded so the same grit comes
+back every time.
+
+- It is **soft mottling plus sparse hard specks**, not per-pixel noise. The first
+  attempt was white noise and came out as a dither checkerboard that read as a
+  repeating grid. Low-frequency blotches are what look like damp and soot.
+- It is an **overlay**, so one tile works over every material and the lighting
+  underneath still shows.
+- **The grain is baked into cached per-colour patterns**, not painted as a second
+  fill. Filling every face twice cost 8 ms a frame -- half the budget. Baking
+  colour and grain together costs one fill again, at the price of stepping the
+  lighting so the cache stays small (around 80 patterns).
+- The grain is **pinned**: the world's to the world, a crawler's to the crawler,
+  so it does not swim as things move.
+- **Side walls of blocks are left flat.** Grain there cost a third of the frame
+  and read as almost nothing; the ground is what you look at.
+- `texture.strength` 0 turns it all off, and a test compares a grained picture
+  against a flat one of the same moment to prove it reached the screen.
+
+Frame cost with the camp in view: about 8.7 ms, of which 1.9 ms is geometry.
 
 ---
 

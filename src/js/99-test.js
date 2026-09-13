@@ -18,6 +18,7 @@ window.__test = {
 
   seed(n) {
     Game.state = newState(n >>> 0);
+    Game.fit();                       /* the picture follows the new zoom */
     bindInput(Game.state, Game.canvas, (cx, cy) => Game.toBuffer(cx, cy));
     return Game.state.seed;
   },
@@ -207,6 +208,26 @@ window.__test = {
       if (got.found) { got.index = i; return got; }
     }
     return { found: false, why: 'every crawler is out of sight' };
+  },
+
+  /* Rebuild the grain at a different strength, so a test can compare a
+     textured picture against a flat one of the same moment. */
+  setTexture(strength) {
+    CFG.texStrength = strength;
+    Render.makeGrain();
+    Game.state.geomDirty = true; Game.state.viewDirty = true;
+    return { strength: CFG.texStrength, on: Render.grainOn,
+             coarse: Render.grainCoarse.width, fine: Render.grainFine.width };
+  },
+  /* How many different colours appear along one line across the picture. A flat
+     fill gives few; a grained one gives more. */
+  colourSpread(y) {
+    const px = Render.buf.getContext('2d').getImageData(0, Math.floor(y), Render.w, 1).data;
+    const seen = {};
+    for (let i = 0; i < px.length; i += 4) {
+      seen[px[i] + ',' + px[i + 1] + ',' + px[i + 2]] = 1;
+    }
+    return Object.keys(seen).length;
   },
 
   /* Draw the same moment again, without advancing it. A test comparing two

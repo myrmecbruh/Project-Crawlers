@@ -390,12 +390,15 @@ await test('a figure is real geometry: posed, lit, and with its back faces dropp
   assert(r.bones >= 15, `the skeleton is only ${r.bones} bones`);
   assert(r.drawn.faces > 0, 'a crawler reached the screen with no faces at all');
   const nParts = r.drawn.parts.length;
-  assert(r.drawn.faces < nParts * 6,
+  /* Parts are lathed now, not boxes: a six-sided limb has fourteen-odd faces and
+     roughly half of them face the camera. What must hold is that culling really
+     happens and that no part is drawn with nothing at all. */
+  assert(r.drawn.faces >= nParts,
+    `${r.drawn.faces} faces for ${nParts} parts -- some part reached the screen empty`);
+  assert(r.drawn.faces < nParts * 9,
     `${r.drawn.faces} faces for ${nParts} parts -- back faces are not being dropped`);
-  assert(r.drawn.faces >= nParts * 2,
-    `${r.drawn.faces} faces for ${nParts} parts -- whole parts are vanishing`);
-  assert(r.drawn.faces <= nParts * 3,
-    `${r.drawn.faces} faces for ${nParts} boxes -- a convex box shows at most three`);
+  assert(r.drawn.faces > nParts * 2,
+    `${r.drawn.faces} faces for ${nParts} parts -- these are not rounded shapes`);
   const moved = Math.abs(r.was[0] - r.now[0]) + Math.abs(r.was[1] - r.now[1])
               + Math.abs(r.was[2] - r.now[2]);
   assert(moved > 0.02, `changing what they are doing moved the hand ${moved.toFixed(3)}m`);
@@ -1093,6 +1096,61 @@ await test('the controls say what the clock is doing', async () => {
     'the pause button does not show whether it is on');
   assert(r.paused.pause !== r.running.pause,
     'the pause button looks the same paused as running');
+});
+
+await test('the grain actually reaches the screen (and can be switched off)', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    for (let i = 0; i < 20; i++) window.__test.frame(60);
+    const rows = [Math.round(Render.h * 0.3), Math.round(Render.h * 0.5),
+                  Math.round(Render.h * 0.7)];
+
+    const on = window.__test.setTexture(window.__test.data.knobs['texture.strength']);
+    window.__test.redraw();
+    const textured = rows.map((y) => window.__test.colourSpread(y));
+
+    const off = window.__test.setTexture(0);
+    window.__test.redraw();
+    const flat = rows.map((y) => window.__test.colourSpread(y));
+
+    window.__test.setTexture(window.__test.data.knobs['texture.strength']);
+    return { on, off, textured, flat,
+             floorPx: window.__test.cfg.floorPx, finePx: window.__test.cfg.finePx };
+  });
+  assert(r.on.on === true && r.off.on === false, 'the texture switch does nothing');
+  assert(r.on.coarse === r.floorPx && r.on.fine === r.finePx,
+    `grain tiles came out ${r.on.coarse} and ${r.on.fine}, the sheet says ${r.floorPx} and ${r.finePx}`);
+  assert(r.on.fine < r.on.coarse,
+    'the grain on crawlers is not finer than the grain on the floor');
+  for (let i = 0; i < r.textured.length; i++) {
+    assert(r.textured[i] > r.flat[i],
+      `row ${i}: ${r.textured[i]} colours with grain against ${r.flat[i]} without -- the grain never reached the screen`);
+  }
+  assert(r.textured.reduce((a, b) => a + b) > r.flat.reduce((a, b) => a + b) * 1.5,
+    'the grain is there but barely changes anything');
+});
+
+await test('a crawler is built from rounded parts, not boxes', async () => {
+  const r = await page.evaluate(() => {
+    const fig = window.__test.data.figure;
+    const sides = Object.keys(fig).map((k) => fig[k].sides);
+    const rings = Object.keys(fig).map((k) => fig[k].rings);
+    const capped = Object.keys(fig).filter((k) => fig[k].cap_top > 0 || fig[k].cap_bot > 0);
+    const body = ['head', 'torso', 'thigh_l', 'upperarm_l'].map((k) => fig[k]);
+    return { sides, rings, capped: capped.length, body,
+             tooFewRings: capped.filter((k) => fig[k].rings < 3) };
+  });
+  assert(Math.min(...r.sides) >= 4, `some part has only ${Math.min(...r.sides)} sides`);
+  assert(r.sides.filter((n) => n >= 6).length > r.sides.length * 0.6,
+    'most parts are still four-sided boxes');
+  assert(r.capped > 6, `only ${r.capped} parts have rounded ends`);
+  assert(r.tooFewRings.length === 0,
+    `${r.tooFewRings.join(', ')} round their ends with fewer than 3 rings, which collapses them`);
+  for (const b of r.body) {
+    assert(b.sides >= 6 && b.rings >= 3,
+      `a main body part is ${b.sides} sides by ${b.rings} rings`);
+  }
+  assert(r.body[1].bulge > 0, 'the torso does not swell between its ends');
 });
 
 await test('the page raised no errors while all that happened', async () => {

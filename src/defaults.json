@@ -300,6 +300,36 @@
       "value": 2,
       "unit": "px",
       "note": "How thick the highlight ring around a selected thing is drawn. It is drawn UNDER the thing and half of it is covered, so 2 here shows as a 1 pixel line around the silhouette."
+    },
+    "texture.floor_px": {
+      "value": 16,
+      "unit": "px",
+      "note": "How big one square of the ground's grain is. The grain repeats every this many pixels across the floor."
+    },
+    "texture.fine_px": {
+      "value": 8,
+      "unit": "px",
+      "note": "How big the grain is on crawlers and on anything built. Smaller than the floor's, because a face is only about eight pixels across."
+    },
+    "texture.strength": {
+      "value": 0.17,
+      "unit": "0-1",
+      "note": "How strongly the grain darkens and lightens what is underneath. 0 turns texture off entirely."
+    },
+    "texture.speck": {
+      "value": 0.055,
+      "unit": "0-1",
+      "note": "How much of the grain is hard specks of grit and rust rather than soft mottling."
+    },
+    "texture.seed": {
+      "value": 7,
+      "unit": "",
+      "note": "Which grain gets generated. Change it for a different pattern of grit."
+    },
+    "render.min_face_px": {
+      "value": 0.28,
+      "unit": "px",
+      "note": "Faces smaller than this many pixels are not drawn. At 32 pixels to the metre a crawler has a lot of surfaces that never cover a whole pixel, and skipping them costs nothing to look at and saves a great deal of work."
     }
   },
   "geometry": {
@@ -799,7 +829,12 @@
       "w_bot": 0.078,
       "d_top": 0.082,
       "d_bot": 0.08,
-      "note": "Always drawn."
+      "sides": 8,
+      "rings": 4,
+      "bulge": 0.04,
+      "cap_top": 0.42,
+      "cap_bot": 0.2,
+      "note": "Always drawn. Eight sides and a domed top: at 52 pixels tall the silhouette is most of what you read."
     },
     "neck": {
       "name": "Neck",
@@ -815,6 +850,11 @@
       "w_bot": 0.048,
       "d_top": 0.05,
       "d_bot": 0.048,
+      "sides": 6,
+      "rings": 2,
+      "bulge": 0,
+      "cap_top": 0,
+      "cap_bot": 0,
       "note": ""
     },
     "torso": {
@@ -831,7 +871,12 @@
       "w_bot": 0.12,
       "d_top": 0.1,
       "d_bot": 0.082,
-      "note": "Wider at the shoulders than the waist -- the taper is what makes a figure read as a person."
+      "sides": 8,
+      "rings": 4,
+      "bulge": 0.1,
+      "cap_top": 0.16,
+      "cap_bot": 0.12,
+      "note": "Always drawn. Wider at the shoulders, pinched at the waist, and swelling slightly in between -- that is what makes a figure read as a body."
     },
     "pelvis": {
       "name": "Pelvis",
@@ -847,6 +892,11 @@
       "w_bot": 0.12,
       "d_top": 0.09,
       "d_bot": 0.086,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.06,
+      "cap_top": 0.1,
+      "cap_bot": 0.1,
       "note": ""
     },
     "upperarm_l": {
@@ -863,6 +913,11 @@
       "w_bot": 0.044,
       "d_top": 0.052,
       "d_bot": 0.044,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.07,
+      "cap_top": 0.1,
+      "cap_bot": 0.18,
       "note": ""
     },
     "forearm_l": {
@@ -879,6 +934,11 @@
       "w_bot": 0.038,
       "d_top": 0.044,
       "d_bot": 0.038,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.05,
+      "cap_top": 0.08,
+      "cap_bot": 0.2,
       "note": ""
     },
     "hand_l": {
@@ -895,6 +955,11 @@
       "w_bot": 0.036,
       "d_top": 0.034,
       "d_bot": 0.03,
+      "sides": 5,
+      "rings": 3,
+      "bulge": 0.05,
+      "cap_top": 0.35,
+      "cap_bot": 0.3,
       "note": ""
     },
     "thigh_l": {
@@ -911,6 +976,11 @@
       "w_bot": 0.058,
       "d_top": 0.078,
       "d_bot": 0.062,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.11,
+      "cap_top": 0.14,
+      "cap_bot": 0.1,
       "note": ""
     },
     "shin_l": {
@@ -927,6 +997,11 @@
       "w_bot": 0.046,
       "d_top": 0.06,
       "d_bot": 0.05,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.09,
+      "cap_top": 0.1,
+      "cap_bot": 0.18,
       "note": ""
     },
     "foot_l": {
@@ -943,6 +1018,11 @@
       "w_bot": 0.05,
       "d_top": 0.105,
       "d_bot": 0.095,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.04,
+      "cap_top": 0.22,
+      "cap_bot": 0.1,
       "note": ""
     },
     "upperarm_r": {
@@ -959,6 +1039,11 @@
       "w_bot": 0.044,
       "d_top": 0.052,
       "d_bot": 0.044,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.07,
+      "cap_top": 0.1,
+      "cap_bot": 0.18,
       "note": ""
     },
     "forearm_r": {
@@ -975,6 +1060,11 @@
       "w_bot": 0.038,
       "d_top": 0.044,
       "d_bot": 0.038,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.05,
+      "cap_top": 0.08,
+      "cap_bot": 0.2,
       "note": ""
     },
     "hand_r": {
@@ -991,6 +1081,11 @@
       "w_bot": 0.036,
       "d_top": 0.034,
       "d_bot": 0.03,
+      "sides": 5,
+      "rings": 3,
+      "bulge": 0.05,
+      "cap_top": 0.35,
+      "cap_bot": 0.3,
       "note": ""
     },
     "thigh_r": {
@@ -1007,6 +1102,11 @@
       "w_bot": 0.058,
       "d_top": 0.078,
       "d_bot": 0.062,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.11,
+      "cap_top": 0.14,
+      "cap_bot": 0.1,
       "note": ""
     },
     "shin_r": {
@@ -1023,6 +1123,11 @@
       "w_bot": 0.046,
       "d_top": 0.06,
       "d_bot": 0.05,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.09,
+      "cap_top": 0.1,
+      "cap_bot": 0.18,
       "note": ""
     },
     "foot_r": {
@@ -1039,6 +1144,11 @@
       "w_bot": 0.05,
       "d_top": 0.105,
       "d_bot": 0.095,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.04,
+      "cap_top": 0.22,
+      "cap_bot": 0.1,
       "note": ""
     },
     "hood_v": {
@@ -1055,6 +1165,11 @@
       "w_bot": 0.096,
       "d_top": 0.09,
       "d_bot": 0.098,
+      "sides": 8,
+      "rings": 3,
+      "bulge": 0.06,
+      "cap_top": 0.38,
+      "cap_bot": 0.1,
       "note": ""
     },
     "collar_v": {
@@ -1067,10 +1182,15 @@
       "oy": 0,
       "from_m": -0.03,
       "to_m": 0.04,
-      "w_top": 0.068,
-      "w_bot": 0.066,
-      "d_top": 0.068,
-      "d_bot": 0.066,
+      "w_top": 0.076,
+      "w_bot": 0.074,
+      "d_top": 0.076,
+      "d_bot": 0.074,
+      "sides": 8,
+      "rings": 3,
+      "bulge": 0.1,
+      "cap_top": 0.05,
+      "cap_bot": 0.05,
       "note": ""
     },
     "pack_v": {
@@ -1087,6 +1207,11 @@
       "w_bot": 0.105,
       "d_top": 0.07,
       "d_bot": 0.062,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.08,
+      "cap_top": 0.14,
+      "cap_bot": 0.14,
       "note": "Sits behind the chest, which is what the oy offset is for."
     },
     "jerkin_v": {
@@ -1103,6 +1228,11 @@
       "w_bot": 0.13,
       "d_top": 0.111,
       "d_bot": 0.093,
+      "sides": 8,
+      "rings": 4,
+      "bulge": 0.11,
+      "cap_top": 0.14,
+      "cap_bot": 0.1,
       "note": ""
     },
     "glove_fore_l": {
@@ -1119,6 +1249,11 @@
       "w_bot": 0.046,
       "d_top": 0.052,
       "d_bot": 0.046,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.06,
+      "cap_top": 0.08,
+      "cap_bot": 0.18,
       "note": ""
     },
     "glove_hand_l": {
@@ -1135,6 +1270,11 @@
       "w_bot": 0.044,
       "d_top": 0.042,
       "d_bot": 0.038,
+      "sides": 5,
+      "rings": 3,
+      "bulge": 0.05,
+      "cap_top": 0.32,
+      "cap_bot": 0.28,
       "note": ""
     },
     "breech_l": {
@@ -1151,6 +1291,11 @@
       "w_bot": 0.066,
       "d_top": 0.086,
       "d_bot": 0.07,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.12,
+      "cap_top": 0.12,
+      "cap_bot": 0.08,
       "note": ""
     },
     "boot_shin_l": {
@@ -1167,6 +1312,11 @@
       "w_bot": 0.054,
       "d_top": 0.068,
       "d_bot": 0.058,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.1,
+      "cap_top": 0.08,
+      "cap_bot": 0.14,
       "note": ""
     },
     "boot_foot_l": {
@@ -1183,6 +1333,11 @@
       "w_bot": 0.058,
       "d_top": 0.115,
       "d_bot": 0.105,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.05,
+      "cap_top": 0.2,
+      "cap_bot": 0.08,
       "note": ""
     },
     "glove_fore_r": {
@@ -1199,6 +1354,11 @@
       "w_bot": 0.046,
       "d_top": 0.052,
       "d_bot": 0.046,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.06,
+      "cap_top": 0.08,
+      "cap_bot": 0.18,
       "note": ""
     },
     "glove_hand_r": {
@@ -1215,6 +1375,11 @@
       "w_bot": 0.044,
       "d_top": 0.042,
       "d_bot": 0.038,
+      "sides": 5,
+      "rings": 3,
+      "bulge": 0.05,
+      "cap_top": 0.32,
+      "cap_bot": 0.28,
       "note": ""
     },
     "breech_r": {
@@ -1231,6 +1396,11 @@
       "w_bot": 0.066,
       "d_top": 0.086,
       "d_bot": 0.07,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.12,
+      "cap_top": 0.12,
+      "cap_bot": 0.08,
       "note": ""
     },
     "boot_shin_r": {
@@ -1247,6 +1417,11 @@
       "w_bot": 0.054,
       "d_top": 0.068,
       "d_bot": 0.058,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.1,
+      "cap_top": 0.08,
+      "cap_bot": 0.14,
       "note": ""
     },
     "boot_foot_r": {
@@ -1263,6 +1438,11 @@
       "w_bot": 0.058,
       "d_top": 0.115,
       "d_bot": 0.105,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.05,
+      "cap_top": 0.2,
+      "cap_bot": 0.08,
       "note": ""
     },
     "belt_v": {
@@ -1279,6 +1459,11 @@
       "w_bot": 0.132,
       "d_top": 0.098,
       "d_bot": 0.094,
+      "sides": 8,
+      "rings": 2,
+      "bulge": 0.04,
+      "cap_top": 0,
+      "cap_bot": 0,
       "note": ""
     },
     "spade_haft": {
@@ -1291,10 +1476,15 @@
       "oy": 0.04,
       "from_m": -0.22,
       "to_m": 0.46,
-      "w_top": 0.02,
-      "w_bot": 0.02,
-      "d_top": 0.02,
-      "d_bot": 0.02,
+      "w_top": 0.03,
+      "w_bot": 0.03,
+      "d_top": 0.03,
+      "d_bot": 0.03,
+      "sides": 4,
+      "rings": 2,
+      "bulge": 0,
+      "cap_top": 0,
+      "cap_bot": 0,
       "note": ""
     },
     "spade_blade": {
@@ -1307,10 +1497,15 @@
       "oy": 0.04,
       "from_m": -0.34,
       "to_m": -0.2,
-      "w_top": 0.058,
-      "w_bot": 0.05,
-      "d_top": 0.018,
-      "d_bot": 0.018,
+      "w_top": 0.07,
+      "w_bot": 0.06,
+      "d_top": 0.024,
+      "d_bot": 0.024,
+      "sides": 4,
+      "rings": 2,
+      "bulge": 0,
+      "cap_top": 0,
+      "cap_bot": 0,
       "note": ""
     },
     "lantern_v": {
@@ -1323,10 +1518,15 @@
       "oy": 0.04,
       "from_m": -0.2,
       "to_m": -0.06,
-      "w_top": 0.048,
-      "w_bot": 0.044,
-      "d_top": 0.048,
-      "d_bot": 0.044,
+      "w_top": 0.078,
+      "w_bot": 0.0702,
+      "d_top": 0.078,
+      "d_bot": 0.0702,
+      "sides": 5,
+      "rings": 3,
+      "bulge": 0.1,
+      "cap_top": 0.12,
+      "cap_bot": 0.12,
       "note": ""
     },
     "coil_v": {
@@ -1339,11 +1539,16 @@
       "oy": -0.02,
       "from_m": -0.06,
       "to_m": 0.04,
-      "w_top": 0.048,
-      "w_bot": 0.044,
-      "d_top": 0.048,
-      "d_bot": 0.044,
-      "note": ""
+      "w_top": 0.09,
+      "w_bot": 0.081,
+      "d_top": 0.09,
+      "d_bot": 0.081,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.18,
+      "cap_top": 0.18,
+      "cap_bot": 0.18,
+      "note": "Drawn larger than life so the coil reads at 32 pixels to the metre."
     },
     "charm_v": {
       "name": "Bone Charm",
@@ -1355,11 +1560,16 @@
       "oy": -0.02,
       "from_m": -0.07,
       "to_m": 0.02,
-      "w_top": 0.026,
-      "w_bot": 0.024,
-      "d_top": 0.026,
-      "d_bot": 0.024,
-      "note": ""
+      "w_top": 0.062,
+      "w_bot": 0.0558,
+      "d_top": 0.062,
+      "d_bot": 0.0558,
+      "sides": 4,
+      "rings": 3,
+      "bulge": 0.1,
+      "cap_top": 0.3,
+      "cap_bot": 0.3,
+      "note": "Drawn larger than life: a true-scale knuckle bone would be under a pixel wide, and rule 4 says it has to be visible."
     }
   },
   "structures": {

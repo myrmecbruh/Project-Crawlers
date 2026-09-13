@@ -147,22 +147,75 @@ function figureParts(actor) {
   return out;
 }
 
-/* The eight corners of one tapered box, in the crawler's own space. */
-const BOX_CORNERS = [[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0],
-                     [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]];
-/* Faces as corner indices, wound so the cross product points outward. */
-const BOX_FACES = [[4, 5, 6, 7], [3, 2, 1, 0], [0, 1, 5, 4],
-                   [2, 3, 7, 6], [1, 2, 6, 5], [3, 0, 4, 7]];
+/* ---- one part, as a lathed shape --------------------------------------- *
+ * A part is a stack of rings. Each ring is a `sides`-sided loop; the stack runs
+ * from from_m to to_m along the bone. Between the ends the width and depth
+ * interpolate, `bulge` swells the middle, and cap_top / cap_bot round the last
+ * fraction off along a circle so a head domes and a hand is not a brick.
+ *
+ * Four sides and two rings is exactly the tapered box this replaced, so nothing
+ * was lost -- there is just somewhere to go now.
+ */
+function partMesh(bone, f, scale) {
+  const sides = f.sides, rings = f.rings;
+  const verts = new Array(rings * sides);
+  const radius = new Array(rings);
 
-function partCorners(bone, f, scale) {
-  const pts = new Array(8);
-  for (let c = 0; c < 8; c++) {
-    const k = BOX_CORNERS[c];
-    const z = (k[2] ? f.to_m : f.from_m) * scale;
-    const w = (k[2] ? f.w_top : f.w_bot) * scale;
-    const dd = (k[2] ? f.d_top : f.d_bot) * scale;
-    const v = matVec(bone.m, k[0] * w + f.ox * scale, k[1] * dd + f.oy * scale, z);
-    pts[c] = [bone.p[0] * scale + v[0], bone.p[1] * scale + v[1], bone.p[2] * scale + v[2]];
+  for (let r = 0; r < rings; r++) {
+    const t = rings === 1 ? 0 : r / (rings - 1);
+    const z = (f.from_m + (f.to_m - f.from_m) * t) * scale;
+    let w = (f.w_bot + (f.w_top - f.w_bot) * t) * scale;
+    let dd = (f.d_bot + (f.d_top - f.d_bot) * t) * scale;
+
+    /* A body is not a cone: it swells between its ends. */
+    const swell = 1 + f.bulge * Math.sin(Math.PI * t);
+    w *= swell; dd *= swell;
+
+    /* Round the ends off along a circle rather than cutting them flat. */
+    if (f.cap_bot > 0 && t < f.cap_bot) {
+      const u = 1 - t / f.cap_bot;
+      const k = Math.sqrt(Math.max(0, 1 - u * u));
+      w *= k; dd *= k;
+    }
+    if (f.cap_top > 0 && t > 1 - f.cap_top) {
+      const u = (t - (1 - f.cap_top)) / f.cap_top;
+      const k = Math.sqrt(Math.max(0, 1 - u * u));
+      w *= k; dd *= k;
+    }
+    radius[r] = Math.max(w, dd);
+
+    for (let i = 0; i < sides; i++) {
+      const a = (i / sides) * TAU;
+      const v = matVec(bone.m,
+                       Math.cos(a) * w + f.ox * scale,
+                       Math.sin(a) * dd + f.oy * scale,
+                       z);
+      verts[r * sides + i] = [bone.p[0] * scale + v[0],
+                              bone.p[1] * scale + v[1],
+                              bone.p[2] * scale + v[2]];
+    }
   }
-  return pts;
+
+  /* Faces, wound so the cross product points outwards. */
+  const faces = [];
+  for (let r = 0; r < rings - 1; r++) {
+    for (let i = 0; i < sides; i++) {
+      const j = (i + 1) % sides;
+      faces.push([r * sides + i, r * sides + j,
+                  (r + 1) * sides + j, (r + 1) * sides + i]);
+    }
+  }
+  /* Only cap an end that is actually open. A rounded end closes itself. */
+  const EPS = 1e-4;
+  if (radius[rings - 1] > EPS) {
+    const top = [];
+    for (let i = 0; i < sides; i++) top.push((rings - 1) * sides + i);
+    faces.push(top);
+  }
+  if (radius[0] > EPS) {
+    const bot = [];
+    for (let i = sides - 1; i >= 0; i--) bot.push(i);
+    faces.push(bot);
+  }
+  return { verts: verts, faces: faces };
 }

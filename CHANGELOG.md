@@ -7,6 +7,55 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.9.0 — crawlers stop being boxes, and everything gets grit
+
+**Parts are lathed now, not boxed.** A figure part is a stack of rings: `sides`
+round it, `rings` along it, `bulge` to swell the middle, and `cap_top`/`cap_bot`
+to round an end off along a circle. A head domes, a hand is not a brick, a thigh
+swells and tapers, a torso pinches at the waist. Four sides and two rings is
+exactly the tapered box this replaced, so nothing was lost — there is just
+somewhere to go now, and it is all spreadsheet columns.
+
+**A trap worth writing down:** with only two rings and a rounded end, *both*
+rings sit inside the cap, both collapse to a point, and the part vanishes
+entirely. Nine parts were authored that way and a crawler came out with no
+pelvis. The build refuses the combination now.
+
+**Cost, which was the real work.** Rounded parts went from 81 visible faces to
+244 and the frame from 6.7 ms to 9.7. Three things brought it back:
+
+- ring and side counts trimmed to what reads at 52 pixels tall;
+- faces smaller than `render.min_face_px` are skipped, which on a rounded limb
+  is most of them;
+- and, for the grain, colour and texture **baked together into cached patterns**
+  rather than painted as a second fill per face. The second fill cost 8 ms — half
+  the frame. Baking costs one fill again, at the price of stepping the lighting
+  so the cache stays small. The banding that costs is not a loss: at this
+  resolution it reads as paint.
+
+That left a floor: if every face of a worn part comes out too small to bother
+with, the largest is drawn anyway. Rule 4 does not bend for an optimisation. And
+small gear — a bone charm, a rope coil — is now drawn deliberately larger than
+life, because at 32 pixels to the metre a true-scale knuckle bone is under one
+pixel wide and rule 4 will not have that either.
+
+**The grain.** Two seeded tiles, coarse for the ground and fine for crawlers,
+laid over everything as an overlay so one tile works on every material. The first
+attempt was per-pixel white noise and looked like a dither checkerboard with a
+visible repeating grid; what reads as damp and soot is **low-frequency mottling
+with sparse hard specks**, which is what it is now. Pinned to the world for the
+ground and to the crawler for a crawler, so nothing swims. Side walls of blocks
+stay flat — grain there cost a third of the frame and read as almost nothing.
+
+Frame cost with the camp in view: 8.7 ms, of which 1.9 ms is geometry.
+
+**Still open, and asked in the reply:** whether "boardgame aesthetics, low
+numbers, tactility" is a rule from the previous project. It was never in the
+handover and is not in this project's memory — and it matters, because the
+numbers here are not low ones.
+
+---
+
 ## v0.8.0 — a silhouette highlight, and an inspector that folds
 
 **The highlight follows the shape now.** Selecting a crawler used to draw a box

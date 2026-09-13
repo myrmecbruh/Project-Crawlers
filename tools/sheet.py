@@ -29,6 +29,7 @@ SECTIONS = {
     "gear":     ("id",  ["name", "slot", "tags", "attr", "bonus", "note"], False),
     "figure":   ("id",  ["name", "slot", "item", "bone", "colour", "ox", "oy",
                          "from_m", "to_m", "w_top", "w_bot", "d_top", "d_bot",
+                         "sides", "rings", "bulge", "cap_top", "cap_bot",
                          "note"], False),
     "structures": ("id", ["name", "tags", "colour", "half_width", "height_m",
                           "skill", "difficulty", "note"], False),
@@ -56,7 +57,8 @@ def norm(col, v):
     if col in ("value", "cross", "clear", "half_width", "from_m", "to_m",
                "height_m", "difficulty", "without", "multiplier",
                "x", "y", "z", "ox", "oy",
-               "w_top", "w_bot", "d_top", "d_bot"):
+               "w_top", "w_bot", "d_top", "d_bot",
+               "sides", "rings", "bulge", "cap_top", "cap_bot"):
         try:
             f = float(v)
             return int(f) if f == int(f) else round(f, 10)
@@ -206,6 +208,11 @@ def for_game(merged):
                          "w_bot": norm("w_bot", r["w_bot"]),
                          "d_top": norm("d_top", r["d_top"]),
                          "d_bot": norm("d_bot", r["d_bot"]),
+                         "sides": int(norm("sides", r.get("sides")) or 6),
+                         "rings": int(norm("rings", r.get("rings")) or 2),
+                         "bulge": norm("bulge", r.get("bulge")) or 0,
+                         "cap_top": norm("cap_top", r.get("cap_top")) or 0,
+                         "cap_bot": norm("cap_bot", r.get("cap_bot")) or 0,
                          "note": str(r.get("note", ""))}
                      for k, r in merged["figure"].items()}
     return out
@@ -364,6 +371,27 @@ def check_vocabulary(game):
         for c in ("w_top", "w_bot", "d_top", "d_bot"):
             if not (f[c] > 0):
                 errors.append("figure: '%s' has %s of %s" % (fid, c, f[c]))
+        if f["sides"] < 3 or f["sides"] > 16:
+            errors.append("figure: '%s' has %d sides; 3 is the fewest that is a "
+                          "shape and 16 is as many as is worth drawing"
+                          % (fid, f["sides"]))
+        if f["rings"] < 2 or f["rings"] > 12:
+            errors.append("figure: '%s' has %d rings along it; 2 is a straight "
+                          "taper and 12 is plenty" % (fid, f["rings"]))
+        # With only two rings both of them sit inside the rounded ends, so both
+        # collapse to a point and the part disappears entirely. It takes a third
+        # ring in the middle to have anything left.
+        if (f["cap_top"] > 0 or f["cap_bot"] > 0) and f["rings"] < 3:
+            errors.append("figure: '%s' rounds its ends off but has only %d "
+                          "rings; a rounded end needs at least 3 or the whole "
+                          "part collapses to a line" % (fid, f["rings"]))
+        if f["cap_top"] + f["cap_bot"] > 1:
+            errors.append("figure: '%s' rounds off %s of its length at the ends, "
+                          "which is more than it has"
+                          % (fid, f["cap_top"] + f["cap_bot"]))
+        if f["bulge"] < -0.9:
+            errors.append("figure: '%s' bulges %s, which turns it inside out"
+                          % (fid, f["bulge"]))
         if f["slot"] == "body":
             if f["item"]:
                 errors.append("figure: '%s' is body and should name no item" % fid)
@@ -502,12 +530,16 @@ def selftest():
                                         "bone": "chest", "colour": "#444",
                                         "ox": 0, "oy": 0, "from_m": -0.3, "to_m": 0.2,
                                         "w_top": 0.18, "w_bot": 0.14,
-                                        "d_top": 0.1, "d_bot": 0.09, "note": ""})]
+                                        "d_top": 0.1, "d_bot": 0.09,
+                                        "sides": 6, "rings": 3, "bulge": 0.1,
+                                        "cap_top": 0.1, "cap_bot": 0.1, "note": ""})]
                        + [(s_ + "_v", {"name": s_, "slot": s_, "item": s_,
                                        "bone": "chest", "colour": "#555",
                                        "ox": 0, "oy": 0, "from_m": -0.3, "to_m": 0.2,
                                        "w_top": 0.19, "w_bot": 0.15,
-                                       "d_top": 0.11, "d_bot": 0.1, "note": ""})
+                                       "d_top": 0.11, "d_bot": 0.1,
+                                       "sides": 6, "rings": 3, "bulge": 0.1,
+                                       "cap_top": 0.1, "cap_bot": 0.1, "note": ""})
                           for s_ in ("head", "neck", "back", "torso", "gloves",
                                      "mainhand", "offhand", "belt", "legs",
                                      "feet", "trinket1", "trinket2")]),
