@@ -63,19 +63,70 @@ Tune the field once, later, when the kit is what it is going to be.
 
 ---
 
+## What the game is
+
+A realtime isometric dungeon crawler, life sim, colony manager and idle game.
+3D geometry rendered at low resolution so it reads as 2D sprite work. Grimdark
+low fantasy. Spatially like Final Fantasy Tactics — elevation, ramps, cover, a
+see-through fourth wall. Explored like Core Keeper: a small community that
+branches slowly outward into an eternal labyrinth. Populated like The Sims
+crossed with Dwarf Fortress — people come and go gradually.
+
+**The player is a head coach, not a hand.** You make strategic suggestions.
+The characters act on their own initiative.
+
+---
+
 ## The non-negotiables
 
-*Ten numbered rules about what this game **is**, each one written the moment a
-decision has been re-litigated twice. One sentence of rule, one paragraph of the
-mistake that caused it. Ask for these as the game takes shape — do not invent
-them.*
+*Nine rules about what this game **is**. Each is one sentence of rule and a
+paragraph of what it protects. Do not re-litigate these; do not quietly drift
+away from them. Add to the list the moment something is argued twice.*
 
-*(Empty. Nothing has been re-litigated yet. Examples of the **form** only, from
-the previous project — the content here will be entirely different:
-"Elevation is information, never statistics." / "Nothing in the simulation may
-move the camera." / "The board is the interface.")*
+**1. Characters improve by failing forward, so progress slows as they get better.**
+Failure is the teacher. A character who fails at a task learns more from it than
+one who succeeds, and the better they already are, the less each attempt returns.
+Any progression curve that speeds up with mastery is wrong, and any system that
+punishes failure with nothing but lost time is wrong too.
 
-1. *(unwritten)*
+**2. Every roll comes from a skill, and every skill comes from the six natural
+attributes. Ask, never invent.** There is one framework for how characters and
+creatures function, and a new feature is not finished until it is wired into that
+framework. When a feature needs a new tag, skill, stat or system, **ask, with
+suggestions, and wait.** Inventing a parallel system is the failure this rule
+exists to prevent — two frameworks that half-agree are worse than one that is
+inconvenient.
+
+**3. Combat is about 20% of the game.** The other 80% is exploring, camping,
+entertaining, cooking, farming, building, crafting, repairing, studying, hunting,
+fishing, singing, lockpicking, mapmaking, trap disarming and everything like them.
+A feature that only pays off in a fight is a feature in the wrong fifth of the
+game. Non-combat work gets the same depth of skills, tools, failure states and
+visible payoff as swinging a sword.
+
+**4. If it exists on a character, it is visible on the character.** A new hat is
+seen. A chipped blade is seen. Diablo 4 is the standard: equipment, injury,
+filth, burden and mood read off the figure without opening a panel.
+
+**5. The labyrinth is ever-shifting and branching, and its environments are highly
+varied.** It is not a dungeon with rooms; it is an eternal, changing structure.
+Two stretches of it should not look or play alike.
+
+**6. Creatures are generated procedurally and described by tags.** Not a
+bestiary of hand-authored monsters — a generator, and tags that say what a thing
+is and what it does. (Rule 2 governs how a new tag gets added: ask.)
+
+**7. One tile is one square metre.** The whole world model is metric and
+grounded at that scale. Nothing is measured in abstract units.
+
+**8. Anything visible can be hovered — outline highlight and an info tooltip, on
+mouseover or on tap.** If the player can see it, the player can interrogate it,
+on desktop and on a phone. Tooltips carry the thing's tags.
+
+**9. Build from the master spreadsheet of knobs and names. Do not hardcode what
+could be adjusted later.** Numbers and names live in `docs/crawlers.xlsx`, which
+is the authority. This is also the safety net under rule 2: anything proposed in
+the sheet is theirs to rename, retune or delete without a conversation.
 
 ---
 

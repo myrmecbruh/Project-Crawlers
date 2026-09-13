@@ -14,6 +14,7 @@ network. Run this after every change.
 """
 
 import hashlib
+import json
 import pathlib
 import re
 import subprocess
@@ -22,6 +23,10 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent
 SRC = ROOT / "src"
 DIST = ROOT / "dist"
+SHEET = ROOT / "docs" / "crawlers.xlsx"
+
+sys.path.insert(0, str(ROOT / "tools"))
+import sheet as S
 
 # The one line in the whole project that declares a version.
 VERSION_FILE = SRC / "js" / "00-version.js"
@@ -65,14 +70,84 @@ def check_syntax(js_path):
     return "ok"
 
 
+def arg(flag, default=None):
+    if flag in sys.argv:
+        i = sys.argv.index(flag)
+        if i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
+        fail("%s needs a path after it" % flag)
+    return default
+
+
+def load_data(sheet_path):
+    """Reconcile the master spreadsheet against the code defaults, and print the
+    receipt. The receipt is the whole point: it is what stops the two drifting
+    apart quietly."""
+    defaults = S.load_defaults(SRC / "defaults.json")
+
+    if not sheet_path.exists():
+        print("  !! docs/crawlers.xlsx is MISSING -- building from code defaults.")
+        print("  !! Run: python3 tools/make_sheet.py")
+        merged, moved, errors = S.reconcile(defaults, None)
+    else:
+        try:
+            raw = S.read_xlsx(sheet_path)
+        except ImportError:
+            fail("openpyxl is not installed, so the spreadsheet cannot be read.\n"
+                 "Run the start-up script, or: pip install openpyxl")
+        merged, moved, errors = S.reconcile(defaults, raw)
+
+    game = S.for_game(merged)
+    errors = errors + S.check_vocabulary(game)
+    if errors:
+        print("\nThe spreadsheet and the game disagree:", file=sys.stderr)
+        for e in errors:
+            print("  - " + e, file=sys.stderr)
+        fail("refusing to build from a spreadsheet that is out of step with the game")
+
+    if moved:
+        print("  spreadsheet moved %d setting%s:" % (len(moved), "" if len(moved) == 1 else "s"))
+        for section, key, col, was, now in moved:
+            label = key if col in ("value", "text") else "%s.%s" % (key, col)
+            print("      %-10s %-26s %s -> %s" % (section, label, was, now))
+    elif sheet_path.exists():
+        print("  spreadsheet matches the code defaults exactly (nothing moved)")
+
+    counts = ", ".join("%d %s" % (len(v), k) for k, v in game.items())
+    print("  loaded from the sheet: %s" % counts)
+    return game
+
+
 def main():
+    if "--check" in sys.argv:
+        print("spreadsheet reconciler self-check")
+        checks = S.selftest()
+        for name, ok, detail in checks:
+            print("  %s %s%s" % ("ok  " if ok else "FAIL", name,
+                                 "" if ok else " -- " + detail))
+        bad = [c for c in checks if not c[1]]
+        print("  %d/%d passed" % (len(checks) - len(bad), len(checks)))
+        return sys.exit(1 if bad else 0)
+
     version = read_version()
     mods = collect_modules()
+
+    sheet_path = pathlib.Path(arg("--sheet", SHEET))
+    print("building Project Crawlers v%s%s"
+          % (version, "" if sheet_path == SHEET else "  [sheet: %s]" % sheet_path))
+    game_data = load_data(sheet_path)
 
     code = "\n".join(
         "/* ==== %s ==== */\n%s" % (m.name, m.read_text().rstrip())
         for m in mods
     )
+
+    # The whole spreadsheet travels inside the built file, so the game plays with
+    # no network and nothing to install.
+    if "{{DATA}}" not in code:
+        fail("no module contains {{DATA}}; the spreadsheet would never reach the game")
+    code = code.replace("{{DATA}}", json.dumps(game_data, separators=(",", ":"),
+                                               sort_keys=True))
     style = (SRC / "style.css").read_text().strip()
 
     shell = (SRC / "shell.html").read_text()
@@ -101,7 +176,8 @@ def main():
     syntax = check_syntax(scratch)
     scratch.unlink()
 
-    versioned = DIST / ("crawlers-v%s.html" % version)
+    out_override = arg("--out")
+    versioned = pathlib.Path(out_override) if out_override else DIST / ("crawlers-v%s.html" % version)
 
     # A/B against a file, and check what built it. If a build of this version
     # already exists and the content has changed, the old file was a baseline
@@ -114,16 +190,19 @@ def main():
                   % versioned.name)
             print("  !! If you were keeping it as a baseline, bump VERSION first.")
 
+    versioned.parent.mkdir(parents=True, exist_ok=True)
     versioned.write_text(standalone)
-    (DIST / "artifact.html").write_text(fragment)
+    if not out_override:
+        (DIST / "artifact.html").write_text(fragment)
 
-    print("built Project Crawlers v%s" % version)
+    print("  --")
     for m in mods:
         print("  %-18s %4d lines" % (m.name, len(m.read_text().splitlines())))
     print("  %-18s %4d lines" % ("style.css", len(style.splitlines())))
     print("  script syntax      %s" % syntax)
-    print("  dist/%-13s %6.1f KB   <- play this" % (versioned.name, len(standalone) / 1024))
-    print("  dist/%-13s %6.1f KB   <- publish this" % ("artifact.html", len(fragment) / 1024))
+    print("  %-18s %6.1f KB   <- play this" % (versioned.name, len(standalone) / 1024))
+    if not out_override:
+        print("  %-18s %6.1f KB   <- publish this" % ("artifact.html", len(fragment) / 1024))
 
 
 if __name__ == "__main__":

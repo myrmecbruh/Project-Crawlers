@@ -2,7 +2,8 @@
    A broken ruler is worse than no ruler, so it reports its own self-check. */
 window.__test = {
   version: VERSION,
-  field: FIELD,
+  cfg: CFG,
+  data: DATA,
 
   get state() { return Game.state; },
 
@@ -11,80 +12,162 @@ window.__test = {
   pause() { Game.paused = true; return true; },
   resume() { Game.paused = false; Game.last = performance.now(); Game.acc = 0; return true; },
 
-  /* Restart the match on a known seed. A number without its seed is not a number. */
   seed(n) {
     Game.state = newState(n >>> 0);
-    bindInput(Game.state, Game.canvas, (cx, cy) => Game.toField(cx, cy));
+    bindInput(Game.state, Game.canvas, (cx, cy) => Game.toBuffer(cx, cy));
     return Game.state.seed;
   },
 
   press(name, down) { Game.state.input[name] = !!down; },
-  aim(x, y) { Game.state.input.aimX = x; Game.state.input.aimY = y; },
-  release() { Game.state.input.aimX = null; Game.state.input.aimY = null; },
 
-  /* Advance the simulation without drawing. */
+  /* Put the pointer somewhere in the low-resolution picture, as a real hover
+     would. Returns the cell now under it. */
+  point(bx, by) {
+    const s = Game.state;
+    s.pointer.over = true;
+    s.pointer.bx = bx; s.pointer.by = by;
+    s.pointer.clientX = 40; s.pointer.clientY = 40;
+    Game.render();
+    return s.hover;
+  },
+  unpoint() {
+    Game.state.pointer.over = false;
+    Game.state.hover = -1;
+    Game.state.viewDirty = true;
+    Game.render();
+  },
+  select(i) { Game.state.selected = i; Game.state.viewDirty = true; Game.render(); },
+
+  zoom(z) { setZoom(Game.state, z); Game.render(); return Game.state.cam.zoom; },
+  pan(dx, dy) { panCamera(Game.state, dx, dy); Game.render(); },
+  camera() { return { x: Game.state.cam.x, y: Game.state.cam.y, zoom: Game.state.cam.zoom }; },
+
   step(n) { for (let i = 0; i < (n || 1); i++) step(Game.state); return Game.state.tick; },
-
-  /* Advance AND draw, so `consumed` is what a player would have seen. */
   frame(n) { for (let i = 0; i < (n || 1); i++) Game.frame(); return Render.consumed; },
 
-  /* What actually reached the canvas last draw. Never read Render.batch. */
+  /* What actually reached the buffer last draw. Never read Render.batch. */
   consumed() { return Render.consumed; },
-  record(on) { Render.recordItems = !!on; },
+  record(on) { Render.recordItems = !!on; Game.state.viewDirty = true; },
 
-  mover() {
-    const m = Game.state.mover;
-    return { x: m.x, y: m.y, vx: m.vx, vy: m.vy, r: m.r };
+  world() {
+    const w = Game.state.world;
+    return { seed: w.seed, n: w.n, cells: w.cells.length };
+  },
+  cell(x, y) {
+    const c = Game.state.world.at(x, y);
+    return c ? { x: c.x, y: c.y, h: c.h, tile: c.tile, slope: c.slope,
+                 footing: TILE(c.tile).footing, index: c.y * Game.state.world.n + c.x } : null;
+  },
+  project(x, y, h) { return Render.project(Game.state, x, y, h); },
+  describe(i) { return Tooltip.describe(Game.state, i); },
+
+  /* What the inspector is actually showing on the page right now. */
+  tooltipOnScreen() {
+    const el = document.getElementById('tooltip');
+    if (!el || el.hidden) return null;
+    return {
+      showing: Tooltip.showing,
+      text: el.textContent,
+      tags: Array.from(el.querySelectorAll('.tag')).map((n) => n.textContent)
+    };
   },
 
-  /* Does the ruler measure? Run on a throwaway state; the live one is untouched. */
+  /* Does the ruler measure? Run on a throwaway match; the live one is restored. */
   selfCheck() {
     const checks = [];
     const add = (name, ok, detail) => checks.push({ name: name, ok: !!ok, detail: detail });
 
+    const keepState = Game.state;
     const keepConsumed = Render.consumed;
     const keepRecord = Render.recordItems;
-    const keepState = Game.state;
-    const off = document.createElement('canvas');
-    off.width = FIELD.w; off.height = FIELD.h;
-    const ctx = off.getContext('2d');
 
     try {
-      const run = (seed) => {
-        const s = newState(seed);
-        s.input.right = true;
-        s.input.down = true;
-        for (let i = 0; i < 60; i++) step(s);
-        return s;
-      };
+      /* -- the spreadsheet actually reached the game ------------------------ */
+      add('the spreadsheet is inside the built file',
+          DATA && DATA.knobs && Object.keys(DATA.knobs).length > 0,
+          Object.keys(DATA.knobs || {}).length + ' knobs, '
+          + Object.keys(DATA.tiles || {}).length + ' tiles');
+      add('one tile is one square metre (rule 7)',
+          CFG.metresPerTile === 1, 'metres_per_tile=' + CFG.metresPerTile);
 
-      const a = run(777), b = run(777), c = run(778);
-      add('step advances the tick', a.tick === 60, 'tick=' + a.tick);
-      add('the mover moved at all', Math.hypot(a.mover.x - FIELD.w / 2, a.mover.y - FIELD.h / 2) > 1,
-          'moved ' + Math.hypot(a.mover.x - FIELD.w / 2, a.mover.y - FIELD.h / 2).toFixed(2) + 'u');
-      add('same seed, same result', a.mover.x === b.mover.x && a.mover.y === b.mover.y,
-          a.mover.x.toFixed(4) + ' vs ' + b.mover.x.toFixed(4));
+      /* -- the world is deterministic --------------------------------------- */
+      const a = newState(777), b = newState(777), c = newState(778);
+      const sig = (s) => s.world.cells.map((q) => q.h + q.tile).join('|');
+      add('same seed, same labyrinth', sig(a) === sig(b), 'seed 777 twice');
+      add('a different seed is a different labyrinth', sig(a) !== sig(c), 'seed 777 vs 778');
       add('the seed is actually carried', c.seed === 778, 'seed=' + c.seed);
 
+      /* -- the projection is the projection we think it is ------------------ */
       Game.state = a;
-      Render.recordItems = true;
-      Render.build(a);
-      const built = Render.batch.length;
-      const drew = Render.draw(ctx, a);
-      add('the renderer consumed what was built', drew && drew.count === built,
-          'built ' + built + ', drew ' + (drew ? drew.count : 0));
-      add('the mover reached the canvas', !!(drew.items || []).some((i) => i.kind === 'mover'),
-          'kinds ' + JSON.stringify(drew.kinds));
+      const p0 = Render.project(a, 4, 4, 0);
+      const pUp = Render.project(a, 4, 4, 1);
+      add('a metre of elevation lifts the picture',
+          p0.y - pUp.y === CFG.rise * a.cam.zoom,
+          (p0.y - pUp.y) + 'px for 1 m at zoom ' + a.cam.zoom);
+      const pRight = Render.project(a, 5, 4, 0);
+      add('one tile east is half a tile wide, half a tile down',
+          Math.abs(pRight.x - p0.x - CFG.tileW / 2 * a.cam.zoom) < 1e-9
+          && Math.abs(pRight.y - p0.y - CFG.tileH / 2 * a.cam.zoom) < 1e-9,
+          'dx=' + (pRight.x - p0.x) + ' dy=' + (pRight.y - p0.y));
 
+      /* -- everything built reached the buffer ------------------------------ */
+      Render.recordItems = true;
+      const built = Render.build(a).length;
+      const drew = Render.draw(a);
+      add('the renderer consumed everything it built',
+          drew.count === built, 'built ' + built + ', drew ' + drew.count);
+      add('the buffer is the size the spreadsheet says',
+          drew.bufW === CFG.lowW && drew.bufH === CFG.lowH,
+          drew.bufW + 'x' + drew.bufH);
+
+      /* -- painter's order: back to front ----------------------------------- */
+      let ordered = true;
+      for (let k = 1; k < drew.items.length; k++) {
+        if ((drew.items[k].x + drew.items[k].y) < (drew.items[k - 1].x + drew.items[k - 1].y)) {
+          ordered = false; break;
+        }
+      }
+      add('blocks are painted back to front', ordered, drew.items.length + ' blocks');
+
+      /* -- picking finds what is under the pointer ---------------------------
+         Use the LAST block painted that is comfortably inside the picture: it
+         is in front of everything else, so nothing can be hiding it, and the
+         view is only a window onto a chunk wider than itself. */
+      Render.drawPick(a);
+      let front = null;
+      for (let k = drew.items.length - 1; k >= 0; k--) {
+        const it = drew.items[k];
+        if (it.sx > 8 && it.sx < CFG.lowW - 8 && it.sy > 8 && it.sy < CFG.lowH - 8) {
+          front = it; break;
+        }
+      }
+      add('some of the labyrinth is actually in view', !!front,
+          drew.items.length + ' blocks drawn');
+      const hit = front ? Render.pickAt(a, front.sx, front.sy) : -2;
+      add('pointing at a block finds that block',
+          front && hit === front.i, front ? 'wanted ' + front.i + ', got ' + hit : 'no block');
+      add('pointing off the edge of the picture finds nothing',
+          Render.pickAt(a, -5, -5) === -1, 'got ' + Render.pickAt(a, -5, -5));
+
+      /* -- the inspector describes what was picked --------------------------- */
+      const d = front ? Tooltip.describe(a, front.i) : null;
+      add('the inspector describes the block it was given',
+          !!d && d.name === TILE(front.tile).name && d.elevation === front.h,
+          d ? d.name + ' at ' + d.elevationText : 'nothing');
+      add('the description carries tags (rule 8)',
+          !!d && d.tags.length > 0, d ? d.tags.join(',') : '');
+
+      /* -- an empty scene draws nothing -------------------------------------- */
       Render.batch.length = 0;
-      const empty = Render.draw(ctx, a);
-      add('an empty batch draws nothing', empty.count === 0, 'drew ' + empty.count);
+      const empty = Render.draw(a);
+      add('an empty scene draws nothing', empty.count === 0, 'drew ' + empty.count);
     } catch (e) {
-      add('self-check ran without throwing', false, String(e && e.message || e));
+      add('self-check ran without throwing', false, String((e && e.message) || e));
     } finally {
       Game.state = keepState;
       Render.consumed = keepConsumed;
       Render.recordItems = keepRecord;
+      if (Game.state) { Game.state.geomDirty = true; Game.state.viewDirty = true; }
     }
 
     return { ok: checks.every((c) => c.ok), version: VERSION, checks: checks };

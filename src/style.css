@@ -1,15 +1,24 @@
 :root {
-  --ground: #070a0e;
-  --ink: #93a7bd;
+  --ground: #05070a;
+  --ink: #8b9bad;
   --ink-bright: #d6e6f7;
+  --edge: rgba(120, 150, 190, 0.16);
+  --panel: #0d1218;
 }
 body {
   background: var(--ground);
   color: var(--ink);
-  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   padding: 0 16px;
-  padding-block: 12px;
+  padding-block: 10px;
   overflow: hidden;
+  /* Whole-number scaling leaves slack around the picture. Split it evenly
+     rather than letting it all pile up under the view. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -23,19 +32,48 @@ body {
 #screen {
   display: block;
   max-width: 100%;
-  border: 1px solid rgba(90, 200, 255, 0.18);
-  border-radius: 6px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 1px solid var(--edge);
   touch-action: none;
-  background: #0b0f14;
+  cursor: crosshair;
+  background: #0a0d11;
 }
 #hud {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   align-items: baseline;
   flex-wrap: wrap;
   justify-content: center;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
 }
 #version { color: var(--ink-bright); }
-#hint { opacity: 0.65; }
-#readout { opacity: 0.45; font-variant-numeric: tabular-nums; }
+#hint { opacity: 0.6; }
+#readout { opacity: 0.4; font-variant-numeric: tabular-nums; }
+
+#tooltip {
+  position: fixed;
+  z-index: 10;
+  min-width: 150px;
+  max-width: 260px;
+  padding: 7px 9px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  line-height: 1.5;
+}
+.tt-head { margin-bottom: 3px; }
+.tt-name { color: var(--ink-bright); font-weight: 600; }
+.tt-at { opacity: 0.35; }
+.tt-row { display: flex; gap: 8px; }
+.tt-k { flex: 0 0 62px; opacity: 0.5; }
+.tt-v { flex: 1 1 auto; color: #b8c8d8; font-variant-numeric: tabular-nums; }
+.tt-tags { display: flex; flex-wrap: wrap; gap: 3px; }
+.tag {
+  background: rgba(120, 160, 200, 0.13);
+  border: 1px solid rgba(120, 160, 200, 0.18);
+  color: #9fb4c8;
+  padding: 0 4px;
+  font-size: 11px;
+}
