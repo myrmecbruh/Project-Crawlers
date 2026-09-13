@@ -130,6 +130,8 @@ const CFG = {
   idleTicks:   K('anim.idle_ticks'),
   idleSway:    K('anim.idle_sway'),
   turnTicks:   K('anim.turn_ticks'),
+  stepWalkTicks: K('anim.step_ticks'),
+  followOn:    K('camera.follow'),
   maxSteps:    K('time.max_steps_per_frame'),
   outlineWidth: K('render.outline_width'),
   minFacePx:   K('render.min_face_px'),

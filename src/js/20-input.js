@@ -76,6 +76,7 @@ function bindInput(state, canvas, toBuffer) {
     /* A press that did not travel is a tap: inspect whatever is under it. */
     if (drag.moved <= DRAG_SLOP) {
       state.selected = state.hover;
+      setFollow(state, state.selected);
       state.viewDirty = true;
     }
     drag.active = false; drag.id = null;

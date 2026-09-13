@@ -43,6 +43,17 @@ window.__test = {
   },
   select(i) { Game.state.selected = i; Game.state.viewDirty = true; Game.render(); },
 
+  /* A tap on the picture, which is how the game itself makes a selection: it
+     pins the thing AND decides whether the view rides it. */
+  tap(pick) {
+    const s = Game.state;
+    s.selected = pick;
+    setFollow(s, pick);
+    s.viewDirty = true;
+    Game.render();
+    return { selected: s.selected, follow: s.cam.follow };
+  },
+
   zoom(z) { setZoom(Game.state, z); Game.render(); return Game.state.cam.zoom; },
 
   /* Turn the view a quarter, and run the swing to its end. */
@@ -139,7 +150,7 @@ window.__test = {
 
   camera() {
     const c = Game.state.cam;
-    return { fx: c.fx, fy: c.fy, fh: c.fh, ox: c.ox, oy: c.oy,
+    return { fx: c.fx, fy: c.fy, fh: c.fh, ox: c.ox, oy: c.oy, follow: c.follow,
              yaw: c.yaw, yawTarget: c.yawTarget, quarter: ((c.quarter % 4) + 4) % 4,
              pitch: c.pitch, pitchTarget: c.pitchTarget,
              tileH: c.tileH, zoom: c.zoom };
@@ -155,9 +166,12 @@ window.__test = {
 
   actors() {
     return Game.state.actors.map(function (a) {
+      const at = actorPos(Game.state, a);
       return { index: a.index, name: a.name, x: a.x, y: a.y, attr: a.attr,
                skills: a.skills, worn: Object.assign({}, a.worn),
                steps: a.steps, doing: a.doing, face: a.face,
+               fromX: a.fromX, fromY: a.fromY, moveT: a.moveT,
+               gx: at.gx, gy: at.gy, gh: at.h,
                stumbles: a.stumbles, pick: Game.state.world.cells.length + a.index };
     });
   },

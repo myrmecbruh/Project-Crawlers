@@ -7,6 +7,49 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.12.0 — walking, and the crawler you are watching
+
+Three things about the same moment: you have picked someone, and you want to
+keep your eye on them.
+
+**Crawlers walk between squares instead of appearing in the next one.** A step
+was resolved and applied in the same instant, so a crawler blinked a metre
+sideways every time a Clambering roll came good. The roll still happens all at
+once -- that is the mechanic, and it is not moving -- but the *arrival* is now
+spread over `anim.step_ticks` (22), with the position and the ground height eased
+in and out so a crawler climbing a ramp rises as they cross it. `actorPos()` is
+the one place that answers "where is this crawler right now", and the renderer
+asks it both for where to draw the figure and for how far back to paint it, so a
+crawler mid-stride sorts against the world at the place they actually are rather
+than the square they are filed under.
+
+The test does not assert that a number moved: it collects the position the figure
+*reached the buffer* at, every tick for 900 ticks, and fails if any single frame
+moved a crawler more than half a metre, or if every drawn position sat exactly on
+a square centre. Teleporting would pass the first check and fail the second; a
+stride that snapped at the end would fail the first.
+
+**A selection outranks the pointer.** The ring used to be drawn on whatever was
+under the mouse, falling back to the selection, which meant the crawler you had
+pinned lost their outline the moment you moved the pointer -- and, since they
+walk, the moment they left the square you were hovering. Selection now wins.
+Hover still rings things you have not pinned anything.
+
+**The view rides the crawler you pick, and lets go when you touch it.** Clicking
+or tapping a crawler sets `cam.follow`; the camera's focus is then moved to their
+drawn position every frame, so turning and tilting still pivot around them and
+the ride glides with the stride instead of hopping a square at a time. Panning by
+hand -- drag, arrow keys -- releases them, as does tapping anything that is not a
+crawler. `camera.follow` in the sheet turns the whole behaviour off.
+
+Following is done in `Game.render()` rather than in `Game.loop()`. The first
+attempt put it in the loop, and the tests all failed identically: the harness
+drives frames through `Game.frame()`, which never enters the loop, so the camera
+never moved and three tests reported the view staying behind. Putting it in
+`render()` -- the one place every path draws through -- means the view keeps up
+however the frame was driven, which is also the honest answer to where it
+belongs.
+
 ## v0.11.0 — the dark, and what you carry into it
 
 The labyrinth is dark now. You can just make out shapes; everything else is

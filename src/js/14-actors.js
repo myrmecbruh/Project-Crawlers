@@ -182,6 +182,9 @@ function makeActor(rand, index, name) {
     skills: {},
     worn: worn,
     x: 0, y: 0,
+    /* Where they are actually drawn, which lags where they ARE: a crawler walks
+       from square to square rather than appearing on the next one. */
+    fromX: 0, fromY: 0, moveT: 1,
     face: 0, faceTarget: 0,
     gait: Math.floor(rand() * 120),   /* so six crawlers do not march in step */
     cooldown: Math.floor(rand() * CFG.stepTicks),
@@ -252,10 +255,14 @@ function tryStep(state, actor, to, dx, dy) {
   actor.faceTarget = facingFor(dx, dy);
   const roll = attempt(state, actor, MOVE_SKILL, TILE(to.tile).cross);
   if (roll.ok) {
+    actor.fromX = actor.x;
+    actor.fromY = actor.y;
+    actor.moveT = 0;              /* start the walk; the tick loop finishes it */
     actor.x = to.x;
     actor.y = to.y;
     actor.steps++;
     state.lightDirty = true;      /* whatever they are carrying moved with them */
+    actor.doing = 'walking';
   } else {
     actor.stumbles++;
   }
@@ -281,7 +288,35 @@ function wander(state, actor) {
 /* A crawler's own initiative. The player is a head coach, not a hand: nothing
    here waits to be told. They pick the nearest bit of the camp that still needs
    doing, walk to it, and work at it. */
+/* Where a crawler is DRAWN: part way between the square they left and the one
+   they are heading for, and part way up the step if it was a ramp. */
+function actorPos(state, actor) {
+  const w = state.world;
+  const to = w.at(actor.x, actor.y);
+  const hTo = to ? surfaceHeight(to) : 0;
+  if (actor.moveT >= 1) {
+    return { gx: actor.x + 0.5, gy: actor.y + 0.5, h: hTo };
+  }
+  const from = w.at(actor.fromX, actor.fromY) || to;
+  const hFrom = from ? surfaceHeight(from) : hTo;
+  const t = actor.moveT;
+  const e = t * t * (3 - 2 * t);        /* ease in and out of the step */
+  return {
+    gx: actor.fromX + (actor.x - actor.fromX) * e + 0.5,
+    gy: actor.fromY + (actor.y - actor.fromY) * e + 0.5,
+    h: hFrom + (hTo - hFrom) * e
+  };
+}
+
 function actorStep(state, actor) {
+  /* The walk plays out over several ticks, whether or not they are due to try
+     another step. */
+  if (actor.moveT < 1) {
+    actor.moveT = Math.min(1, actor.moveT + 1 / Math.max(1, CFG.stepWalkTicks));
+    state.viewDirty = true;
+    state.geomDirty = true;
+  }
+
   /* Turning happens every tick, not only on the tick they move, so a crawler
      swings round to face where they are going rather than snapping. */
   if (actor.face !== actor.faceTarget) {

@@ -355,6 +355,16 @@
       "value": 1.35,
       "unit": "x",
       "note": "How sharply light dies with distance. Above 1 keeps the bright part close to the source."
+    },
+    "anim.step_ticks": {
+      "value": 22,
+      "unit": "ticks",
+      "note": "How long a crawler takes to walk from one square to the next. Shorter than the pause between attempts, so they arrive and then think about the next step rather than gliding forever."
+    },
+    "camera.follow": {
+      "value": 1,
+      "unit": "0 or 1",
+      "note": "Whether clicking a crawler locks the view onto them. 1 follows; 0 leaves the view where you put it. Panning by hand always lets go."
     }
   },
   "geometry": {
@@ -497,6 +507,9 @@
     },
     "ui.label_lastroll": {
       "text": "last roll"
+    },
+    "ui.label_following": {
+      "text": "following"
     }
   },
   "tags": {

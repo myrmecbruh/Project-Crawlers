@@ -1245,6 +1245,109 @@ await test('what a crawler carries is what lights their way', async () => {
   assert(r.gear.jerkin.light === 0, 'a leather jerkin is giving off light');
 });
 
+/* ---- v0.12.0: the crawler you are watching ------------------------------ */
+
+await test('a crawler walks between squares instead of teleporting', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(9); window.__test.record(true);
+    const drawn = [];                 /* where the figure REACHED THE BUFFER */
+    let moved = 0, biggest = 0, last = null;
+    for (let t = 0; t < 900; t++) {
+      window.__test.step(1);
+      const f = window.__test.frame(1);
+      const me = f.items.find((q) => q.kind === 'actor' && q.name);
+      if (!me) continue;
+      if (last && last.i === me.i) {
+        const jump = Math.abs(me.gx - last.gx) + Math.abs(me.gy - last.gy);
+        if (jump > 0) { moved++; if (jump > biggest) biggest = jump; }
+      }
+      if (me.gx % 1 !== 0.5 || me.gy % 1 !== 0.5) drawn.push({ gx: me.gx, gy: me.gy });
+      last = me;
+    }
+    return { moved, biggest, between: drawn.length, sample: drawn.slice(0, 3),
+             ticks: window.__test.cfg.stepWalkTicks };
+  });
+  assert(r.moved > 20, `nobody moved on screen in 900 ticks (${r.moved} changes)`);
+  assert(r.between > 0, 'every drawn position was dead on a square centre -- they teleport');
+  assert(r.biggest < 0.5,
+    `a crawler jumped ${r.biggest.toFixed(3)} m between two frames; a stride of `
+    + `${r.ticks} ticks should never move more than about ${(1 / r.ticks).toFixed(3)} m`);
+});
+
+await test('a selected crawler stays ringed while they walk away', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    for (let i = 0; i < 20; i++) window.__test.frame(60);
+    const found = window.__test.pointAtAnyActor();
+    if (!found.found) return { found: false };
+    window.__test.tap(found.pick);
+    const at0 = window.__test.actors()[found.index];
+
+    /* Run them along until they are standing somewhere else entirely. */
+    let at1 = at0, drew = null;
+    for (let t = 0; t < 900 && (at1.x === at0.x && at1.y === at0.y); t++) {
+      window.__test.step(1);
+      drew = window.__test.frame(1);
+      at1 = window.__test.actors()[found.index];
+    }
+    /* And prove the pointer cannot steal the ring off them. */
+    window.__test.point(4, 4);
+    const stolen = window.__test.consumed();
+    return { found: true, pick: found.pick,
+             from: [at0.x, at0.y], to: [at1.x, at1.y],
+             focus: drew && drew.focus, outlined: drew && drew.outlined,
+             stillFocus: stolen.focus, stillOutlined: stolen.outlined };
+  });
+  assert(r.found, 'every crawler is out of sight');
+  assert(r.from[0] !== r.to[0] || r.from[1] !== r.to[1], 'nobody moved, so nothing was proved');
+  assert(r.focus === r.pick, `the ring left them: focus ${r.focus}, wanted ${r.pick}`);
+  assert(r.outlined, 'the ring never reached the buffer after they moved');
+  assert(r.stillFocus === r.pick, 'the pointer stole the ring off the selected crawler');
+  assert(r.stillOutlined, 'the ring vanished when the pointer went elsewhere');
+});
+
+await test('the view rides the crawler you picked, and lets go when you pan', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    for (let i = 0; i < 20; i++) window.__test.frame(60);
+    const found = window.__test.pointAtAnyActor();
+    if (!found.found) return { found: false };
+    const tapped = window.__test.tap(found.pick);
+    const cam0 = window.__test.camera();
+    const at0 = window.__test.actors()[found.index];
+
+    /* Run until they have not only left the square but finished the stride, so
+       the drawn position really is somewhere else. */
+    let at1 = at0;
+    for (let t = 0; t < 2000; t++) {
+      window.__test.step(1);
+      window.__test.frame(1);
+      at1 = window.__test.actors()[found.index];
+      if ((at1.x !== at0.x || at1.y !== at0.y) && at1.moveT >= 1) break;
+    }
+    const cam1 = window.__test.camera();
+
+    window.__test.pan(40, 40);              /* a hand on the view lets go */
+    const cam2 = window.__test.camera();
+
+    /* Tapping the ground is not a crawler, so nothing is ridden. */
+    window.__test.tap(0);
+    const cam3 = window.__test.camera();
+    return { found: true, index: found.index, tapped,
+             cam0, cam1, cam2, cam3, at0, at1 };
+  });
+  assert(r.found, 'every crawler is out of sight');
+  assert(r.tapped.follow === r.index,
+    `tapping a crawler set follow to ${r.tapped.follow}, wanted ${r.index}`);
+  assert(Math.abs(r.cam0.fx - r.at0.gx) < 1e-9 && Math.abs(r.cam0.fy - r.at0.gy) < 1e-9,
+    `the view did not centre on them: ${r.cam0.fx},${r.cam0.fy} vs ${r.at0.gx},${r.at0.gy}`);
+  assert(Math.abs(r.cam1.fx - r.at1.gx) < 1e-9 && Math.abs(r.cam1.fy - r.at1.gy) < 1e-9,
+    'the view stayed behind when they walked off');
+  assert(r.cam1.fx !== r.cam0.fx || r.cam1.fy !== r.cam0.fy, 'the view never moved at all');
+  assert(r.cam2.follow === -1, 'panning by hand did not let go of the crawler');
+  assert(r.cam3.follow === -1, 'tapping the ground still left the view riding someone');
+});
+
 await test('the page raised no errors while all that happened', async () => {
   assert(errors.length === 0, errors.join(' | '));
 });

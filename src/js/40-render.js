@@ -356,13 +356,19 @@ const Render = {
       if (!people) continue;
       for (let q = 0; q < people.length; q++) {
         const actor = s.actors[people[q]];
-        const fig = this.figure3d(s, actor, x + 0.5, y + 0.5, ground, scale);
+        /* Mid-stride a crawler is between two squares, so where they are drawn
+           -- and how far back they paint -- comes from actorPos(), not from the
+           square they are filed under. */
+        const at = actorPos(s, actor);
+        const fig = this.figure3d(s, actor, at.gx, at.gy, at.h, scale);
         const abox = fig.box;
         if (!fig.parts.length) continue;
         if (abox[2] < 0 || abox[0] > this.w || abox[3] < 0 || abox[1] > this.h) continue;
         b.push({
           kind: 'actor', i: w.cells.length + people[q],
-          actor: actor, parts: fig.parts, solid: true, depth: depth + 0.02, light: light, light: light,
+          actor: actor, parts: fig.parts, solid: true,
+          gx: at.gx, gy: at.gy, gh: at.h,
+          depth: this.depth(s, at.gx, at.gy) + 0.02, light: light, light: light,
           minX: abox[0], minY: abox[1], maxX: abox[2], maxY: abox[3],
           cx: (abox[0] + abox[2]) / 2, cy: abox[1] + (abox[3] - abox[1]) * 0.35
         });
@@ -452,7 +458,9 @@ const Render = {
     ctx.fillStyle = '#06080b';
     ctx.fillRect(0, 0, this.w, this.h);
 
-    const focusIdx = s.hover >= 0 ? s.hover : s.selected;
+    /* A pinned selection outranks whatever the pointer happens to be over, so
+       the crawler you picked stays ringed while they walk away. */
+    const focusIdx = s.selected >= 0 ? s.selected : s.hover;
     let focus = null, focusPos = -1;
     if (focusIdx >= 0) {
       for (let k = 0; k < b.length; k++) {
@@ -507,6 +515,9 @@ const Render = {
         if (items) {
           items.push({ i: it.i, kind: 'actor', name: it.actor.name,
                        x: it.actor.x, y: it.actor.y, doing: it.actor.doing,
+                       /* where the figure actually stood on the ground this
+                          frame -- fractional while the stride plays out */
+                       gx: it.gx, gy: it.gy, gh: it.gh,
                        face: it.actor.face,
                        parts: it.parts.map(function (q) { return q.id; }),
                        worn: it.parts.filter(function (q) { return q.slot !== 'body'; })

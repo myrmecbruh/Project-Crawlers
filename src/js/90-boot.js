@@ -103,6 +103,9 @@ const Game = {
 
   render() {
     const s = this.state;
+    /* Riding a crawler happens here rather than in the loop, so the view keeps
+       up however the frame was driven -- the game's own clock or a test's. */
+    if (followCamera(s)) s.viewDirty = true;
     if (s.geomDirty) { Render.build(s); Render.drawPick(s); }
     if (s.pointer.over) {
       const hit = Render.pickAt(s, s.pointer.bx, s.pointer.by);
@@ -124,8 +127,8 @@ const Game = {
     this.render();
   },
 
-  /* The arrow keys pan here rather than inside the simulation, because panning
-     is what lets time run -- if the simulation did it, time would wind itself. */
+  /* The arrow keys pan the view. This is not part of the simulation step: the
+     camera runs on real time and the world runs on the player's clock. */
   keyPan() {
     const i = this.state.input;
     let dx = 0, dy = 0;
@@ -171,10 +174,13 @@ const Game = {
     if (!el) return;
     const s = this.state;
     const camp = campSummary(s.camp);
+    const rider = s.cam.follow >= 0 && s.actors[s.cam.follow]
+      ? ' · ' + N('ui.label_following') + ' ' + s.actors[s.cam.follow].name : '';
     el.textContent = 'seed ' + s.seed
       + ' · tick ' + s.tick
       + ' · camp ' + camp.built + '/' + camp.sites
-      + ' · zoom ' + s.cam.zoom + '×';
+      + ' · zoom ' + s.cam.zoom + '×'
+      + rider;
   }
 };
 

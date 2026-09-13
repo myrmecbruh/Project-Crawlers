@@ -258,6 +258,14 @@ perfectly flat, which is the only way to prove no curve was smuggled in.
 - A structure grows to its real height as it is built, so how far the camp has
   got is something you can see rather than read.
 
+**A crawler walks; they do not appear in the next square.** The roll still
+resolves in one instant -- that is the mechanic -- but the arrival is spread over
+`anim.step_ticks`, eased in and out through position AND ground height so a ramp
+is climbed rather than stepped up. `actorPos()` in `14-actors.js` is the ONLY
+answer to "where is this crawler right now"; the renderer asks it both for where
+to draw the figure and for its depth, so someone mid-stride sorts against the
+world where they actually are, not where they are filed.
+
 ---
 
 ## The inspector (what the popups are called)
@@ -274,6 +282,11 @@ Two surfaces, and the difference is the point:
 `describe()` returns plain data; `renderTip()` and `renderPanel()` put it on the
 page. Split so a test can prove both that the description is right and that it
 reached the screen.
+
+**A selection outranks the pointer.** The ring is drawn on `state.selected` and
+falls back to `state.hover`, so the crawler you pinned keeps their outline while
+they walk away from where you were pointing. It was the other way round once, and
+the ring came off them the moment the pointer moved.
 
 **A selected thing is ringed by its own silhouette**, not boxed: its polygons
 are painted in the highlight colour underneath it, fattened by a stroke, and the
@@ -461,6 +474,12 @@ is.
   not every frame.
 - The swing and the tilt advance on **real milliseconds**, not game ticks, so
   the view keeps moving smoothly even when the player has the world paused.
+- **The view can ride a crawler.** Clicking one sets `cam.follow`; the focus is
+  then moved to their drawn position, so turning and tilting still pivot around
+  them. Panning by hand releases them, as does clicking anything else.
+  `followCamera()` is called from `Game.render()`, NOT from `Game.loop()` --
+  `render()` is the one place every path draws through, including the test
+  harness's `Game.frame()`, which never enters the loop.
 
 ---
 

@@ -37,6 +37,7 @@ function newState(seed) {
       yaw: 0, yawTarget: 0, quarter: 0,
       pitch: 0, pitchTarget: 0,                  /* 0 normal angle, 1 raised  */
       zoom: CFG.zoomStart,
+      follow: -1,                                /* a crawler the view rides */
       ox: 0, oy: 0, cos: 1, sin: 0, tileH: CFG.tileHLow
     },
     input: { panUp: false, panDown: false, panLeft: false, panRight: false },
@@ -122,12 +123,37 @@ function markCutaway(s) {
 function panCamera(s, dx, dy) {
   if (!dx && !dy) return false;
   const cam = s.cam;
+  cam.follow = -1;                 /* moving the view by hand lets go of them */
   const drx = dx / (CFG.tileW / 2), dry = dy / (cam.tileH / 2);
   const du = (drx + dry) / 2, dv = (dry - drx) / 2;
   cam.fx += du * cam.cos + dv * cam.sin;
   cam.fy += -du * cam.sin + dv * cam.cos;
   camRefresh(s);
   return true;
+}
+
+/* Ride the crawler the player picked. The focus is moved rather than the
+   offsets, so turning and tilting still pivot around them, and because the
+   focus follows actorPos() the view glides with the walk instead of hopping a
+   whole square at a time. */
+function followCamera(s) {
+  const cam = s.cam;
+  if (cam.follow < 0) return false;
+  const a = s.actors[cam.follow];
+  if (!a) { cam.follow = -1; return false; }
+  const at = actorPos(s, a);
+  if (at.gx === cam.fx && at.gy === cam.fy && at.h === cam.fh) return false;
+  cam.fx = at.gx; cam.fy = at.gy; cam.fh = at.h;
+  camRefresh(s);
+  return true;
+}
+
+/* Clicking a crawler locks the view onto them; clicking anything else, or
+   nothing, lets go. */
+function setFollow(s, pick) {
+  if (!CFG.followOn) return;
+  s.cam.follow = Render.isActorPick(s, pick) ? pick - Render.actorBase(s) : -1;
+  followCamera(s);
 }
 
 /* Turn the view a quarter, the way Final Fantasy Tactics does: the swing is
