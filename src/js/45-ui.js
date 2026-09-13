@@ -115,7 +115,8 @@ const Tooltip = {
        + '</span><span class="tt-v tt-attrs">';
     for (const a of d.attributes) {
       h += '<span class="attr"><span class="attr-k">' + a.abbrev
-         + '</span><span class="attr-v">' + a.value + '</span></span>';
+         + '</span><span class="attr-v' + (a.shift ? (a.shift > 0 ? ' up' : ' down') : '')
+         + '">' + a.value + '</span></span>';
     }
     h += '</span></div>';
 
@@ -133,8 +134,22 @@ const Tooltip = {
     h += '</span></div>';
 
     h += this.row(N('ui.label_doing'), this.doingText(d.doing));
-    h += this.row(N('ui.label_wearing'),
-      d.worn.length ? d.worn.join(', ') : '<span class="tt-dim">' + N('ui.label_bare') + '</span>');
+
+    /* All twelve slots, always -- an empty one is information too. */
+    h += '<div class="tt-row"><span class="tt-k">' + N('ui.label_gear')
+       + '</span><span class="tt-v tt-gear">';
+    for (const g of d.gear) {
+      if (g.empty) {
+        h += '<div class="gear gear-off"><span class="gear-s">' + g.slotName
+           + '</span><span class="gear-n">' + N('ui.label_empty') + '</span></div>';
+      } else {
+        h += '<div class="gear"><span class="gear-s">' + g.slotName
+           + '</span><span class="gear-n">' + g.name + '</span>'
+           + (g.effects.length ? '<span class="gear-e">' + g.effects.join(' ') + '</span>' : '')
+           + '</div>';
+      }
+    }
+    h += '</span></div>';
     return h + this.tagsRow(d.tags);
   },
 

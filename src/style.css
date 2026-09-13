@@ -98,6 +98,14 @@ body {
 .attr { display: flex; justify-content: space-between; gap: 5px; }
 .attr-k { opacity: 0.45; }
 .attr-v { color: var(--ink-bright); font-variant-numeric: tabular-nums; }
+.tt-gear { display: grid; grid-template-columns: 1fr; gap: 0; }
+.gear { display: flex; gap: 6px; align-items: baseline; }
+.gear-s { flex: 0 0 58px; opacity: 0.38; font-size: 10px; letter-spacing: 0.04em; }
+.gear-n { color: #c3d2e0; }
+.gear-e { opacity: 0.55; font-size: 10px; color: #9fb48c; }
+.gear-off .gear-n { opacity: 0.25; }
+.attr-v.up { color: #9fc47f; }
+.attr-v.down { color: #c98d7a; }
 .skill { display: flex; gap: 6px; align-items: baseline; }
 .skill-n { color: #b8c8d8; }
 .skill-l { color: var(--ink-bright); font-variant-numeric: tabular-nums; }

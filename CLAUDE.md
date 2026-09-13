@@ -79,7 +79,7 @@ The characters act on their own initiative.
 
 ## The non-negotiables
 
-*Twelve rules about what this game **is**. Each is one sentence of rule and a
+*Thirteen rules about what this game **is**. Each is one sentence of rule and a
 paragraph of what it protects. Do not re-litigate these; do not quietly drift
 away from them. Add to the list the moment something is argued twice.*
 
@@ -144,6 +144,14 @@ camera, or time would wind itself forward for ever. There is a short coast
 (`time.coast_ticks`, currently 45 = three quarters of a second) so a phone does
 not look frozen between drags; set it to 0 for the strict reading.
 
+**13. Gear does three things at once, and it is the same twelve parts that are
+seen.** A piece of gear SHIFTS an attribute (a pack makes you stronger-backed
+and slower), BONUSES a skill (boots help you keep your feet), and some work
+REQUIRES it (building with bare hands is thirty points harder, which is close to
+impossible). All three go through `ability()`, so there is still exactly one
+place anything is resolved. A gear row carries its look and its effect on the
+same line of the spreadsheet, so the two can never drift apart.
+
 **12. The view turns, and it can be raised.** Four quarter turns and two
 angles, Final Fantasy Tactics style, with the swing animated and the focus held
 still so the world turns around what you were looking at. The swing runs on real
@@ -186,6 +194,7 @@ src/js/*.js           the game, assembled in filename order
   12-world.js         rooms and halls from a seed; the walking and sight rules
   14-actors.js        the six attributes, skills, rolls, learning, crawlers
   16-camp.js          choosing a room, laying out a camp, and working at it
+  18-figure.js        the skeleton, the poses, and one crawler's geometry
   20-input.js         key / mouse / touch, all writing the same state
   30-sim.js           one fixed simulation step
   40-render.js        isometric blocks, figures, the pick pass, `consumed`
@@ -224,6 +233,9 @@ six attributes  ->  a skill (one PAIR of them)  ->  ability  ->  one roll
 - `attempt()` in `14-actors.js` is the ONLY place anything is ever resolved.
   A new thing a crawler can do is a call to `attempt()` naming one of the
   fifteen -- never a second way of deciding whether something worked.
+- Gear reaches the roll through the same funnel: `effAttr()` applies its
+  attribute shifts, `gearBonus()` its skill bonuses, and `toolPenalty()` the
+  cost of working without the tool a skill names in `needs_tag`.
 
 **Rule 1 is not a curve.** There is no code anywhere that slows progress down.
 Failing teaches 2.2, only just failing teaches 3.6, and **succeeding teaches 0**.
@@ -254,29 +266,47 @@ perfectly flat, which is the only way to prove no curve was smuggled in.
 
 ---
 
-## Gear: the twelve slots
+## Gear: the twelve slots, and the figure
 
-Agreed, and not to be re-derived. A crawler is composed of twelve parts, which
-are their gear, **both visually and mechanically**:
+A crawler is twelve parts, which are their gear, both visually and mechanically:
 
 ```
-1  Head            7  Offhand
-2  Neck            8  Belt
-3  Back            9  Legs
-4  Torso          10  Feet        (knees down)
-5  Gloves         11  Trinket 1   (elbow down)
-6  Mainhand       12  Trinket 2
+1  Head       5  Gloves  (elbow down)   9  Legs      (hips to knees)
+2  Neck       6  Mainhand              10  Feet      (knees down)
+3  Back       7  Offhand               11  Trinket 1
+4  Torso      8  Belt                  12  Trinket 2
 ```
 
-Rule 4 applies to every one of them: worn is drawn, and the build refuses a
-piece of gear that nothing draws. The mechanical half -- how gear changes a
-roll -- is NOT decided yet, and rule 2 says ask before inventing it.
+**The figure is real 3D, posed and lit, drawn into the same small buffer as
+everything else.** That is what makes it read as sprite work: the geometry is
+real, the resolution is not. It is NOT pre-rendered sprites and must not become
+them.
 
-**Still to build (this is the next release):** a skeleton, tapered parts hung
-off bones rather than stacked boxes, procedural animation (walk, work, idle),
-and crawlers turning to face where they are going. The camera work below landed
-first on purpose: figures built against a fixed viewpoint would have had to be
-redone the moment the view could turn.
+- `bones` in the sheet is a skeleton, seventeen bones, measured in metres from
+  the parent. The character's own space has **+Y forward, +Z up**, and the root
+  carries the facing.
+- `figure` rows are **tapered boxes** hung off a bone: `from_m`/`to_m` along the
+  bone, `w_top`/`w_bot` and `d_top`/`d_bot` across it, `ox`/`oy` to sit a pack
+  behind a chest. The taper is what makes a figure read as a person rather than
+  a stack.
+- A row is drawn if its slot is `body`, or if the item it names is the one worn
+  in its slot. **There is no other path to the screen**, and the build refuses
+  any piece of gear that no row draws (rule 4) or any slot nothing can fill.
+- Back faces are dropped and each face is lit by its own normal against a light
+  fixed in the WORLD, so the sun does not spin when the view does. A convex box
+  shows at most three faces; a test asserts exactly that.
+- Parts are depth-sorted within a figure along the camera axis, which swings
+  with the view.
+
+**Animation is procedural, and split on purpose:** the SHAPE of each clip (walk,
+work, idle) is code in `18-figure.js` because it is logic; every AMOUNT is a
+knob, so the stride can be widened or the work slowed without touching it.
+Crawlers turn the short way round to face where they are going.
+
+Animation runs off `state.tick`, so under rule 11 it stops when the view stops.
+That is intended.
+
+---
 
 ---
 
@@ -352,9 +382,9 @@ ruler is worse than no ruler.
 
 ### The master spreadsheet, which is the authority
 
-`docs/crawlers.xlsx` holds every number and every piece of wording, across nine
+`docs/crawlers.xlsx` holds every number and every piece of wording, across twelve
 tabs: `knobs`, `geometry` (read only), `names`, `tags`, `tiles`, `attributes`,
-`skills`, `figure`, `structures`. `src/defaults.json` carries the same values so a fresh
+`skills`, `figure`, `structures`, `bones`, `slots`, `gear`. `src/defaults.json` carries the same values so a fresh
 checkout still builds. The build reconciles the two and inlines the result.
 
 1. **Change a number in the sheet, not in the code.** If the code default must

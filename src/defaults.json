@@ -101,11 +101,6 @@
       "unit": "pts",
       "note": "Highest a natural attribute can be rolled at."
     },
-    "actor.hat_chance": {
-      "value": 0.5,
-      "unit": "0-1",
-      "note": "How many crawlers turn up already wearing something on their head."
-    },
     "actor.step_ticks": {
       "value": 26,
       "unit": "ticks",
@@ -230,6 +225,76 @@
       "value": 260,
       "unit": "ms",
       "note": "How long the view takes to rise to the higher angle and back."
+    },
+    "anim.walk_ticks": {
+      "value": 34,
+      "unit": "ticks",
+      "note": "How long one full stride takes. 60 ticks is a second, so smaller is a faster walk."
+    },
+    "anim.walk_leg_swing": {
+      "value": 38,
+      "unit": "degrees",
+      "note": "How far the legs swing forward and back while walking."
+    },
+    "anim.walk_knee_bend": {
+      "value": 46,
+      "unit": "degrees",
+      "note": "How much the trailing knee folds as the leg comes through."
+    },
+    "anim.walk_arm_swing": {
+      "value": 26,
+      "unit": "degrees",
+      "note": "How far the arms swing, opposite to the legs."
+    },
+    "anim.walk_bob": {
+      "value": 0.035,
+      "unit": "m",
+      "note": "How far a crawler rises and falls with each step."
+    },
+    "anim.work_ticks": {
+      "value": 40,
+      "unit": "ticks",
+      "note": "How long one swing of a tool takes."
+    },
+    "anim.work_arm_lift": {
+      "value": 78,
+      "unit": "degrees",
+      "note": "How far the arms come up for a swing of work."
+    },
+    "anim.work_lean": {
+      "value": 14,
+      "unit": "degrees",
+      "note": "How far a crawler leans into their work."
+    },
+    "anim.idle_ticks": {
+      "value": 150,
+      "unit": "ticks",
+      "note": "How long one slow breath takes while standing about."
+    },
+    "anim.idle_sway": {
+      "value": 4.5,
+      "unit": "degrees",
+      "note": "How much a crawler sways while standing about."
+    },
+    "anim.turn_ticks": {
+      "value": 8,
+      "unit": "ticks",
+      "note": "How long a crawler takes to turn to face a new direction."
+    },
+    "render.light_ambient": {
+      "value": 0.46,
+      "unit": "x",
+      "note": "How lit the darkest face of anything is. Raise it to flatten the lighting."
+    },
+    "render.light_diffuse": {
+      "value": 0.62,
+      "unit": "x",
+      "note": "How much brighter a face gets for facing the light."
+    },
+    "actor.gear_chance": {
+      "value": 0.55,
+      "unit": "0-1",
+      "note": "How likely a crawler is to turn up already wearing any given piece of gear."
     }
   },
   "geometry": {
@@ -244,9 +309,9 @@
       "note": "READ ONLY. tile_w divided by tile_h. Changing this is changing the camera, not balancing the game."
     },
     "figure.nominal_height_m": {
-      "value": 1.75,
+      "value": 1.625,
       "unit": "m",
-      "note": "READ ONLY. The height the figure tab's part measurements are written against. A crawler of a different height has every part scaled by the same ratio."
+      "note": "READ ONLY. The height the skeleton and the figure parts are measured against. A crawler of a different height is scaled by the ratio."
     }
   },
   "names": {
@@ -327,6 +392,15 @@
     },
     "ui.doing_idle": {
       "text": "looking about"
+    },
+    "ui.label_gear": {
+      "text": "wearing"
+    },
+    "ui.label_effect": {
+      "text": "effect"
+    },
+    "ui.label_empty": {
+      "text": "nothing"
     }
   },
   "tags": {
@@ -421,6 +495,34 @@
     "warm": {
       "name": "warm",
       "note": "Holds off the cold. Crawlers will come to it."
+    },
+    "leather": {
+      "name": "leather",
+      "note": "Cured hide. Tough, and it creaks."
+    },
+    "iron": {
+      "name": "iron",
+      "note": "Cold, heavy, and it rusts."
+    },
+    "rope": {
+      "name": "rope",
+      "note": "Twisted fibre."
+    },
+    "glass": {
+      "name": "glass",
+      "note": "Sees through, and breaks."
+    },
+    "tool": {
+      "name": "tool",
+      "note": "Made for work, not for fighting."
+    },
+    "light": {
+      "name": "light",
+      "note": "Gives light in the dark."
+    },
+    "charm": {
+      "name": "charm",
+      "note": "Carried for luck, or for something worse."
     }
   },
   "tiles": {
@@ -541,115 +643,685 @@
     "clambering": {
       "name": "Clambering",
       "derives": "might:1,agility:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "Climbing, scrambling, and keeping your feet on ground that does not want you to. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "labouring": {
       "name": "Labouring",
       "derives": "might:1,endurance:1",
-      "note": "Hauling, digging, clearing ground, and still doing it an hour later. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+      "needs_tag": "tool",
+      "without": -20,
+      "note": "Hauling, digging, clearing ground, and still doing it an hour later. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Bare hands cost 20 points."
     },
     "wrangling": {
       "name": "Wrangling",
       "derives": "might:1,presence:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "Handling animals, and dragging people out of trouble whether they like it or not. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "building": {
       "name": "Building",
       "derives": "might:1,intellect:1",
-      "note": "Raising structures that stay up. Knowing where the weight goes, and being able to put it there. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+      "needs_tag": "tool",
+      "without": -30,
+      "note": "Raising structures that stay up. Knowing where the weight goes, and being able to put it there. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Needs a tool in hand: without one the job is 30 points harder, which is close to impossible."
     },
     "fighting": {
       "name": "Fighting",
       "derives": "might:1,willpower:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "The one fifth of the game that is violence. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "ranging": {
       "name": "Ranging",
       "derives": "agility:1,endurance:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "Covering ground: travelling far, moving quietly, getting back again. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "performing": {
       "name": "Performing",
       "derives": "agility:1,presence:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "Singing, playing, dancing, and holding a room while you do it. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "crafting": {
       "name": "Crafting",
       "derives": "agility:1,intellect:1",
+      "needs_tag": "tool",
+      "without": -25,
       "note": "Making and mending: tools, clothes, meals, anything that takes hands and a recipe. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "tinkering": {
       "name": "Tinkering",
       "derives": "agility:1,willpower:1",
+      "needs_tag": "tool",
+      "without": -25,
       "note": "Locks, traps, and anything fiddly that punishes a shaking hand. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "tending": {
       "name": "Tending",
       "derives": "endurance:1,presence:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "Nursing, feeding, and keeping people upright who would rather lie down. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "foraging": {
       "name": "Foraging",
       "derives": "endurance:1,intellect:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "Hunting, fishing, gathering, and knowing which of it is safe to eat. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "enduring": {
       "name": "Enduring",
       "derives": "endurance:1,willpower:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "Cold, hunger, pain, boredom and the dark. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "bargaining": {
       "name": "Bargaining",
       "derives": "presence:1,intellect:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "Trading, persuading, and working out what somebody actually wants. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "leading": {
       "name": "Leading",
       "derives": "presence:1,willpower:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "Rallying, calming a panic, and holding a group together when it wants to scatter. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "studying": {
       "name": "Studying",
       "derives": "intellect:1,willpower:1",
+      "needs_tag": "",
+      "without": 0,
       "note": "Lore, mapmaking, deciphering, and sitting with a problem until it gives. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     }
   },
   "figure": {
-    "legs": {
-      "name": "Legs",
+    "head": {
+      "name": "Head",
       "slot": "body",
-      "colour": "#33302c",
-      "half_width": 0.15,
+      "item": "",
+      "bone": "head",
+      "colour": "#a08a70",
+      "ox": 0,
+      "oy": 0,
       "from_m": 0.0,
-      "to_m": 0.8,
+      "to_m": 0.23,
+      "w_top": 0.08,
+      "w_bot": 0.078,
+      "d_top": 0.082,
+      "d_bot": 0.08,
       "note": "Always drawn."
+    },
+    "neck": {
+      "name": "Neck",
+      "slot": "body",
+      "item": "",
+      "bone": "neck",
+      "colour": "#a08a70",
+      "ox": 0,
+      "oy": 0,
+      "from_m": 0.0,
+      "to_m": 0.07,
+      "w_top": 0.05,
+      "w_bot": 0.048,
+      "d_top": 0.05,
+      "d_bot": 0.048,
+      "note": ""
     },
     "torso": {
       "name": "Torso",
       "slot": "body",
+      "item": "",
+      "bone": "chest",
       "colour": "#5c5145",
-      "half_width": 0.22,
-      "from_m": 0.78,
-      "to_m": 1.4,
-      "note": "Always drawn. The cloth colour, and the widest part of a crawler."
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.26,
+      "to_m": 0.2,
+      "w_top": 0.155,
+      "w_bot": 0.12,
+      "d_top": 0.1,
+      "d_bot": 0.082,
+      "note": "Wider at the shoulders than the waist -- the taper is what makes a figure read as a person."
     },
-    "head": {
-      "name": "Head",
+    "pelvis": {
+      "name": "Pelvis",
       "slot": "body",
-      "colour": "#ab977d",
-      "half_width": 0.14,
-      "from_m": 1.4,
-      "to_m": 1.72,
-      "note": "Always drawn."
+      "item": "",
+      "bone": "hips",
+      "colour": "#33302c",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.08,
+      "to_m": 0.06,
+      "w_top": 0.128,
+      "w_bot": 0.12,
+      "d_top": 0.09,
+      "d_bot": 0.086,
+      "note": ""
     },
-    "hat": {
-      "name": "Hat",
-      "slot": "hat",
-      "colour": "#23201d",
-      "half_width": 0.17,
-      "from_m": 1.7,
-      "to_m": 1.84,
-      "note": "Only drawn on a crawler wearing one. Keep half_width near the head's or the brim hides the face. Rule 4: if it is on them, it is on screen -- add a row here and it can be worn."
+    "upperarm_l": {
+      "name": "Upper Arm",
+      "slot": "body",
+      "item": "",
+      "bone": "shoulder_l",
+      "colour": "#5c5145",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.26,
+      "to_m": 0.03,
+      "w_top": 0.052,
+      "w_bot": 0.044,
+      "d_top": 0.052,
+      "d_bot": 0.044,
+      "note": ""
+    },
+    "forearm_l": {
+      "name": "Forearm",
+      "slot": "body",
+      "item": "",
+      "bone": "elbow_l",
+      "colour": "#a08a70",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.24,
+      "to_m": 0.01,
+      "w_top": 0.044,
+      "w_bot": 0.038,
+      "d_top": 0.044,
+      "d_bot": 0.038,
+      "note": ""
+    },
+    "hand_l": {
+      "name": "Hand",
+      "slot": "body",
+      "item": "",
+      "bone": "hand_l",
+      "colour": "#a08a70",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.08,
+      "to_m": 0.01,
+      "w_top": 0.042,
+      "w_bot": 0.036,
+      "d_top": 0.034,
+      "d_bot": 0.03,
+      "note": ""
+    },
+    "thigh_l": {
+      "name": "Thigh",
+      "slot": "body",
+      "item": "",
+      "bone": "thigh_l",
+      "colour": "#33302c",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.42,
+      "to_m": 0.04,
+      "w_top": 0.072,
+      "w_bot": 0.058,
+      "d_top": 0.078,
+      "d_bot": 0.062,
+      "note": ""
+    },
+    "shin_l": {
+      "name": "Shin",
+      "slot": "body",
+      "item": "",
+      "bone": "knee_l",
+      "colour": "#33302c",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.38,
+      "to_m": 0.02,
+      "w_top": 0.056,
+      "w_bot": 0.046,
+      "d_top": 0.06,
+      "d_bot": 0.05,
+      "note": ""
+    },
+    "foot_l": {
+      "name": "Foot",
+      "slot": "body",
+      "item": "",
+      "bone": "foot_l",
+      "colour": "#2b2825",
+      "ox": 0,
+      "oy": 0.025,
+      "from_m": -0.03,
+      "to_m": 0.06,
+      "w_top": 0.054,
+      "w_bot": 0.05,
+      "d_top": 0.105,
+      "d_bot": 0.095,
+      "note": ""
+    },
+    "upperarm_r": {
+      "name": "Upper Arm",
+      "slot": "body",
+      "item": "",
+      "bone": "shoulder_r",
+      "colour": "#5c5145",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.26,
+      "to_m": 0.03,
+      "w_top": 0.052,
+      "w_bot": 0.044,
+      "d_top": 0.052,
+      "d_bot": 0.044,
+      "note": ""
+    },
+    "forearm_r": {
+      "name": "Forearm",
+      "slot": "body",
+      "item": "",
+      "bone": "elbow_r",
+      "colour": "#a08a70",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.24,
+      "to_m": 0.01,
+      "w_top": 0.044,
+      "w_bot": 0.038,
+      "d_top": 0.044,
+      "d_bot": 0.038,
+      "note": ""
+    },
+    "hand_r": {
+      "name": "Hand",
+      "slot": "body",
+      "item": "",
+      "bone": "hand_r",
+      "colour": "#a08a70",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.08,
+      "to_m": 0.01,
+      "w_top": 0.042,
+      "w_bot": 0.036,
+      "d_top": 0.034,
+      "d_bot": 0.03,
+      "note": ""
+    },
+    "thigh_r": {
+      "name": "Thigh",
+      "slot": "body",
+      "item": "",
+      "bone": "thigh_r",
+      "colour": "#33302c",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.42,
+      "to_m": 0.04,
+      "w_top": 0.072,
+      "w_bot": 0.058,
+      "d_top": 0.078,
+      "d_bot": 0.062,
+      "note": ""
+    },
+    "shin_r": {
+      "name": "Shin",
+      "slot": "body",
+      "item": "",
+      "bone": "knee_r",
+      "colour": "#33302c",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.38,
+      "to_m": 0.02,
+      "w_top": 0.056,
+      "w_bot": 0.046,
+      "d_top": 0.06,
+      "d_bot": 0.05,
+      "note": ""
+    },
+    "foot_r": {
+      "name": "Foot",
+      "slot": "body",
+      "item": "",
+      "bone": "foot_r",
+      "colour": "#2b2825",
+      "ox": 0,
+      "oy": 0.025,
+      "from_m": -0.03,
+      "to_m": 0.06,
+      "w_top": 0.054,
+      "w_bot": 0.05,
+      "d_top": 0.105,
+      "d_bot": 0.095,
+      "note": ""
+    },
+    "hood_v": {
+      "name": "Hood",
+      "slot": "head",
+      "item": "hood",
+      "bone": "head",
+      "colour": "#3a352f",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.02,
+      "to_m": 0.26,
+      "w_top": 0.086,
+      "w_bot": 0.096,
+      "d_top": 0.09,
+      "d_bot": 0.098,
+      "note": ""
+    },
+    "collar_v": {
+      "name": "Collar",
+      "slot": "neck",
+      "item": "collar",
+      "bone": "neck",
+      "colour": "#4a4038",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.03,
+      "to_m": 0.04,
+      "w_top": 0.068,
+      "w_bot": 0.066,
+      "d_top": 0.068,
+      "d_bot": 0.066,
+      "note": ""
+    },
+    "pack_v": {
+      "name": "Pack",
+      "slot": "back",
+      "item": "pack",
+      "bone": "chest",
+      "colour": "#5a4a34",
+      "ox": 0,
+      "oy": -0.135,
+      "from_m": -0.18,
+      "to_m": 0.14,
+      "w_top": 0.12,
+      "w_bot": 0.105,
+      "d_top": 0.07,
+      "d_bot": 0.062,
+      "note": "Sits behind the chest, which is what the oy offset is for."
+    },
+    "jerkin_v": {
+      "name": "Jerkin",
+      "slot": "torso",
+      "item": "jerkin",
+      "bone": "chest",
+      "colour": "#6b5335",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.27,
+      "to_m": 0.21,
+      "w_top": 0.166,
+      "w_bot": 0.13,
+      "d_top": 0.111,
+      "d_bot": 0.093,
+      "note": ""
+    },
+    "glove_fore_l": {
+      "name": "Glove",
+      "slot": "gloves",
+      "item": "gloves",
+      "bone": "elbow_l",
+      "colour": "#4b3b28",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.25,
+      "to_m": 0.02,
+      "w_top": 0.052,
+      "w_bot": 0.046,
+      "d_top": 0.052,
+      "d_bot": 0.046,
+      "note": ""
+    },
+    "glove_hand_l": {
+      "name": "Glove",
+      "slot": "gloves",
+      "item": "gloves",
+      "bone": "hand_l",
+      "colour": "#4b3b28",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.09,
+      "to_m": 0.02,
+      "w_top": 0.05,
+      "w_bot": 0.044,
+      "d_top": 0.042,
+      "d_bot": 0.038,
+      "note": ""
+    },
+    "breech_l": {
+      "name": "Breeches",
+      "slot": "legs",
+      "item": "breeches",
+      "bone": "thigh_l",
+      "colour": "#4a4136",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.43,
+      "to_m": 0.06,
+      "w_top": 0.08,
+      "w_bot": 0.066,
+      "d_top": 0.086,
+      "d_bot": 0.07,
+      "note": ""
+    },
+    "boot_shin_l": {
+      "name": "Boot",
+      "slot": "feet",
+      "item": "boots",
+      "bone": "knee_l",
+      "colour": "#3b2f22",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.39,
+      "to_m": 0.03,
+      "w_top": 0.064,
+      "w_bot": 0.054,
+      "d_top": 0.068,
+      "d_bot": 0.058,
+      "note": ""
+    },
+    "boot_foot_l": {
+      "name": "Boot",
+      "slot": "feet",
+      "item": "boots",
+      "bone": "foot_l",
+      "colour": "#3b2f22",
+      "ox": 0,
+      "oy": 0.025,
+      "from_m": -0.04,
+      "to_m": 0.07,
+      "w_top": 0.062,
+      "w_bot": 0.058,
+      "d_top": 0.115,
+      "d_bot": 0.105,
+      "note": ""
+    },
+    "glove_fore_r": {
+      "name": "Glove",
+      "slot": "gloves",
+      "item": "gloves",
+      "bone": "elbow_r",
+      "colour": "#4b3b28",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.25,
+      "to_m": 0.02,
+      "w_top": 0.052,
+      "w_bot": 0.046,
+      "d_top": 0.052,
+      "d_bot": 0.046,
+      "note": ""
+    },
+    "glove_hand_r": {
+      "name": "Glove",
+      "slot": "gloves",
+      "item": "gloves",
+      "bone": "hand_r",
+      "colour": "#4b3b28",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.09,
+      "to_m": 0.02,
+      "w_top": 0.05,
+      "w_bot": 0.044,
+      "d_top": 0.042,
+      "d_bot": 0.038,
+      "note": ""
+    },
+    "breech_r": {
+      "name": "Breeches",
+      "slot": "legs",
+      "item": "breeches",
+      "bone": "thigh_r",
+      "colour": "#4a4136",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.43,
+      "to_m": 0.06,
+      "w_top": 0.08,
+      "w_bot": 0.066,
+      "d_top": 0.086,
+      "d_bot": 0.07,
+      "note": ""
+    },
+    "boot_shin_r": {
+      "name": "Boot",
+      "slot": "feet",
+      "item": "boots",
+      "bone": "knee_r",
+      "colour": "#3b2f22",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.39,
+      "to_m": 0.03,
+      "w_top": 0.064,
+      "w_bot": 0.054,
+      "d_top": 0.068,
+      "d_bot": 0.058,
+      "note": ""
+    },
+    "boot_foot_r": {
+      "name": "Boot",
+      "slot": "feet",
+      "item": "boots",
+      "bone": "foot_r",
+      "colour": "#3b2f22",
+      "ox": 0,
+      "oy": 0.025,
+      "from_m": -0.04,
+      "to_m": 0.07,
+      "w_top": 0.062,
+      "w_bot": 0.058,
+      "d_top": 0.115,
+      "d_bot": 0.105,
+      "note": ""
+    },
+    "belt_v": {
+      "name": "Tool Belt",
+      "slot": "belt",
+      "item": "toolbelt",
+      "bone": "hips",
+      "colour": "#4b3b28",
+      "ox": 0,
+      "oy": 0,
+      "from_m": -0.01,
+      "to_m": 0.07,
+      "w_top": 0.136,
+      "w_bot": 0.132,
+      "d_top": 0.098,
+      "d_bot": 0.094,
+      "note": ""
+    },
+    "spade_haft": {
+      "name": "Spade Haft",
+      "slot": "mainhand",
+      "item": "spade",
+      "bone": "hand_r",
+      "colour": "#6b5334",
+      "ox": 0,
+      "oy": 0.04,
+      "from_m": -0.22,
+      "to_m": 0.46,
+      "w_top": 0.02,
+      "w_bot": 0.02,
+      "d_top": 0.02,
+      "d_bot": 0.02,
+      "note": ""
+    },
+    "spade_blade": {
+      "name": "Spade Blade",
+      "slot": "mainhand",
+      "item": "spade",
+      "bone": "hand_r",
+      "colour": "#7d8189",
+      "ox": 0,
+      "oy": 0.04,
+      "from_m": -0.34,
+      "to_m": -0.2,
+      "w_top": 0.058,
+      "w_bot": 0.05,
+      "d_top": 0.018,
+      "d_bot": 0.018,
+      "note": ""
+    },
+    "lantern_v": {
+      "name": "Lantern",
+      "slot": "offhand",
+      "item": "lantern",
+      "bone": "hand_l",
+      "colour": "#c98a2e",
+      "ox": 0,
+      "oy": 0.04,
+      "from_m": -0.2,
+      "to_m": -0.06,
+      "w_top": 0.048,
+      "w_bot": 0.044,
+      "d_top": 0.048,
+      "d_bot": 0.044,
+      "note": ""
+    },
+    "coil_v": {
+      "name": "Rope Coil",
+      "slot": "trinket1",
+      "item": "coil",
+      "bone": "hips",
+      "colour": "#8a7a5a",
+      "ox": 0.155,
+      "oy": -0.02,
+      "from_m": -0.06,
+      "to_m": 0.04,
+      "w_top": 0.048,
+      "w_bot": 0.044,
+      "d_top": 0.048,
+      "d_bot": 0.044,
+      "note": ""
+    },
+    "charm_v": {
+      "name": "Bone Charm",
+      "slot": "trinket2",
+      "item": "charm",
+      "bone": "hips",
+      "colour": "#b3ab92",
+      "ox": -0.155,
+      "oy": -0.02,
+      "from_m": -0.07,
+      "to_m": 0.02,
+      "w_top": 0.026,
+      "w_bot": 0.024,
+      "d_top": 0.026,
+      "d_bot": 0.024,
+      "note": ""
     }
   },
   "structures": {
@@ -692,6 +1364,292 @@
       "skill": "building",
       "difficulty": 65,
       "note": "The hardest thing in a starting camp, and the one that makes it feel like one."
+    }
+  },
+  "bones": {
+    "root": {
+      "name": "Root",
+      "parent": "",
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "note": "Between the feet, on the ground. Everything hangs off this, and it is what turns when a crawler changes direction."
+    },
+    "hips": {
+      "name": "Hips",
+      "parent": "root",
+      "x": 0,
+      "y": 0,
+      "z": 0.82,
+      "note": ""
+    },
+    "chest": {
+      "name": "Chest",
+      "parent": "hips",
+      "x": 0,
+      "y": 0,
+      "z": 0.26,
+      "note": ""
+    },
+    "neck": {
+      "name": "Neck",
+      "parent": "chest",
+      "x": 0,
+      "y": 0,
+      "z": 0.24,
+      "note": ""
+    },
+    "head": {
+      "name": "Head",
+      "parent": "neck",
+      "x": 0,
+      "y": 0,
+      "z": 0.07,
+      "note": ""
+    },
+    "shoulder_l": {
+      "name": "Left Shoulder",
+      "parent": "chest",
+      "x": 0.155,
+      "y": 0,
+      "z": 0.17,
+      "note": ""
+    },
+    "shoulder_r": {
+      "name": "Right Shoulder",
+      "parent": "chest",
+      "x": -0.155,
+      "y": 0,
+      "z": 0.17,
+      "note": ""
+    },
+    "elbow_l": {
+      "name": "Left Elbow",
+      "parent": "shoulder_l",
+      "x": 0,
+      "y": 0,
+      "z": -0.26,
+      "note": ""
+    },
+    "elbow_r": {
+      "name": "Right Elbow",
+      "parent": "shoulder_r",
+      "x": 0,
+      "y": 0,
+      "z": -0.26,
+      "note": ""
+    },
+    "hand_l": {
+      "name": "Left Hand",
+      "parent": "elbow_l",
+      "x": 0,
+      "y": 0,
+      "z": -0.24,
+      "note": "Where the offhand item is held."
+    },
+    "hand_r": {
+      "name": "Right Hand",
+      "parent": "elbow_r",
+      "x": 0,
+      "y": 0,
+      "z": -0.24,
+      "note": "Where the mainhand item is held."
+    },
+    "thigh_l": {
+      "name": "Left Thigh",
+      "parent": "hips",
+      "x": 0.085,
+      "y": 0,
+      "z": 0,
+      "note": ""
+    },
+    "thigh_r": {
+      "name": "Right Thigh",
+      "parent": "hips",
+      "x": -0.085,
+      "y": 0,
+      "z": 0,
+      "note": ""
+    },
+    "knee_l": {
+      "name": "Left Knee",
+      "parent": "thigh_l",
+      "x": 0,
+      "y": 0,
+      "z": -0.42,
+      "note": ""
+    },
+    "knee_r": {
+      "name": "Right Knee",
+      "parent": "thigh_r",
+      "x": 0,
+      "y": 0,
+      "z": -0.42,
+      "note": ""
+    },
+    "foot_l": {
+      "name": "Left Foot",
+      "parent": "knee_l",
+      "x": 0,
+      "y": 0,
+      "z": -0.38,
+      "note": ""
+    },
+    "foot_r": {
+      "name": "Right Foot",
+      "parent": "knee_r",
+      "x": 0,
+      "y": 0,
+      "z": -0.38,
+      "note": ""
+    }
+  },
+  "slots": {
+    "head": {
+      "name": "Head",
+      "note": "Helms, hats, hoods."
+    },
+    "neck": {
+      "name": "Neck",
+      "note": "Collars, amulets, scarves."
+    },
+    "back": {
+      "name": "Back",
+      "note": "Packs, capes, bedrolls, anything carried on the back."
+    },
+    "torso": {
+      "name": "Torso",
+      "note": "Armour, coats, shirts."
+    },
+    "gloves": {
+      "name": "Gloves",
+      "note": "Elbow down: forearms and hands together."
+    },
+    "mainhand": {
+      "name": "Mainhand",
+      "note": "The tool or weapon in the right hand."
+    },
+    "offhand": {
+      "name": "Offhand",
+      "note": "Shield, lantern, or a second tool, in the left hand."
+    },
+    "belt": {
+      "name": "Belt",
+      "note": "Belts, sashes, tool loops."
+    },
+    "legs": {
+      "name": "Legs",
+      "note": "Hips to knees."
+    },
+    "feet": {
+      "name": "Feet",
+      "note": "Knees down: shins and feet together."
+    },
+    "trinket1": {
+      "name": "Trinket 1",
+      "note": "A small carried thing. Hangs at the left hip."
+    },
+    "trinket2": {
+      "name": "Trinket 2",
+      "note": "A small carried thing. Hangs at the right hip."
+    }
+  },
+  "gear": {
+    "hood": {
+      "name": "Hood",
+      "slot": "head",
+      "tags": "cloth,leather",
+      "attr": "willpower:1",
+      "bonus": "",
+      "note": "Keeps the drip off."
+    },
+    "collar": {
+      "name": "Collar",
+      "slot": "neck",
+      "tags": "leather",
+      "attr": "presence:1",
+      "bonus": "",
+      "note": "A worn strap, buckled at the throat."
+    },
+    "pack": {
+      "name": "Pack",
+      "slot": "back",
+      "tags": "leather,store",
+      "attr": "might:1,agility:-1",
+      "bonus": "labouring:4",
+      "note": "Everything they own, on their back. Carries more and slows you down: the trade-off is the point."
+    },
+    "jerkin": {
+      "name": "Jerkin",
+      "slot": "torso",
+      "tags": "leather",
+      "attr": "endurance:1,agility:-1",
+      "bonus": "",
+      "note": "Boiled hide. Better than nothing."
+    },
+    "gloves": {
+      "name": "Work Gloves",
+      "slot": "gloves",
+      "tags": "leather",
+      "attr": "",
+      "bonus": "labouring:6,tinkering:4",
+      "note": "Elbow to fingertip."
+    },
+    "spade": {
+      "name": "Spade",
+      "slot": "mainhand",
+      "tags": "iron,wood,tool",
+      "attr": "",
+      "bonus": "labouring:10,building:8",
+      "note": "For digging, clearing and, at a push, arguing. Counts as a tool, so it is what makes Building and Labouring possible at all."
+    },
+    "lantern": {
+      "name": "Lantern",
+      "slot": "offhand",
+      "tags": "iron,glass,light",
+      "attr": "",
+      "bonus": "studying:6,foraging:4",
+      "note": "Burns something. Nobody asks what."
+    },
+    "toolbelt": {
+      "name": "Tool Belt",
+      "slot": "belt",
+      "tags": "leather,tool",
+      "attr": "",
+      "bonus": "crafting:5,building:4",
+      "note": "Loops and a buckle. Also counts as a tool."
+    },
+    "breeches": {
+      "name": "Breeches",
+      "slot": "legs",
+      "tags": "cloth",
+      "attr": "endurance:1",
+      "bonus": "",
+      "note": "Hip to knee."
+    },
+    "boots": {
+      "name": "Boots",
+      "slot": "feet",
+      "tags": "leather",
+      "attr": "",
+      "bonus": "clambering:8,ranging:6",
+      "note": "Knee down. The first thing a crawler buys."
+    },
+    "coil": {
+      "name": "Rope Coil",
+      "slot": "trinket1",
+      "tags": "rope",
+      "attr": "",
+      "bonus": "clambering:5",
+      "note": "Twenty metres, if you believe the seller."
+    },
+    "charm": {
+      "name": "Bone Charm",
+      "slot": "trinket2",
+      "tags": "organic,charm,grim",
+      "attr": "willpower:1,presence:-1",
+      "bonus": "",
+      "note": "Somebody's knuckle, on a thong."
     }
   }
 }

@@ -44,6 +44,19 @@ function SKILL(id) {
 const ATTRIBUTE_IDS = Object.keys(DATA.attributes);
 const SKILL_IDS = Object.keys(DATA.skills);
 const FIGURE_IDS = Object.keys(DATA.figure);
+const BONE_IDS = Object.keys(DATA.bones);
+const SLOT_IDS = Object.keys(DATA.slots);
+const GEAR_IDS = Object.keys(DATA.gear);
+function GEAR(id) {
+  const g = DATA.gear[id];
+  if (!g) throw new Error('unknown gear: ' + id);
+  return g;
+}
+function SLOT(id) {
+  const s = DATA.slots[id];
+  if (!s) throw new Error('unknown slot: ' + id);
+  return s;
+}
 const STRUCTURE_IDS = Object.keys(DATA.structures);
 function STRUCT(id) {
   const s = DATA.structures[id];
@@ -98,9 +111,22 @@ const CFG = {
   actorCount:  K('actor.count'),
   attrMin:     K('actor.attribute_min'),
   attrMax:     K('actor.attribute_max'),
-  hatChance:   K('actor.hat_chance'),
   stepTicks:   K('actor.step_ticks'),
   actorHeight: K('actor.height_m'),
+  gearChance:  K('actor.gear_chance'),
+  walkTicks:   K('anim.walk_ticks'),
+  walkLegSwing: K('anim.walk_leg_swing'),
+  walkKneeBend: K('anim.walk_knee_bend'),
+  walkArmSwing: K('anim.walk_arm_swing'),
+  walkBob:     K('anim.walk_bob'),
+  workTicks:   K('anim.work_ticks'),
+  workArmLift: K('anim.work_arm_lift'),
+  workLean:    K('anim.work_lean'),
+  idleTicks:   K('anim.idle_ticks'),
+  idleSway:    K('anim.idle_sway'),
+  turnTicks:   K('anim.turn_ticks'),
+  lightAmbient: K('render.light_ambient'),
+  lightDiffuse: K('render.light_diffuse'),
   figureNominal: G('figure.nominal_height_m'),
   metresPerTile: G('world.metres_per_tile'),
   isoRatio:    G('render.iso_ratio')

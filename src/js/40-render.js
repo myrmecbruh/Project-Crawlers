@@ -69,18 +69,64 @@ const Render = {
              left: [top[2], top[3], bot[3], bot[2]] };
   },
 
-  /* Which parts of a figure are on this crawler right now. Rule 4: a part that
-     is worn is a part that is drawn, and there is no other path to the screen. */
-  figureParts(actor) {
+  /* Where the camera is, in the space the world is measured in. Two points on
+     this line land on the same pixel, so it is both the cull test and the
+     depth order -- and it swings with the view. */
+  towardCamera(s, nx, ny, nz) {
+    const cam = s.cam;
+    const nu = nx * cam.cos - ny * cam.sin;
+    const nv = nx * cam.sin + ny * cam.cos;
+    return nu + nv + nz * (cam.tileH / CFG.rise);
+  },
+
+  /* One fixed light, in the WORLD rather than in the camera, so the sun does
+     not spin when the view does. */
+  lightOn(nx, ny, nz) {
+    const len = Math.hypot(nx, ny, nz) || 1;
+    const d = (nx * 0.30 + ny * -0.42 + nz * 0.86) / len;
+    return CFG.lightAmbient + CFG.lightDiffuse * Math.max(0, d);
+  },
+
+  /* One posed crawler, as real boxes on real bones. */
+  figure3d(s, actor, gx, gy, ground, scale) {
+    const pose = poseFor(actor, s.tick);
+    const bones = buildSkeleton(pose);
+    const parts = figureParts(actor);
     const out = [];
-    for (let i = 0; i < FIGURE_IDS.length; i++) {
-      const id = FIGURE_IDS[i], f = DATA.figure[id];
-      if (f.slot === 'body' || actor.worn[f.slot] === id) out.push({ id: id, part: f });
+    const box = [Infinity, Infinity, -Infinity, -Infinity];
+
+    for (let i = 0; i < parts.length; i++) {
+      const f = parts[i].part;
+      const bone = bones[f.bone];
+      if (!bone) continue;
+      const pts = partCorners(bone, f, scale);
+      const scr = new Array(8);
+      let cx = 0, cy = 0, cz = 0;
+      for (let c = 0; c < 8; c++) {
+        const q = pts[c];
+        scr[c] = this.project(s, gx + q[0], gy + q[1], ground + q[2]);
+        cx += q[0]; cy += q[1]; cz += q[2];
+      }
+      const faces = [];
+      for (let k = 0; k < BOX_FACES.length; k++) {
+        const fa = BOX_FACES[k];
+        const a = pts[fa[0]], b2 = pts[fa[1]], c2 = pts[fa[2]];
+        const ux = b2[0] - a[0], uy = b2[1] - a[1], uz = b2[2] - a[2];
+        const vx = c2[0] - b2[0], vy = c2[1] - b2[1], vz = c2[2] - b2[2];
+        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        if (this.towardCamera(s, nx, ny, nz) <= 0) continue;   /* facing away */
+        faces.push({ pts: [scr[fa[0]], scr[fa[1]], scr[fa[2]], scr[fa[3]]],
+                     lit: this.lightOn(nx, ny, nz) });
+      }
+      if (!faces.length) continue;
+      this.bounds(scr, box);
+      out.push({ id: parts[i].id, slot: f.slot, item: f.item, colour: f.colour,
+                 faces: faces,
+                 depth: this.towardCamera(s, gx + cx / 8, gy + cy / 8, ground + cz / 8) });
     }
-    /* Ground up, always. A hat painted before the head it sits on is a hat
-       nobody can see -- which looks exactly like a hat that works. */
-    out.sort(function (a, b) { return a.part.from_m - b.part.from_m; });
-    return out;
+    /* Nearest last. Twelve-odd convex boxes sort reliably by their middles. */
+    out.sort(function (a, b) { return a.depth - b.depth; });
+    return { parts: out, box: box };
   },
 
   bounds(pts, box) {
@@ -182,23 +228,15 @@ const Render = {
       if (!people) continue;
       for (let q = 0; q < people.length; q++) {
         const actor = s.actors[people[q]];
-        const parts = this.figureParts(actor);
-        const drawn = [];
-        const abox = [Infinity, Infinity, -Infinity, -Infinity];
-        for (let r = 0; r < parts.length; r++) {
-          const f = parts[r].part;
-          const shape = this.box(s, x + 0.5, y + 0.5, f.half_width,
-                                 ground + f.from_m * scale, ground + f.to_m * scale);
-          drawn.push({ id: parts[r].id, colour: f.colour, shape: shape });
-          this.bounds(shape.top, abox);
-        }
-        if (abox[2] < 0 || abox[0] > this.w || abox[3] + CFG.rise < 0 || abox[1] > this.h) continue;
-        const crown = drawn[drawn.length - 1].shape.top;
+        const fig = this.figure3d(s, actor, x + 0.5, y + 0.5, ground, scale);
+        const abox = fig.box;
+        if (!fig.parts.length) continue;
+        if (abox[2] < 0 || abox[0] > this.w || abox[3] < 0 || abox[1] > this.h) continue;
         b.push({
           kind: 'actor', i: w.cells.length + people[q],
-          actor: actor, parts: drawn, top: crown, solid: true, depth: depth + 0.02,
-          minX: abox[0], minY: abox[1], maxX: abox[2], maxY: abox[3] + CFG.rise,
-          cx: (crown[0].x + crown[2].x) / 2, cy: (crown[0].y + crown[2].y) / 2
+          actor: actor, parts: fig.parts, solid: true, depth: depth + 0.02,
+          minX: abox[0], minY: abox[1], maxX: abox[2], maxY: abox[3],
+          cx: (abox[0] + abox[2]) / 2, cy: abox[1] + (abox[3] - abox[1]) * 0.35
         });
       }
     }
@@ -271,16 +309,20 @@ const Render = {
       if (it.kind === 'actor') {
         for (let r = 0; r < it.parts.length; r++) {
           const pt = it.parts[r];
-          this.poly(ctx, pt.shape.left, shade(pt.colour, CFG.shadeLeft));
-          this.poly(ctx, pt.shape.right, shade(pt.colour, CFG.shadeRight));
-          this.poly(ctx, pt.shape.top, pt.colour);
-          if (DATA.figure[pt.id].slot !== 'body') wornDrawn.push(pt.id);
+          for (let g = 0; g < pt.faces.length; g++) {
+            this.poly(ctx, pt.faces[g].pts, shade(pt.colour, pt.faces[g].lit));
+          }
+          if (pt.slot !== 'body') wornDrawn.push(pt.item);
         }
         people++; drawn++;
         if (items) {
           items.push({ i: it.i, kind: 'actor', name: it.actor.name,
                        x: it.actor.x, y: it.actor.y, doing: it.actor.doing,
+                       face: it.actor.face,
                        parts: it.parts.map(function (q) { return q.id; }),
+                       worn: it.parts.filter(function (q) { return q.slot !== 'body'; })
+                              .map(function (q) { return q.item; }),
+                       faces: it.parts.reduce(function (n, q) { return n + q.faces.length; }, 0),
                        alpha: alpha, sx: it.cx, sy: it.cy });
         }
         continue;
@@ -324,7 +366,16 @@ const Render = {
     ctx.globalAlpha = 1;
     let outlined = false;
     if (focus) {
-      this.outline(ctx, focus.kind === 'site' ? focus.shape.top : focus.top, '#ffe9a8');
+      if (focus.kind === 'actor') {
+        /* A posed figure has no one flat top to trace, so it is boxed. */
+        ctx.strokeStyle = '#ffe9a8';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(Math.round(focus.minX) - 1.5, Math.round(focus.minY) - 1.5,
+                       Math.round(focus.maxX - focus.minX) + 3,
+                       Math.round(focus.maxY - focus.minY) + 3);
+      } else {
+        this.outline(ctx, focus.kind === 'site' ? focus.shape.top : focus.top, '#ffe9a8');
+      }
       outlined = true;
     }
 
@@ -356,9 +407,8 @@ const Render = {
       const col = 'rgb(' + (id & 255) + ',' + ((id >> 8) & 255) + ',' + ((id >> 16) & 255) + ')';
       if (it.kind === 'actor') {
         for (let r = 0; r < it.parts.length; r++) {
-          this.poly(ctx, it.parts[r].shape.left, col);
-          this.poly(ctx, it.parts[r].shape.right, col);
-          this.poly(ctx, it.parts[r].shape.top, col);
+          const fs = it.parts[r].faces;
+          for (let g = 0; g < fs.length; g++) this.poly(ctx, fs[g].pts, col);
         }
         continue;
       }

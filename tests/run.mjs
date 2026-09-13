@@ -324,59 +324,162 @@ await test('crawlers reach the screen, standing on the ground (rule 4)', async (
   assert(r.actors.length === 6, `${r.actors.length} crawlers were made`);
   assert(r.people > 0, 'not one crawler reached the screen');
   for (const d of r.drawn) {
-    assert(d.parts.includes('legs') && d.parts.includes('torso') && d.parts.includes('head'),
-      `${d.name} reached the screen as ${d.parts.join('+')}`);
-  }
-});
-
-await test('a hat on a crawler is a hat on the screen (rule 4)', async () => {
-  const r = await page.evaluate(() => {
-    window.__test.seed(1); window.__test.record(true);
-    /* Go and find a crawler, then take their hat off and on. */
-    const found = window.__test.pointAtAnyActor();
-    const idx = found.index;
-    const who = found.pick;
-
-    const n = window.__test.actors().length;
-    for (let i = 0; i < n; i++) window.__test.wearHat(i, false);
-    const bare = window.__test.redraw();          /* same moment, no time passes */
-    const bareParts = bare.items.find((i) => i.i === who).parts;
-
-    window.__test.wearHat(idx, true);
-    const hatted = window.__test.redraw();
-    const hatParts = hatted.items.find((i) => i.i === who).parts;
-
-    return { bareParts, hatParts, bareWorn: bare.worn, hatWorn: hatted.worn,
-             found, described: window.__test.describe(who) };
-  });
-  assert(!r.bareParts.includes('hat'), 'a bare head was drawn wearing a hat');
-  assert(r.hatParts.includes('hat'), 'a crawler wearing a hat was drawn without one');
-  assert(r.hatWorn.includes('hat'), 'the hat never reached the canvas');
-  assert(!r.bareWorn.includes('hat'), 'a hat reached the canvas with nobody wearing it');
-  assert(r.described.worn.includes('Hat'), 'the inspector does not list the hat');
-  assert(r.found.found, `could not get the pointer onto a crawler: ${r.found.why}`);
-});
-
-await test('a figure is painted from the ground up, so nothing worn is buried', async () => {
-  const r = await page.evaluate(() => {
-    window.__test.seed(1); window.__test.record(true);
-    const n = window.__test.actors().length;
-    for (let i = 0; i < n; i++) window.__test.wearHat(i, true);
-    window.__test.centreOn(0);
-    const drew = window.__test.frame(1);
-    const people = drew.items.filter((i) => i.kind === 'actor');
-    return { people: people.map((p) => p.parts), figure: window.__test.data.figure };
-  });
-  assert(r.people.length > 0, 'no crawler was drawn');
-  for (const parts of r.people) {
-    const heights = parts.map((id) => r.figure[id].from_m);
-    for (let i = 1; i < heights.length; i++) {
-      assert(heights[i] >= heights[i - 1],
-        `painted ${parts.join(' -> ')}, which puts ${parts[i]} underneath ${parts[i - 1]}`);
+    for (const must of ['head', 'torso', 'pelvis', 'thigh_l', 'thigh_r',
+                        'upperarm_l', 'upperarm_r', 'foot_l', 'foot_r']) {
+      assert(d.parts.includes(must),
+        `${d.name} reached the screen without a ${must}: ${d.parts.join('+')}`);
     }
-    assert(parts[parts.length - 1] === 'hat',
-      `the hat was not the last thing painted: ${parts.join(' -> ')}`);
   }
+});
+
+await test('every one of the twelve slots shows on the crawler (rule 4)', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    const found = window.__test.pointAtAnyActor();
+    const idx = found.index, who = found.pick;
+
+    window.__test.strip(idx);
+    const bare = window.__test.redraw().items.find((i) => i.i === who);
+
+    const slots = Object.keys(window.__test.data.slots);
+    const gear = window.__test.data.gear;
+    const results = [];
+    for (const slot of slots) {
+      const item = slots.indexOf(slot) >= 0
+        ? Object.keys(gear).find((g) => gear[g].slot === slot) : null;
+      window.__test.strip(idx);
+      window.__test.wear(idx, slot, item);
+      const drawn = window.__test.redraw().items.find((i) => i.i === who);
+      results.push({ slot, item, worn: drawn ? drawn.worn : [],
+                     parts: drawn ? drawn.parts.length : 0 });
+    }
+    window.__test.strip(idx);
+    return { found, bare: { worn: bare.worn, parts: bare.parts.length }, results,
+             slots: slots.length };
+  });
+  assert(r.found.found, `could not get at a crawler: ${r.found.why}`);
+  assert(r.slots === 12, `there are ${r.slots} slots, not twelve`);
+  assert(r.bare.worn.length === 0, `a stripped crawler still showed ${r.bare.worn}`);
+  assert(r.bare.parts > 10, `a stripped crawler is only ${r.bare.parts} parts`);
+  for (const q of r.results) {
+    assert(q.item, `nothing can be worn in ${q.slot}`);
+    assert(q.worn.includes(q.item),
+      `wore ${q.item} in ${q.slot} and the screen showed ${q.worn.join(',') || 'nothing'}`);
+    assert(q.parts > r.bare.parts,
+      `wearing ${q.item} added no parts to the figure`);
+  }
+});
+
+await test('a figure is real geometry: posed, lit, and with its back faces dropped', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    const found = window.__test.pointAtAnyActor();
+    const drawn = window.__test.redraw().items.find((i) => i.i === found.pick);
+    const pose = window.__test.pose(found.index);
+    /* Move the arm and the hand must move with it. */
+    const a = window.__test.state.actors[found.index];
+    const was = window.__test.pose(found.index).bones.hand_r.slice();
+    a.doing = a.doing === 'walking' ? 'building' : 'walking';
+    window.__test.state.geomDirty = true;
+    const now = window.__test.pose(found.index).bones.hand_r.slice();
+    return { found, drawn, pose, was, now,
+             bones: Object.keys(window.__test.data.bones).length };
+  });
+  assert(r.found.found, 'no crawler in view');
+  assert(r.bones >= 15, `the skeleton is only ${r.bones} bones`);
+  assert(r.drawn.faces > 0, 'a crawler reached the screen with no faces at all');
+  const nParts = r.drawn.parts.length;
+  assert(r.drawn.faces < nParts * 6,
+    `${r.drawn.faces} faces for ${nParts} parts -- back faces are not being dropped`);
+  assert(r.drawn.faces >= nParts * 2,
+    `${r.drawn.faces} faces for ${nParts} parts -- whole parts are vanishing`);
+  assert(r.drawn.faces <= nParts * 3,
+    `${r.drawn.faces} faces for ${nParts} boxes -- a convex box shows at most three`);
+  const moved = Math.abs(r.was[0] - r.now[0]) + Math.abs(r.was[1] - r.now[1])
+              + Math.abs(r.was[2] - r.now[2]);
+  assert(moved > 0.02, `changing what they are doing moved the hand ${moved.toFixed(3)}m`);
+  assert(Math.abs(r.pose.bones.head[2] - 1.3) < 0.4,
+    `the head is at ${r.pose.bones.head[2]}m, which is not where a head goes`);
+});
+
+await test('a crawler turns to face where they are going', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(3);
+    const faces = new Set();
+    let turned = 0, last = null;
+    for (let i = 0; i < 600; i++) {
+      window.__test.frame(1);
+      for (const a of window.__test.actors()) {
+        faces.add(Math.round(a.face * 100) / 100);
+        if (a.index === 0) {
+          if (last !== null && Math.abs(a.face - last) > 1e-6) turned++;
+          last = a.face;
+        }
+      }
+    }
+    return { distinct: faces.size, turned };
+  });
+  assert(r.distinct > 2, `every crawler faced the same way all match (${r.distinct} angles)`);
+  assert(r.turned > 3, `the first crawler changed facing only ${r.turned} times`);
+});
+
+await test('gear does all three things it is supposed to (hybrid)', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    const i = 0;
+    window.__test.strip(i);
+    const bare = { build: window.__test.ability(i, 'building'),
+                   climb: window.__test.ability(i, 'clambering'),
+                   attrs: window.__test.describe(window.__test.actors()[i].pick).attributes };
+
+    /* 1. a tool is REQUIRED: without one, building is brutal */
+    window.__test.wear(i, 'mainhand', 'spade');
+    const tooled = window.__test.ability(i, 'building');
+
+    /* 2. gear makes a roll EASIER */
+    window.__test.strip(i);
+    window.__test.wear(i, 'feet', 'boots');
+    const booted = window.__test.ability(i, 'clambering');
+
+    /* 3. gear CHANGES WHO YOU ARE, with a cost */
+    window.__test.strip(i);
+    window.__test.wear(i, 'back', 'pack');
+    const packed = window.__test.describe(window.__test.actors()[i].pick).attributes;
+    window.__test.strip(i);
+    return { bare, tooled, booted, packed,
+             packGear: window.__test.data.gear.pack };
+  });
+
+  assert(r.bare.build.tool < 0,
+    `building with bare hands cost nothing (${r.bare.build.tool})`);
+  assert(r.tooled.tool === 0 && r.tooled.ability > r.bare.build.ability + 25,
+    `a spade took building from ${r.bare.build.ability} to ${r.tooled.ability}`);
+
+  assert(r.booted.bonus > 0 && r.booted.ability > r.bare.climb.ability,
+    `boots took clambering from ${r.bare.climb.ability} to ${r.booted.ability}`);
+
+  const find = (list, id) => list.find((a) => a.id === id);
+  assert(find(r.packed, 'might').value > find(r.bare.attrs, 'might').value,
+    'a pack did not make them stronger');
+  assert(find(r.packed, 'agility').value < find(r.bare.attrs, 'agility').value,
+    'a pack cost them nothing in agility -- the trade-off is the point');
+});
+
+await test('the inspector shows all twelve slots, full or empty', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    const i = 0;
+    window.__test.strip(i);
+    window.__test.wear(i, 'feet', 'boots');
+    const found = window.__test.pointAtAnyActor();
+    const d = window.__test.describe(window.__test.actors()[i].pick);
+    return { d, tip: window.__test.tooltipOnScreen(), found };
+  });
+  assert(r.d.gear.length === 12, `the inspector lists ${r.d.gear.length} slots`);
+  const boots = r.d.gear.find((g) => g.slot === 'feet');
+  assert(boots && !boots.empty && boots.name === 'Boots', 'the boots are not listed');
+  assert(boots.effects.length > 0, 'the boots list no effect');
+  assert(r.d.gear.filter((g) => g.empty).length === 11, 'the empty slots are not shown');
 });
 
 await test('the six attributes are shown in the order the spreadsheet lists them', async () => {

@@ -20,12 +20,72 @@ const CRAWLER_TAGS = ['person', 'crawler'];
 
 /* ---- the roll ----------------------------------------------------------- */
 
+/* ---- gear, which is twelve parts and does three things --------------------
+   Gear SHIFTS an attribute (a pack makes you stronger-backed and slower), it
+   BONUSES a skill (boots help you keep your feet), and some work REQUIRES it
+   (you cannot build with your hands). All three go through ability() below, so
+   there is still exactly one place anything is resolved (rule 2). */
+
+function wornList(actor) {
+  const out = [];
+  for (let i = 0; i < SLOT_IDS.length; i++) {
+    const item = actor.worn[SLOT_IDS[i]];
+    if (item) out.push(item);
+  }
+  return out;
+}
+
+function gearAttrShift(actor, attrId) {
+  let sum = 0;
+  const worn = wornList(actor);
+  for (let i = 0; i < worn.length; i++) {
+    const pairs = GEAR(worn[i]).attr;
+    for (let k = 0; k < pairs.length; k++) {
+      if (pairs[k][0] === attrId) sum += pairs[k][1];
+    }
+  }
+  return sum;
+}
+
+/* What an attribute is actually worth right now, gear included. */
+function effAttr(actor, attrId) {
+  return actor.attr[attrId] + gearAttrShift(actor, attrId);
+}
+
+function gearBonus(actor, skillId) {
+  let sum = 0;
+  const worn = wornList(actor);
+  for (let i = 0; i < worn.length; i++) {
+    const pairs = GEAR(worn[i]).bonus;
+    for (let k = 0; k < pairs.length; k++) {
+      if (pairs[k][0] === skillId) sum += pairs[k][1];
+    }
+  }
+  return sum;
+}
+
+function carriesTag(actor, tag) {
+  const worn = wornList(actor);
+  for (let i = 0; i < worn.length; i++) {
+    if (GEAR(worn[i]).tags.indexOf(tag) >= 0) return true;
+  }
+  return false;
+}
+
+/* Some work needs a tool at all. Going without is not forbidden -- it is just
+   very hard, which keeps one rule instead of two. */
+function toolPenalty(actor, skillId) {
+  const sk = SKILL(skillId);
+  if (!sk.needs_tag) return 0;
+  return carriesTag(actor, sk.needs_tag) ? 0 : sk.without;
+}
+
 /* What the six attributes are worth to one skill, as a weighted average. */
 function attributeBase(actor, skillId) {
   const derives = SKILL(skillId).derives;
   let total = 0, weight = 0;
   for (let i = 0; i < derives.length; i++) {
-    total += actor.attr[derives[i][0]] * derives[i][1];
+    total += effAttr(actor, derives[i][0]) * derives[i][1];
     weight += derives[i][1];
   }
   return weight ? total / weight : 0;
@@ -39,7 +99,9 @@ function skillLevel(actor, skillId) {
    point of a game about people who come and go. */
 function ability(actor, skillId) {
   return attributeBase(actor, skillId) * CFG.attrWeight
-       + skillLevel(actor, skillId) * CFG.skillWeight;
+       + skillLevel(actor, skillId) * CFG.skillWeight
+       + gearBonus(actor, skillId)
+       + toolPenalty(actor, skillId);
 }
 
 /* Triangular luck: two draws added, so results cluster near the middle and a
@@ -89,14 +151,22 @@ function makeActor(rand, index, name) {
   for (let i = 0; i < ATTRIBUTE_IDS.length; i++) {
     attr[ATTRIBUTE_IDS[i]] = rollAttribute(rand);
   }
+  /* Rule 4: what they are wearing is on them, not in a panel. Twelve slots,
+     and what turns up in each is down to the seed. */
+  const worn = {};
+  for (let i = 0; i < GEAR_IDS.length; i++) {
+    const g = GEAR_IDS[i];
+    if (rand() < CFG.gearChance) worn[GEAR(g).slot] = g;
+  }
   return {
     index: index,
     name: name,
     attr: attr,
     skills: {},
-    /* Rule 4: what they are wearing is on them, not in a panel. */
-    worn: rand() < CFG.hatChance ? { hat: 'hat' } : {},
+    worn: worn,
     x: 0, y: 0,
+    face: 0, faceTarget: 0,
+    gait: Math.floor(rand() * 120),   /* so six crawlers do not march in step */
     cooldown: Math.floor(rand() * CFG.stepTicks),
     lastRoll: null, lastWork: null,
     site: -1, doing: 'idle',
@@ -162,6 +232,7 @@ const MOVE_SKILL = 'clambering';
    against how hard that floor is to cross -- water and rubble are genuinely
    worth failing at. */
 function tryStep(state, actor, to, dx, dy) {
+  actor.faceTarget = facingFor(dx, dy);
   const roll = attempt(state, actor, MOVE_SKILL, TILE(to.tile).cross);
   if (roll.ok) {
     actor.x = to.x;
@@ -193,6 +264,14 @@ function wander(state, actor) {
    here waits to be told. They pick the nearest bit of the camp that still needs
    doing, walk to it, and work at it. */
 function actorStep(state, actor) {
+  /* Turning happens every tick, not only on the tick they move, so a crawler
+     swings round to face where they are going rather than snapping. */
+  if (actor.face !== actor.faceTarget) {
+    actor.face = turnToward(actor.face, actor.faceTarget,
+                            (Math.PI / Math.max(1, CFG.turnTicks)));
+    state.viewDirty = true;
+    state.geomDirty = true;
+  }
   if (actor.cooldown > 0) { actor.cooldown--; return null; }
 
   const camp = state.camp;
@@ -208,9 +287,15 @@ function actorStep(state, actor) {
     site.workers++;
   }
 
-  if (actor.x === site.x && actor.y === site.y) {
+  /* Work from ALONGSIDE the site, not on top of it. Nobody builds a fire while
+     standing in it, and a crawler drawn on the same square as a half-built
+     store looks like they are standing on a crate. */
+  const n = state.world.n;
+  const away = site.field[actor.y * n + actor.x];
+  if (away >= 0 && away <= 1) {
     actor.cooldown = CFG.campWorkTicks;
     actor.doing = site.cleared ? 'building' : 'clearing';
+    actor.faceTarget = facingFor(site.x - actor.x, site.y - actor.y);
     return workSite(state, actor, site);
   }
 
@@ -226,7 +311,9 @@ function actorStep(state, actor) {
 
 function describeActor(actor) {
   const attrs = ATTRIBUTE_IDS.map(function (id) {
-    return { id: id, abbrev: ATTR(id).abbrev, name: ATTR(id).name, value: actor.attr[id] };
+    return { id: id, abbrev: ATTR(id).abbrev, name: ATTR(id).name,
+             value: effAttr(actor, id), base: actor.attr[id],
+             shift: gearAttrShift(actor, id) };
   });
   const skills = SKILL_IDS.filter(function (id) { return actor.skills[id]; })
     .map(function (id) {
@@ -234,9 +321,23 @@ function describeActor(actor) {
                level: Math.round(skillLevel(actor, id) * 10) / 10,
                from: SKILL(id).derives.map(function (p) { return ATTR(p[0]).abbrev; }).join('+') };
     });
-  const worn = Object.keys(actor.worn).map(function (slot) {
-    return DATA.figure[actor.worn[slot]].name;
+  const gear = SLOT_IDS.map(function (slot) {
+    const item = actor.worn[slot];
+    if (!item) return { slot: slot, slotName: SLOT(slot).name, empty: true };
+    const g = GEAR(item);
+    const effects = [];
+    for (const pair of g.attr) {
+      effects.push((pair[1] > 0 ? '+' : '') + pair[1] + ' ' + ATTR(pair[0]).abbrev);
+    }
+    for (const pair of g.bonus) {
+      effects.push((pair[1] > 0 ? '+' : '') + pair[1] + ' ' + SKILL(pair[0]).name);
+    }
+    return { slot: slot, slotName: SLOT(slot).name, item: item, name: g.name,
+             tags: g.tags.map(function (t) { return TAG(t).name; }),
+             effects: effects, empty: false };
   });
+  const worn = gear.filter(function (g) { return !g.empty; })
+                   .map(function (g) { return g.name; });
   return {
     kind: 'crawler',
     name: actor.name,
@@ -244,6 +345,8 @@ function describeActor(actor) {
     attributes: attrs,
     skills: skills,
     worn: worn,
+    gear: gear,
+    lacksTool: !carriesTag(actor, 'tool'),
     steps: actor.steps,
     stumbles: actor.stumbles,
     doing: actor.doing,

@@ -21,8 +21,13 @@ SECTIONS = {
     "tags":     ("id",  ["name", "note"], False),
     "tiles":    ("id",  ["name", "tags", "top", "side", "footing", "cross", "clear", "note"], False),
     "attributes": ("id", ["name", "abbrev", "note"], False),
-    "skills":   ("id",  ["name", "derives", "note"], False),
-    "figure":   ("id",  ["name", "slot", "colour", "half_width", "from_m", "to_m", "note"], False),
+    "skills":   ("id",  ["name", "derives", "needs_tag", "without", "note"], False),
+    "bones":    ("id",  ["name", "parent", "x", "y", "z", "note"], False),
+    "slots":    ("id",  ["name", "note"], False),
+    "gear":     ("id",  ["name", "slot", "tags", "attr", "bonus", "note"], False),
+    "figure":   ("id",  ["name", "slot", "item", "bone", "colour", "ox", "oy",
+                         "from_m", "to_m", "w_top", "w_bot", "d_top", "d_bot",
+                         "note"], False),
     "structures": ("id", ["name", "tags", "colour", "half_width", "height_m",
                           "skill", "difficulty", "note"], False),
 }
@@ -47,15 +52,16 @@ def norm(col, v):
     if blank(v):
         return ""
     if col in ("value", "cross", "clear", "half_width", "from_m", "to_m",
-               "height_m", "difficulty"):
+               "height_m", "difficulty", "without", "x", "y", "z", "ox", "oy",
+               "w_top", "w_bot", "d_top", "d_bot"):
         try:
             f = float(v)
             return int(f) if f == int(f) else round(f, 10)
         except (TypeError, ValueError):
             return str(v).strip()
-    if col in ("footing", "slot"):
+    if col in ("footing", "slot", "item", "bone", "parent", "needs_tag"):
         return str(v).strip().lower()
-    if col == "derives":
+    if col in ("derives", "attr", "bonus"):
         return ",".join(t.strip().lower() for t in str(v).split(",") if t.strip())
     if col == "tags":
         return ",".join(t.strip() for t in str(v).split(",") if t.strip())
@@ -143,6 +149,8 @@ def for_game(merged):
             attr, _, w = part.partition(":")
             pairs.append([attr.strip(), float(w) if w.strip() else 1.0])
         out["skills"][k] = {"name": str(r["name"]), "derives": pairs,
+                            "needs_tag": norm("needs_tag", r.get("needs_tag")),
+                            "without": norm("without", r.get("without")) or 0,
                             "note": str(r.get("note", ""))}
 
     out["structures"] = {k: {"name": str(r["name"]),
@@ -155,11 +163,42 @@ def for_game(merged):
                              "note": str(r.get("note", ""))}
                          for k, r in merged["structures"].items()}
 
+    out["bones"] = {k: {"name": str(r["name"]), "parent": norm("parent", r["parent"]),
+                        "x": norm("x", r["x"]), "y": norm("y", r["y"]),
+                        "z": norm("z", r["z"]), "note": str(r.get("note", ""))}
+                    for k, r in merged["bones"].items()}
+    out["slots"] = {k: {"name": str(r["name"]), "note": str(r.get("note", ""))}
+                    for k, r in merged["slots"].items()}
+    def pairs_of(text):
+        out_ = []
+        if blank(text):
+            return out_
+        for part_ in norm("attr", text).split(","):
+            if not part_:
+                continue
+            key, _, amt = part_.partition(":")
+            try:
+                out_.append([key.strip(), float(amt)])
+            except ValueError:
+                out_.append([key.strip(), 0.0])
+        return out_
+
+    out["gear"] = {k: {"name": str(r["name"]), "slot": norm("slot", r["slot"]),
+                       "tags": [t for t in norm("tags", r["tags"]).split(",") if t],
+                       "attr": pairs_of(r.get("attr")), "bonus": pairs_of(r.get("bonus")),
+                       "note": str(r.get("note", ""))}
+                   for k, r in merged["gear"].items()}
     out["figure"] = {k: {"name": str(r["name"]), "slot": norm("slot", r["slot"]),
+                         "item": norm("item", r["item"]),
+                         "bone": norm("bone", r["bone"]),
                          "colour": str(r["colour"]).strip(),
-                         "half_width": norm("half_width", r["half_width"]),
+                         "ox": norm("ox", r["ox"]), "oy": norm("oy", r["oy"]),
                          "from_m": norm("from_m", r["from_m"]),
                          "to_m": norm("to_m", r["to_m"]),
+                         "w_top": norm("w_top", r["w_top"]),
+                         "w_bot": norm("w_bot", r["w_bot"]),
+                         "d_top": norm("d_top", r["d_top"]),
+                         "d_bot": norm("d_bot", r["d_bot"]),
                          "note": str(r.get("note", ""))}
                      for k, r in merged["figure"].items()}
     return out
@@ -236,13 +275,92 @@ def check_vocabulary(game):
                 errors.append("structures: '%s' claims the tag '%s', which is not "
                               "in the tags sheet" % (stid, tag))
 
+    # A crawler is twelve parts, which are their gear. That is a rule, so the
+    # build checks it rather than trusting the sheet to stay that way.
+    if len(game["slots"]) != 12:
+        errors.append("slots: there are %d gear slots, and a crawler has twelve"
+                      % len(game["slots"]))
+
+    bones = set(game["bones"])
+    for bid, b in game["bones"].items():
+        if b["parent"] and b["parent"] not in bones:
+            errors.append("bones: '%s' hangs off '%s', which is not a bone"
+                          % (bid, b["parent"]))
+    # A loop in a skeleton hangs the game rather than failing it.
+    for bid in game["bones"]:
+        seen, cur = set(), bid
+        while cur:
+            if cur in seen:
+                errors.append("bones: '%s' is part of a loop" % bid)
+                break
+            seen.add(cur)
+            cur = game["bones"].get(cur, {}).get("parent", "")
+
+    for sid, sk in game["skills"].items():
+        if sk["needs_tag"] and sk["needs_tag"] not in known:
+            errors.append("skills: '%s' needs gear tagged '%s', which is not in "
+                          "the tags sheet" % (sid, sk["needs_tag"]))
+        if sk["without"] > 0:
+            errors.append("skills: '%s' has a penalty of +%s for going without, "
+                          "which would be a reward" % (sid, sk["without"]))
+        if sk["without"] and not sk["needs_tag"]:
+            errors.append("skills: '%s' penalises going without, but never says "
+                          "without what" % sid)
+
+    slots = set(game["slots"])
+    for gid, g in game["gear"].items():
+        for attr, amt in g["attr"]:
+            if attr not in attrs:
+                errors.append("gear: '%s' shifts '%s', which is not one of the six"
+                              % (gid, attr))
+        for skill, amt in g["bonus"]:
+            if skill not in game["skills"]:
+                errors.append("gear: '%s' helps with '%s', which is not a skill"
+                              % (gid, skill))
+        if g["slot"] not in slots:
+            errors.append("gear: '%s' goes in slot '%s', which is not one of the "
+                          "twelve" % (gid, g["slot"]))
+        for tag in g["tags"]:
+            if tag not in known:
+                errors.append("gear: '%s' claims the tag '%s', which is not in "
+                              "the tags sheet" % (gid, tag))
+
+    drawn = set()
     for fid, f in game["figure"].items():
-        if f["slot"] not in ("body", "hat", "back", "held"):
-            errors.append("figure: '%s' has slot '%s'; expected body, hat, back "
-                          "or held" % (fid, f["slot"]))
+        if f["slot"] != "body" and f["slot"] not in slots:
+            errors.append("figure: '%s' has slot '%s'; expected body or one of "
+                          "the twelve" % (fid, f["slot"]))
+        if f["bone"] not in bones:
+            errors.append("figure: '%s' hangs off '%s', which is not a bone"
+                          % (fid, f["bone"]))
         if not (f["to_m"] > f["from_m"]):
             errors.append("figure: '%s' spans %s to %s, which is nothing at all"
                           % (fid, f["from_m"], f["to_m"]))
+        for c in ("w_top", "w_bot", "d_top", "d_bot"):
+            if not (f[c] > 0):
+                errors.append("figure: '%s' has %s of %s" % (fid, c, f[c]))
+        if f["slot"] == "body":
+            if f["item"]:
+                errors.append("figure: '%s' is body and should name no item" % fid)
+        elif f["item"] not in game["gear"]:
+            errors.append("figure: '%s' draws the gear '%s', which does not exist"
+                          % (fid, f["item"]))
+        elif game["gear"][f["item"]]["slot"] != f["slot"]:
+            errors.append("figure: '%s' is in slot '%s' but draws '%s', which is "
+                          "worn on '%s'" % (fid, f["slot"], f["item"],
+                                            game["gear"][f["item"]]["slot"]))
+        else:
+            drawn.add(f["item"])
+
+    # Rule 4: if it is on a crawler it is on the screen. Gear nothing draws
+    # would be invisible when worn, which is exactly the failure rule 4 forbids.
+    for gid in game["gear"]:
+        if gid not in drawn:
+            errors.append("gear: nothing draws '%s', so wearing it would show "
+                          "nothing (rule 4)" % gid)
+    for sid in slots:
+        if not any(g["slot"] == sid for g in game["gear"].values()):
+            errors.append("slots: nothing can be worn in '%s' yet" % sid)
     return errors
 
 
@@ -344,8 +462,27 @@ def selftest():
                                    "intellect", "willpower"))
             for b in ("might", "agility", "endurance", "presence", "intellect",
                       "willpower")[i + 1:]),
-        "figure": {"torso": {"name": "Torso", "slot": "body", "colour": "#444",
-                             "half_width": 0.2, "from_m": 0.4, "to_m": 1.3, "note": ""}},
+        "bones": {"root": {"name": "Root", "parent": "", "x": 0, "y": 0, "z": 0, "note": ""},
+                  "chest": {"name": "Chest", "parent": "root", "x": 0, "y": 0, "z": 1, "note": ""}},
+        "slots": dict((s_, {"name": s_, "note": ""}) for s_ in
+                      ("head", "neck", "back", "torso", "gloves", "mainhand",
+                       "offhand", "belt", "legs", "feet", "trinket1", "trinket2")),
+        "gear": dict((s_, {"name": s_, "slot": s_, "tags": "t1", "note": ""}) for s_ in
+                     ("head", "neck", "back", "torso", "gloves", "mainhand",
+                      "offhand", "belt", "legs", "feet", "trinket1", "trinket2")),
+        "figure": dict([("torso_body", {"name": "Torso", "slot": "body", "item": "",
+                                        "bone": "chest", "colour": "#444",
+                                        "ox": 0, "oy": 0, "from_m": -0.3, "to_m": 0.2,
+                                        "w_top": 0.18, "w_bot": 0.14,
+                                        "d_top": 0.1, "d_bot": 0.09, "note": ""})]
+                       + [(s_ + "_v", {"name": s_, "slot": s_, "item": s_,
+                                       "bone": "chest", "colour": "#555",
+                                       "ox": 0, "oy": 0, "from_m": -0.3, "to_m": 0.2,
+                                       "w_top": 0.19, "w_bot": 0.15,
+                                       "d_top": 0.11, "d_bot": 0.1, "note": ""})
+                          for s_ in ("head", "neck", "back", "torso", "gloves",
+                                     "mainhand", "offhand", "belt", "legs",
+                                     "feet", "trinket1", "trinket2")]),
         "structures": {"fire": {"name": "Fire", "tags": "t1", "colour": "#900",
                                 "half_width": 0.3, "height_m": 0.5,
                                 "skill": "mig_agi", "difficulty": 40, "note": ""}},
@@ -388,6 +525,19 @@ def selftest():
     errs = check_vocabulary(for_game(m))
     add("a skill from an attribute nobody has stops the build (rule 2)",
         any("not one of the six attributes" in e for e in errs), str(errs[:1]))
+
+    s4 = sheet_from(base)
+    s4["figure"] = {k: v for k, v in s4["figure"].items() if k != "head_v"}
+    d4 = {k: dict(v) for k, v in base.items()}
+    d4["figure"] = {k: v for k, v in base["figure"].items() if k != "head_v"}
+    m, _, _ = reconcile(d4, s4)
+    add("gear nothing draws stops the build (rule 4)",
+        any("would show nothing" in e for e in check_vocabulary(for_game(m))),
+        str(check_vocabulary(for_game(m))[:1]))
+
+    m, _, _ = reconcile(base, None)
+    add("twelve gear slots, no more and no less",
+        not any("twelve" in e for e in check_vocabulary(for_game(m))), "")
 
     m, _, _ = reconcile(base, None)
     add("six attributes, and all fifteen pairs present (rule 2)",

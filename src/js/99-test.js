@@ -125,15 +125,38 @@ window.__test = {
   actors() {
     return Game.state.actors.map(function (a) {
       return { index: a.index, name: a.name, x: a.x, y: a.y, attr: a.attr,
-               skills: a.skills, worn: a.worn, steps: a.steps, doing: a.doing,
+               skills: a.skills, worn: Object.assign({}, a.worn),
+               steps: a.steps, doing: a.doing, face: a.face,
                stumbles: a.stumbles, pick: Game.state.world.cells.length + a.index };
     });
   },
-  wearHat(i, on) {
+  /* Put something in one of the twelve slots, or take it out. */
+  wear(i, slot, item) {
     const a = Game.state.actors[i];
-    if (on) a.worn.hat = 'hat'; else delete a.worn.hat;
+    if (item) a.worn[slot] = item; else delete a.worn[slot];
+    Game.state.geomDirty = true; Game.state.viewDirty = true;
+    return Object.assign({}, a.worn);
+  },
+  strip(i) {
+    const a = Game.state.actors[i];
+    a.worn = {};
     Game.state.geomDirty = true; Game.state.viewDirty = true;
     return a.worn;
+  },
+  /* What a crawler can actually do right now, with what they are carrying. */
+  ability(i, skill) {
+    const a = Game.state.actors[i];
+    return { ability: ability(a, skill), base: attributeBase(a, skill),
+             bonus: gearBonus(a, skill), tool: toolPenalty(a, skill),
+             skill: skillLevel(a, skill) };
+  },
+  pose(i) {
+    const a = Game.state.actors[i];
+    const p = poseFor(a, Game.state.tick);
+    const bones = buildSkeleton(p);
+    const out = {};
+    for (const id of BONE_IDS) out[id] = bones[id].p.slice();
+    return { bob: p.bob, face: a.face, doing: a.doing, bones: out };
   },
   rolls() { return Game.state.rolls; },
 

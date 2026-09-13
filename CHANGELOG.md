@@ -7,6 +7,66 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.6.0 — crawlers become real figures
+
+Posed, lit, three-dimensional people, drawn into the same small buffer as
+everything else. Not sprites: the geometry is real and the resolution is not,
+which is the whole point.
+
+**The skeleton.** Seventeen bones measured in metres from their parents, in a
+space where the crawler faces +Y with +Z up. Every visible part is a **tapered**
+box hung off a bone — wider at the shoulder than the waist, narrower at the
+wrist than the elbow — and the taper is most of what makes a figure read as a
+person rather than a stack of blocks. The build refuses a skeleton with a loop
+in it, because a loop hangs the game rather than failing it.
+
+**Real 3D, not a trick.** Corners are transformed by the bone chain, projected,
+and then each face is tested against the camera axis and dropped if it faces
+away. A convex box shows at most three faces and a test asserts exactly that —
+81 faces across 27 parts, which is three each. Lighting is by face normal
+against a light fixed in the **world**, not the camera, so the sun does not spin
+when the view swings. Parts are depth-sorted along the camera axis.
+
+**Animation is procedural and deliberately split.** The shape of each clip —
+walk, work, idle — is code, because it is logic: a knee only folds one way, a
+work swing goes up slowly and down fast. Every amount is a knob, so the stride
+can be widened or the work slowed from the spreadsheet without touching the
+code. Crawlers turn the short way round to face where they are going, rather
+than snapping.
+
+**The twelve slots, settled and built.** Head, Neck, Back, Torso, Gloves (elbow
+down), Mainhand, Offhand, Belt, Legs, Feet (knees down), Trinket 1, Trinket 2.
+A figure row is drawn if its slot is body, or if the item it names is the one
+worn in that slot — and there is no other path to the screen. Rule 4 is now
+enforced by the build itself: a piece of gear that no row draws stops it, and so
+does a slot nothing can fill. A test dresses a crawler in each of the twelve in
+turn and fails if any of them does not appear.
+
+**Gear does all three things.** Asked and answered as a hybrid, so:
+
+- it **shifts an attribute** — a pack is +1 Might and −1 Agility, and the cost is
+  the point;
+- it **bonuses a skill** — boots are +8 Clambering;
+- and some work **requires** it — Building without a tool is 30 points harder,
+  Labouring 20, which is close to impossible without ever needing a second rule
+  that says "you cannot".
+
+All three arrive through `ability()`, so there is still exactly one place in the
+game where anything is resolved. A gear row carries its look and its effect on
+the same line of the sheet, so the two cannot drift apart. Measured: a crawler
+with a tool belt builds at 31; stripped naked, −4.5.
+
+**One thing the screenshot caught that no test would have.** Crawlers were
+standing *on* the structure they were building — they pathed to the site square
+and worked from it, which drew a figure on top of a half-built store and read as
+standing on a crate. They now work from alongside, and turn to face what they
+are working on. Nobody builds a fire while standing in it.
+
+**Still not decided:** what happens to gear over time. It does not wear out,
+break, get lost or get taken off. Rule 2 says ask.
+
+---
+
 ## v0.5.0 — the view turns, and it can be raised
 
 Final Fantasy Tactics' answer to the problem this project kept running into:
