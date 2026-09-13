@@ -7,6 +7,36 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.10.0 — low numbers, and dice
+
+Rule 10 arrived nine releases late: **boardgame aesthetics, low numbers, and
+tactility**, carried over from the previous project. It was never in the
+handover, and asking "do you have my rule about..." is the only reason it
+surfaced. Everything numeric has been rescaled to match.
+
+**Attributes run 1 to 6.** Skills 0 to 6. An attempt is now
+`attribute + skill + 2d6` against a difficulty of about a dozen — a campfire is
+15, crossing rubble is 11, building bare-handed costs you 6. The triangular
+noise of ±22 is gone; two six-sided dice give the same bell shape in a form
+anybody already knows.
+
+**Whole pips only.** A skill of 5.5 counts as 5 in a roll. Practice still
+accumulates in fractions, but it buys the next pip rather than dribbling into
+the result, so every roll comes out in whole numbers: *Clambering 5 + 11 = 16
+against 11*. The panel shows the last roll exactly that way, and shows skills as
+six pips rather than a decimal — which is the tactility half of the rule, not
+just the low-numbers half.
+
+**The build now watches the scale.** An attribute range, skill cap, die or dice
+count that climbs out of boardgame territory stops the build with rule 10 quoted
+at it. The cost of finding this out late is precisely why that guard exists.
+
+**One thing to flag:** gear shifts attributes, so a crawler in a jerkin and
+breeches can show Endurance 7. Natural attributes are 1–6; gear can push past
+it. Say if that should be clamped instead.
+
+---
+
 ## v0.9.0 — crawlers stop being boxes, and everything gets grit
 
 **Parts are lathed now, not boxed.** A figure part is a stack of rings: `sides`

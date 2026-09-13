@@ -137,9 +137,21 @@ const Inspector = {
          + (open ? '<div class="fold-body">' + body + '</div>' : '');
   },
 
+  /* The last attempt, read the way somebody at a table would read it:
+     what they brought, what they threw, what they needed. */
+  rollText(r) {
+    if (!r) return '<span class="tt-dim">' + N('ui.label_empty') + '</span>';
+    return '<span class="roll' + (r.ok ? ' win' : ' lose') + '">'
+         + '<span class="roll-s">' + r.skillName + '</span> '
+         + r.ability + ' + <b>' + r.dice + '</b> = ' + r.total
+         + ' <span class="roll-v">vs ' + r.difficulty + '</span> '
+         + (r.ok ? '\u2713' : '\u2717') + '</span>';
+  },
+
   crawlerPanel(s, d) {
     const open = this.sections(s);
     let h = this.row(N('ui.label_doing'), this.doingText(d.doing));
+    h += this.row(N('ui.label_lastroll'), this.rollText(d.lastRoll));
 
     let attrs = '<div class="tt-attrs">';
     for (const a of d.attributes) {
@@ -153,9 +165,19 @@ const Inspector = {
     let skills = '';
     if (d.skills.length) {
       for (const sk of d.skills) {
+        /* Pips, not a decimal: filled for what counts, and the one being worked
+           on shows how far along it is. */
+        let pips = '';
+        for (let i = 0; i < sk.cap; i++) {
+          const filled = i < sk.level;
+          const working = i === sk.level;
+          pips += '<span class="pip' + (filled ? ' on' : '') + '"'
+                + (working ? ' style="opacity:' + (0.25 + sk.progress * 0.65).toFixed(2) + '"' : '')
+                + '></span>';
+        }
         skills += '<div class="skill"><span class="skill-n">' + sk.name
-                + '</span> <span class="skill-l">' + sk.level
-                + '</span> <span class="skill-f">' + sk.from + '</span></div>';
+                + '</span><span class="pips">' + pips + '</span>'
+                + '<span class="skill-f">' + sk.from + '</span></div>';
       }
     } else {
       skills = '<span class="tt-dim">' + N('ui.label_empty') + '</span>';

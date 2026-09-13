@@ -47,29 +47,24 @@
       "note": "How many different floor levels the rooms and halls are spread across."
     },
     "roll.attribute_weight": {
-      "value": 3.0,
+      "value": 1,
       "unit": "x",
-      "note": "How much a natural attribute is worth in a roll. A 10 in the attribute is worth 30 with this at 3."
+      "note": "How much a natural attribute is worth in a roll. At 1, an attribute of 4 is worth 4 -- the number on the sheet is the number in the roll."
     },
     "roll.skill_weight": {
-      "value": 1.0,
+      "value": 1,
       "unit": "x",
-      "note": "How much practice is worth in a roll. At 1, a skill of 100 is worth 100 -- practice eventually outweighs talent."
-    },
-    "roll.noise_spread": {
-      "value": 22.0,
-      "unit": "pts",
-      "note": "How much luck swings a single attempt, either way. Lower makes the better character win more reliably."
+      "note": "How much practice is worth in a roll. At 1, a skill of 3 is worth 3."
     },
     "skill.cap": {
-      "value": 100.0,
+      "value": 6,
       "unit": "pts",
-      "note": "The most practice any one skill can hold."
+      "note": "The most practice any one skill can hold. Six, the same scale as an attribute."
     },
     "learn.gain_on_failure": {
-      "value": 2.2,
+      "value": 0.1,
       "unit": "pts",
-      "note": "Practice gained from a FAILED attempt. Rule 1: failing is how a character learns."
+      "note": "Practice gained from a FAILED attempt. Rule 1: failing is how a crawler learns. Ten failures is a tenth of the way to mastery."
     },
     "learn.gain_on_success": {
       "value": 0,
@@ -77,14 +72,14 @@
       "note": "Practice gained from a successful attempt. Zero: succeeding teaches nothing at all, so a crawler who has mastered something stops improving until the labyrinth gives them something harder."
     },
     "learn.near_miss_bonus": {
-      "value": 1.4,
+      "value": 0.06,
       "unit": "pts",
       "note": "Extra practice for only just failing. Getting close teaches most of all."
     },
     "learn.near_miss_margin": {
-      "value": 10.0,
+      "value": 2,
       "unit": "pts",
-      "note": "How close a failure has to be to count as only just missing."
+      "note": "How close a failure has to be to count as only just missing. Two, on a scale where a whole roll is about a dozen."
     },
     "actor.count": {
       "value": 6,
@@ -92,14 +87,14 @@
       "note": "How many crawlers turn up in the labyrinth."
     },
     "actor.attribute_min": {
-      "value": 4,
+      "value": 1,
       "unit": "pts",
-      "note": "Lowest a natural attribute can be rolled at. Ordinary people sit near 10."
+      "note": "Lowest a natural attribute can be. One to six, like a die: 3 and 4 are ordinary, 1 and 6 are remarkable."
     },
     "actor.attribute_max": {
-      "value": 16,
+      "value": 6,
       "unit": "pts",
-      "note": "Highest a natural attribute can be rolled at."
+      "note": "Highest a natural attribute can be."
     },
     "actor.step_ticks": {
       "value": 26,
@@ -330,6 +325,16 @@
       "value": 0.28,
       "unit": "px",
       "note": "Faces smaller than this many pixels are not drawn. At 32 pixels to the metre a crawler has a lot of surfaces that never cover a whole pixel, and skipping them costs nothing to look at and saves a great deal of work."
+    },
+    "roll.dice": {
+      "value": 2,
+      "unit": "dice",
+      "note": "How many dice are thrown for an attempt. Two gives a bell: middling results are common, extremes are rare."
+    },
+    "roll.die_faces": {
+      "value": 6,
+      "unit": "faces",
+      "note": "How many faces each die has."
     }
   },
   "geometry": {
@@ -469,6 +474,9 @@
     },
     "ui.section_gear": {
       "text": "gear"
+    },
+    "ui.label_lastroll": {
+      "text": "last roll"
     }
   },
   "tags": {
@@ -600,8 +608,8 @@
       "top": "#6e7278",
       "side": "#585c61",
       "footing": "walk",
-      "cross": 8,
-      "clear": 20,
+      "cross": 4,
+      "clear": 8,
       "note": "Worked flagstone. The default footing of the labyrinth."
     },
     "packed_earth": {
@@ -610,8 +618,8 @@
       "top": "#7d6c54",
       "side": "#63553f",
       "footing": "walk",
-      "cross": 10,
-      "clear": 25,
+      "cross": 5,
+      "clear": 9,
       "note": "Trodden soil."
     },
     "moss_stone": {
@@ -620,8 +628,8 @@
       "top": "#5f7557",
       "side": "#4a5c45",
       "footing": "walk",
-      "cross": 16,
-      "clear": 35,
+      "cross": 7,
+      "clear": 11,
       "note": "Stone gone green where the water sits."
     },
     "shallow_water": {
@@ -630,8 +638,8 @@
       "top": "#3f6b7d",
       "side": "#335667",
       "footing": "walk",
-      "cross": 26,
-      "clear": 60,
+      "cross": 10,
+      "clear": 15,
       "note": "Ankle deep. Slows a walker, ruins what it soaks."
     },
     "rubble": {
@@ -640,8 +648,8 @@
       "top": "#6d6860",
       "side": "#57534c",
       "footing": "walk",
-      "cross": 30,
-      "clear": 55,
+      "cross": 11,
+      "clear": 14,
       "note": "Collapsed masonry, not yet cleared."
     },
     "bone_litter": {
@@ -650,8 +658,8 @@
       "top": "#8d8672",
       "side": "#6f6959",
       "footing": "walk",
-      "cross": 14,
-      "clear": 30,
+      "cross": 6,
+      "clear": 10,
       "note": "Somebody else got this far."
     },
     "stone_ramp": {
@@ -660,8 +668,8 @@
       "top": "#73777d",
       "side": "#5b5f64",
       "footing": "ramp",
-      "cross": 22,
-      "clear": 40,
+      "cross": 8,
+      "clear": 12,
       "note": "A climbable one-metre slope."
     },
     "stone_block": {
@@ -670,8 +678,8 @@
       "top": "#5a5d62",
       "side": "#46494d",
       "footing": "block",
-      "cross": 999,
-      "clear": 999,
+      "cross": 99,
+      "clear": 99,
       "note": "A full cubic metre of rock."
     }
   },
@@ -719,8 +727,8 @@
       "name": "Labouring",
       "derives": "might:1,endurance:1",
       "needs_tag": "tool",
-      "without": -20,
-      "note": "Hauling, digging, clearing ground, and still doing it an hour later. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Bare hands cost 20 points."
+      "without": -4,
+      "note": "Hauling, digging, clearing ground, and still doing it an hour later. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Bare hands cost 4."
     },
     "wrangling": {
       "name": "Wrangling",
@@ -733,8 +741,8 @@
       "name": "Building",
       "derives": "might:1,intellect:1",
       "needs_tag": "tool",
-      "without": -30,
-      "note": "Raising structures that stay up. Knowing where the weight goes, and being able to put it there. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Needs a tool in hand: without one the job is 30 points harder, which is close to impossible."
+      "without": -6,
+      "note": "Raising structures that stay up. Knowing where the weight goes, and being able to put it there. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Needs a tool in hand: without one the job is 6 points harder, which on a scale of about a dozen is close to impossible."
     },
     "fighting": {
       "name": "Fighting",
@@ -761,14 +769,14 @@
       "name": "Crafting",
       "derives": "agility:1,intellect:1",
       "needs_tag": "tool",
-      "without": -25,
+      "without": -5,
       "note": "Making and mending: tools, clothes, meals, anything that takes hands and a recipe. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "tinkering": {
       "name": "Tinkering",
       "derives": "agility:1,willpower:1",
       "needs_tag": "tool",
-      "without": -25,
+      "without": -5,
       "note": "Locks, traps, and anything fiddly that punishes a shaking hand. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "tending": {
@@ -1580,7 +1588,7 @@
       "half_width": 0.38,
       "height_m": 0.55,
       "skill": "building",
-      "difficulty": 55,
+      "difficulty": 15,
       "note": "The heart of a camp. Everything else is laid out around it."
     },
     "bedroll": {
@@ -1590,7 +1598,7 @@
       "half_width": 0.4,
       "height_m": 0.22,
       "skill": "building",
-      "difficulty": 35,
+      "difficulty": 11,
       "note": "Somewhere to sleep. The easiest thing in a camp to put up."
     },
     "store": {
@@ -1600,7 +1608,7 @@
       "half_width": 0.36,
       "height_m": 0.85,
       "skill": "building",
-      "difficulty": 45,
+      "difficulty": 13,
       "note": "Keeps supplies off the wet floor."
     },
     "windbreak": {
@@ -1610,7 +1618,7 @@
       "half_width": 0.46,
       "height_m": 1.45,
       "skill": "building",
-      "difficulty": 65,
+      "difficulty": 17,
       "note": "The hardest thing in a starting camp, and the one that makes it feel like one."
     }
   },
@@ -1824,7 +1832,7 @@
       "slot": "back",
       "tags": "leather,store",
       "attr": "might:1,agility:-1",
-      "bonus": "labouring:4",
+      "bonus": "labouring:1",
       "note": "Everything they own, on their back. Carries more and slows you down: the trade-off is the point."
     },
     "jerkin": {
@@ -1840,7 +1848,7 @@
       "slot": "gloves",
       "tags": "leather",
       "attr": "",
-      "bonus": "labouring:6,tinkering:4",
+      "bonus": "labouring:2,tinkering:1",
       "note": "Elbow to fingertip."
     },
     "spade": {
@@ -1848,7 +1856,7 @@
       "slot": "mainhand",
       "tags": "iron,wood,tool",
       "attr": "",
-      "bonus": "labouring:10,building:8",
+      "bonus": "labouring:3,building:3",
       "note": "For digging, clearing and, at a push, arguing. Counts as a tool, so it is what makes Building and Labouring possible at all."
     },
     "lantern": {
@@ -1856,7 +1864,7 @@
       "slot": "offhand",
       "tags": "iron,glass,light",
       "attr": "",
-      "bonus": "studying:6,foraging:4",
+      "bonus": "studying:2,foraging:1",
       "note": "Burns something. Nobody asks what."
     },
     "toolbelt": {
@@ -1864,7 +1872,7 @@
       "slot": "belt",
       "tags": "leather,tool",
       "attr": "",
-      "bonus": "crafting:5,building:4",
+      "bonus": "crafting:2,building:1",
       "note": "Loops and a buckle. Also counts as a tool."
     },
     "breeches": {
@@ -1880,7 +1888,7 @@
       "slot": "feet",
       "tags": "leather",
       "attr": "",
-      "bonus": "clambering:8,ranging:6",
+      "bonus": "clambering:2,ranging:2",
       "note": "Knee down. The first thing a crawler buys."
     },
     "coil": {
@@ -1888,7 +1896,7 @@
       "slot": "trinket1",
       "tags": "rope",
       "attr": "",
-      "bonus": "clambering:5",
+      "bonus": "clambering:1",
       "note": "Twenty metres, if you believe the seller."
     },
     "charm": {

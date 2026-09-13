@@ -79,7 +79,7 @@ The characters act on their own initiative.
 
 ## The non-negotiables
 
-*Nine rules about what this game **is**, WRITTEN BY THEM. Each is one sentence
+*Ten rules about what this game **is**, WRITTEN BY THEM. Each is one sentence
 of rule and a paragraph of what it protects. Do not re-litigate these; do not
 quietly drift away from them.*
 
@@ -136,6 +136,16 @@ on desktop and on a phone. Tooltips carry the thing's tags.
 could be adjusted later.** Numbers and names live in `docs/crawlers.xlsx`, which
 is the authority. This is also the safety net under rule 2: anything proposed in
 the sheet is theirs to rename, retune or delete without a conversation.
+
+**10. Boardgame aesthetics, low numbers, and tactility.** Carried over from the
+previous project and confirmed here. **Attributes run 1 to 6**, skills 0 to 6,
+and an attempt is `attribute + skill + 2d6` against a difficulty of about a
+dozen. Every number in the game should be one a person can hold in their head
+and a hand could move: 4 and 2 and a throw of 7, not 31 against 55. The build
+refuses an attribute range, skill cap, die or dice count that climbs out of that
+scale. This was missed for nine releases -- the numbers were built on a
+hundred-point scale first -- and the cost of finding out late is exactly why it
+is written here now.
 
 ---
 
@@ -205,17 +215,24 @@ six attributes  ->  a skill (one PAIR of them)  ->  ability  ->  one roll
   Building MGT+INT, Studying INT+WIL, and so on for all fifteen.
 - Each skill is a FAMILY of work, not one action: Crafting covers cooking,
   sewing and mending; Studying covers lore, mapmaking and deciphering.
-- `ability = average of the pair x roll.attribute_weight
-            + practice x roll.skill_weight`. Practice eventually outweighs talent.
+- `ability = average of the pair + practice`, and then **2d6 is thrown on top**
+  and the sum is compared with a difficulty. Both weights are 1, so the number
+  on the sheet is the number in the roll (rule 10). A crawler with Might 4,
+  Intellect 4 and Building 2 brings 6, throws 2d6, and needs 15 for a campfire.
 - `attempt()` in `14-actors.js` is the ONLY place anything is ever resolved.
   A new thing a crawler can do is a call to `attempt()` naming one of the
   fifteen -- never a second way of deciding whether something worked.
+- **Whole pips only.** `skillPips()` floors a skill before it enters a roll, so
+  every roll is whole numbers a person could read off a table (rule 10).
+  Practice accumulates in fractions between pips and buys the next one; it never
+  dribbles into the result. The panel shows pips, not a decimal.
 - Gear reaches the roll through the same funnel: `effAttr()` applies its
   attribute shifts, `gearBonus()` its skill bonuses, and `toolPenalty()` the
   cost of working without the tool a skill names in `needs_tag`.
 
 **Rule 1 is not a curve.** There is no code anywhere that slows progress down.
-Failing teaches 2.2, only just failing teaches 3.6, and **succeeding teaches 0**.
+Failing teaches 0.10, only just failing teaches 0.16, and **succeeding teaches 0**
+-- on a skill scale that runs to 6, so mastery is about sixty failures.
 A crawler who has got good at something fails less often and is therefore taught
 less often; master it entirely and they stop dead until something harder turns
 up. A test holds the success rate at zero and requires progress to come out
@@ -296,8 +313,8 @@ the angle opens the ground out (`tile_h`) and leaves wall heights alone, so the
 ### Gear does three things at once
 
 A piece of gear SHIFTS an attribute (a pack is +1 Might, -1 Agility), BONUSES a
-skill (boots are +8 Clambering), and some work REQUIRES it (Building bare-handed
-is 30 points harder, which is close to impossible). All three go through
+skill (boots are +2 Clambering), and some work REQUIRES it (Building bare-handed
+is 6 points harder, which on a scale of about a dozen is close to impossible). All three go through
 `ability()`, so there is still exactly one place anything is resolved. A gear row
 carries its look and its effect on the same line of the sheet, so the two cannot
 drift apart.

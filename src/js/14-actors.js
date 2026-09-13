@@ -91,23 +91,33 @@ function attributeBase(actor, skillId) {
   return weight ? total / weight : 0;
 }
 
+/* What is banked, fractions and all. Learning adds to this. */
 function skillLevel(actor, skillId) {
   return actor.skills[skillId] || 0;
+}
+
+/* What COUNTS. Rule 10: whole pips only, so every roll is whole numbers you
+   could read off a table. Practice accumulates in between and buys the next
+   pip; it does not dribble into the result. */
+function skillPips(actor, skillId) {
+  return Math.floor(skillLevel(actor, skillId));
 }
 
 /* Talent plus practice. Practice eventually outweighs talent, which is the
    point of a game about people who come and go. */
 function ability(actor, skillId) {
-  return attributeBase(actor, skillId) * CFG.attrWeight
-       + skillLevel(actor, skillId) * CFG.skillWeight
+  return Math.round(attributeBase(actor, skillId)) * CFG.attrWeight
+       + skillPips(actor, skillId) * CFG.skillWeight
        + gearBonus(actor, skillId)
        + toolPenalty(actor, skillId);
 }
 
-/* Triangular luck: two draws added, so results cluster near the middle and a
-   wild swing is rare. Seeded, like everything else. */
-function luck(rand) {
-  return (rand() + rand() - 1) * CFG.noiseSpread;
+/* Dice. Two six-sided ones by default, which is the whole reason the numbers
+   are small: 2d6 is a shape anybody already knows. Seeded, like everything. */
+function roll(rand) {
+  let total = 0;
+  for (let i = 0; i < CFG.dice; i++) total += 1 + Math.floor(rand() * CFG.dieFaces);
+  return total;
 }
 
 function learn(actor, skillId, ok, margin) {
@@ -127,12 +137,17 @@ function learn(actor, skillId, ok, margin) {
 /* One attempt at one thing. This is the ONLY way anything is ever resolved. */
 function attempt(state, actor, skillId, difficulty) {
   const able = ability(actor, skillId);
-  const margin = able + luck(state.rand) - difficulty;
+  const dice = roll(state.rand);
+  const total = able + dice;
+  const margin = total - difficulty;
   const ok = margin >= 0;
   const gain = learn(actor, skillId, ok, margin);
   state.rolls++;
+  /* Everything the roll was made of is kept, so the panel can show the sum the
+     way a person at a table would read it: 4 and 2, threw 7, needed 15. */
   actor.lastRoll = {
-    skill: skillId, difficulty: difficulty, ability: able,
+    skill: skillId, skillName: SKILL(skillId).name,
+    difficulty: difficulty, ability: able, dice: dice, total: total,
     margin: margin, ok: ok, gain: gain, tick: state.tick
   };
   return actor.lastRoll;
@@ -317,8 +332,11 @@ function describeActor(actor) {
   });
   const skills = SKILL_IDS.filter(function (id) { return actor.skills[id]; })
     .map(function (id) {
+      const raw = skillLevel(actor, id);
       return { id: id, name: SKILL(id).name,
-               level: Math.round(skillLevel(actor, id) * 10) / 10,
+               level: Math.floor(raw),
+               progress: raw - Math.floor(raw),
+               cap: CFG.skillCap,
                from: SKILL(id).derives.map(function (p) { return ATTR(p[0]).abbrev; }).join('+') };
     });
   const gear = SLOT_IDS.map(function (slot) {
@@ -347,6 +365,7 @@ function describeActor(actor) {
     worn: worn,
     gear: gear,
     lacksTool: !carriesTag(actor, 'tool'),
+    lastRoll: actor.lastRoll,
     steps: actor.steps,
     stumbles: actor.stumbles,
     doing: actor.doing,

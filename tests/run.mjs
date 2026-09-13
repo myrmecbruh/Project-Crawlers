@@ -456,7 +456,7 @@ await test('gear does all three things it is supposed to (hybrid)', async () => 
 
   assert(r.bare.build.tool < 0,
     `building with bare hands cost nothing (${r.bare.build.tool})`);
-  assert(r.tooled.tool === 0 && r.tooled.ability > r.bare.build.ability + 25,
+  assert(r.tooled.tool === 0 && r.tooled.ability > r.bare.build.ability + 5,
     `a spade took building from ${r.bare.build.ability} to ${r.tooled.ability}`);
 
   assert(r.booted.bonus > 0 && r.booted.ability > r.bare.climb.ability,
@@ -657,10 +657,10 @@ await test('crawlers only ever step where the ground actually connects', async (
   assert(r.bad.length === 0, `${r.bad.length} illegal steps, e.g. ${r.bad[0]}`);
 });
 
-await test('progress slows as a crawler gets better (rule 1, seed 12, difficulty 55)', async () => {
+await test('progress slows as a crawler gets better (rule 1, seed 12, difficulty 12)', async () => {
   const r = await page.evaluate(() => window.__test.practice({
-    seed: 12, skill: 'clambering', difficulty: 55, per: 15, blocks: 4,
-    attr: { agility: 10, endurance: 10 }
+    seed: 12, skill: 'clambering', difficulty: 12, per: 25, blocks: 4,
+    attr: { agility: 3, endurance: 3, might: 3 }
   }));
   const g = r.blocks.map((b) => b.gain);
   const w = r.blocks.map((b) => b.wins);
@@ -676,7 +676,7 @@ await test('progress slows as a crawler gets better (rule 1, seed 12, difficulty
   }
   assert(g[1] < g[0] && w[1] > w[0],
     `while they were still improving, progress did not slow: ${g.join(' -> ')}`);
-  assert(g[0] > g[3] * 3,
+  assert(g[0] > g[3] * 2,
     `first block gained ${g[0]}, last gained ${g[3]} -- barely a slowdown`);
   assert(w[0] < per / 2, `they began by succeeding ${w[0]} of ${per}`);
   assert(w[3] > per / 2, `they ended succeeding only ${w[3]} of ${per}`);
@@ -690,8 +690,8 @@ await test('the slowdown comes from succeeding more, not from a hidden curve', a
     /* Hold the success rate at zero by making the task impossible. If a curve
        were baked into learning, progress would tail off anyway. It must not. */
     const hard = window.__test.practice({
-      seed: 12, skill: 'clambering', difficulty: 900, per: 10, blocks: 4,
-      attr: { agility: 10, endurance: 10 }
+      seed: 12, skill: 'clambering', difficulty: 99, per: 10, blocks: 4,
+      attr: { agility: 3, endurance: 3, might: 3 }
     });
     return { gains: hard.blocks.map((b) => b.gain),
              wins: hard.blocks.map((b) => b.wins),
@@ -705,11 +705,11 @@ await test('the slowdown comes from succeeding more, not from a hidden curve', a
 
 await test('better natural attributes really do make a better crawler (rule 2)', async () => {
   const r = await page.evaluate(() => {
-    const opts = { seed: 31, skill: 'clambering', difficulty: 75, per: 40, blocks: 1 };
+    const opts = { seed: 31, skill: 'clambering', difficulty: 12, per: 40, blocks: 1 };
     const poor = window.__test.practice(Object.assign({}, opts,
-      { attr: { agility: 5, endurance: 5 } }));
+      { attr: { agility: 1, might: 1 } }));
     const fine = window.__test.practice(Object.assign({}, opts,
-      { attr: { agility: 16, endurance: 16 } }));
+      { attr: { agility: 6, might: 6 } }));
     return { poor: poor.blocks[0].wins, fine: fine.blocks[0].wins,
              poorBase: poor.base, fineBase: fine.base };
   });
@@ -723,8 +723,8 @@ await test('nothing at all is learned from succeeding (rule 1)', async () => {
   const r = await page.evaluate(() => {
     /* Make it far too easy: they succeed every time, and so must never improve. */
     const easy = window.__test.practice({
-      seed: 4, skill: 'clambering', difficulty: -200, per: 40, blocks: 3,
-      attr: { agility: 10, might: 10 }
+      seed: 4, skill: 'clambering', difficulty: -20, per: 40, blocks: 3,
+      attr: { agility: 3, might: 3 }
     });
     return { gains: easy.blocks.map((b) => b.gain), wins: easy.blocks.map((b) => b.wins),
              knob: window.__test.data.knobs['learn.gain_on_success'] };

@@ -179,7 +179,20 @@ body {
 .attr-v { color: var(--ink-bright); font-variant-numeric: tabular-nums; }
 .attr-v.up { color: #9fc47f; }
 .attr-v.down { color: #c98d7a; }
-.skill { display: flex; gap: 6px; align-items: baseline; }
+.roll { font-variant-numeric: tabular-nums; }
+.roll-s { color: #b8c8d8; }
+.roll-v { opacity: 0.45; }
+.roll.win { color: #9fc47f; }
+.roll.lose { color: #c98d7a; }
+.skill { display: flex; gap: 6px; align-items: center; }
+.skill-n { flex: 1 1 auto; }
+.pips { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+.pip {
+  width: 5px; height: 5px;
+  border: 1px solid rgba(150, 180, 210, 0.35);
+  background: transparent;
+}
+.pip.on { background: #c9a35e; border-color: #c9a35e; }
 .skill-n { color: #b8c8d8; }
 .skill-l { color: var(--ink-bright); font-variant-numeric: tabular-nums; }
 .skill-f { opacity: 0.35; font-size: 10px; letter-spacing: 0.05em; }

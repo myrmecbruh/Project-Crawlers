@@ -289,6 +289,19 @@ def check_vocabulary(game):
                 errors.append("structures: '%s' claims the tag '%s', which is not "
                               "in the tags sheet" % (stid, tag))
 
+    # Low numbers is a rule, so the build keeps an eye on the scale.
+    for kname, kmax in (("actor.attribute_max", 12), ("skill.cap", 12),
+                        ("roll.die_faces", 12), ("roll.dice", 5)):
+        v = game["knobs"].get(kname)
+        if v is not None and v > kmax:
+            errors.append("knobs: '%s' is %s. Rule 10 says low numbers; above "
+                          "%s is not a number anybody holds in their head"
+                          % (kname, v, kmax))
+    dice = game["knobs"].get("roll.dice")
+    if dice is not None and dice < 1:
+        errors.append("knobs: 'roll.dice' is %s; an attempt needs at least one "
+                      "die" % dice)
+
     speeds = list(game["speeds"].items())
     if len(speeds) < 2:
         errors.append("speeds: there is only one speed, so the control would do "
