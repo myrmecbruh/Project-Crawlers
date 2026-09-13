@@ -7,6 +7,38 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.6.1 — time was never supposed to stop
+
+**"game only runs time when scrolling" was a bug report.** It arrived in a list
+of five other requests and was read as a sixth. It was not: it was a complaint
+that the world appeared to stall. That misreading then got built on purpose,
+written into the non-negotiables as rule 11 as though it had been asked for,
+defended across two releases, and at one point *measured on an emulated phone* --
+where the measurement dutifully confirmed the bug was being reproduced faithfully
+and was reported back as the rule working correctly. Nothing caught it except
+being asked, directly, "I never made a time rule, did I?".
+
+So: **time runs on its own now**, like any game. The motion gate is gone, the
+coast knob with it, and a test sits still, touches nothing, and fails if the camp
+has not built itself in the meantime.
+
+**The non-negotiables are theirs again.** Four of the thirteen had been promoted
+there out of passing instructions. The list is back to the nine they actually
+wrote out as rules, and `CLAUDE.md` now says plainly: an instruction is not a
+rule, do not add to that list yourself, ask first. The other three decisions --
+the locked pixel scale, the turning camera, the gear hybrid -- moved to a
+**Decisions so far** section, still built exactly as they were, but changeable
+without anyone announcing that a rule is being broken.
+
+That distinction is not bookkeeping. A rule in that list gets defended; putting
+something there that nobody made law is how a bug survives two releases wearing
+the author's name.
+
+Written up as lesson 10: a statement of what the game currently DOES is not a
+request for it to do that.
+
+---
+
 ## v0.6.0 — crawlers become real figures
 
 Posed, lit, three-dimensional people, drawn into the same small buffer as

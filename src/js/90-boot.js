@@ -5,8 +5,7 @@
  * the camera only ever sits on whole pixels -- which is what keeps every edge
  * hard and stops the ground shimmering as the view slides.
  *
- * Time only runs while the view is moving. Stop scrolling and the labyrinth
- * stops with you.
+ * Time runs on its own. The labyrinth does not wait to be looked at.
  */
 const Game = {
   state: null,
@@ -125,19 +124,9 @@ const Game = {
     this.keyPan();
     camAnimate(s, dt);
 
-    if (s.motion > 0) {
-      this.acc += dt;
-      let steps = 0;
-      while (this.acc >= TICK_MS && steps < 8) {
-        step(s);
-        s.motion = Math.max(0, s.motion - 1);
-        this.acc -= TICK_MS;
-        steps++;
-        if (s.motion === 0) break;
-      }
-    } else {
-      this.acc = 0;   /* time does not bank up while you are still */
-    }
+    this.acc += dt;
+    let steps = 0;
+    while (this.acc >= TICK_MS && steps < 8) { step(s); this.acc -= TICK_MS; steps++; }
 
     this.render();
     if ((this.frames = (this.frames || 0) + 1) % 12 === 0) this.readout();
@@ -150,7 +139,7 @@ const Game = {
     const s = this.state;
     const camp = campSummary(s.camp);
     el.textContent = 'seed ' + s.seed
-      + ' · ' + (s.motion > 0 ? 'time running' : 'time still')
+      + ' · tick ' + s.tick
       + ' · camp ' + camp.built + '/' + camp.sites
       + ' · zoom ' + s.cam.zoom + '×';
   }

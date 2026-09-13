@@ -85,7 +85,6 @@ const CFG = {
   cutawayDepth: K('render.cutaway_depth'),
   swingMs:     K('camera.swing_ms'),
   tiltMs:      K('camera.tilt_ms'),
-  coastTicks:  K('time.coast_ticks'),
   keyPan:      K('camera.key_pan_speed'),
   chunkTiles:  K('world.chunk_tiles'),
   maxElev:     K('world.max_elevation'),

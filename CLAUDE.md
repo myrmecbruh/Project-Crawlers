@@ -79,9 +79,16 @@ The characters act on their own initiative.
 
 ## The non-negotiables
 
-*Thirteen rules about what this game **is**. Each is one sentence of rule and a
-paragraph of what it protects. Do not re-litigate these; do not quietly drift
-away from them. Add to the list the moment something is argued twice.*
+*Nine rules about what this game **is**, WRITTEN BY THEM. Each is one sentence
+of rule and a paragraph of what it protects. Do not re-litigate these; do not
+quietly drift away from them.*
+
+**Do not add to this list yourself.** An instruction is not a rule. Four were
+promoted here out of passing requests -- including one that was a BUG REPORT
+read as a feature -- and the result was a list that said "yours" over things
+they had never made law, and a real bug built on purpose and defended for two
+releases. Ask before anything is numbered here. Everything else goes under
+**Decisions so far** below, where it can be changed without ceremony.
 
 **1. Characters improve by failing forward. Succeeding teaches them NOTHING.**
 Failure is the only teacher; failing narrowly teaches most of all. A crawler who
@@ -129,36 +136,6 @@ on desktop and on a phone. Tooltips carry the thing's tags.
 could be adjusted later.** Numbers and names live in `docs/crawlers.xlsx`, which
 is the authority. This is also the safety net under rule 2: anything proposed in
 the sheet is theirs to rename, retune or delete without a conversation.
-
-**10. The picture is pixel perfect, and the scale is locked at 32 pixels to the
-metre.** A crawler is 52 px tall and stays 52 px tall. Zoom changes how many
-REAL screen pixels one game pixel covers -- by a whole number -- and the picture
-is drawn smaller to match; it never scales the world. The camera only ever sits
-on whole pixels. No fractional scaling, no smoothing, nothing that puts an edge
-halfway across a pixel.
-
-**11. Time only runs while the view is moving.** Stop scrolling and the
-labyrinth stops with you. This is the idle-game clock: the world advances
-because the player is looking around it. Nothing in the simulation may move the
-camera, or time would wind itself forward for ever. There is a short coast
-(`time.coast_ticks`, currently 45 = three quarters of a second) so a phone does
-not look frozen between drags; set it to 0 for the strict reading.
-
-**12. The view turns, and it can be raised.** Four quarter turns and two
-angles, Final Fantasy Tactics style, with the swing animated and the focus held
-still so the world turns around what you were looking at. The swing runs on real
-time rather than game time -- the view must move smoothly whether or not the
-world is running. Raising the angle opens the ground out (`tile_h`) and leaves
-wall heights alone, so rule 10's locked 32 pixels to the metre holds at both
-angles. Turning or raising the view is moving it, so it also runs time.
-
-**13. Gear does three things at once, and it is the same twelve parts that are
-seen.** A piece of gear SHIFTS an attribute (a pack makes you stronger-backed
-and slower), BONUSES a skill (boots help you keep your feet), and some work
-REQUIRES it (building with bare hands is thirty points harder, which is close to
-impossible). All three go through `ability()`, so there is still exactly one
-place anything is resolved. A gear row carries its look and its effect on the
-same line of the spreadsheet, so the two can never drift apart.
 
 ---
 
@@ -266,6 +243,47 @@ perfectly flat, which is the only way to prove no curve was smuggled in.
 
 ---
 
+## Decisions so far (not rules)
+
+These are settled and built, and they can be changed by asking. They are NOT
+non-negotiables; do not treat them as law, and do not announce a change to one
+as breaking a rule.
+
+### The picture: pixel perfect, 32 pixels to the metre
+
+Their words were "lock our artificial pixelized resolution to 32px per meter
+tall", so a crawler is 52 px and stays 52 px. Zoom changes how many REAL screen
+pixels one game pixel covers -- by a whole number -- and the picture is drawn
+smaller to match; it never scales the world. The camera only ever sits on whole
+pixels. This one is load-bearing: every measurement in the game is built against
+it, so moving it moves everything.
+
+### The camera turns, and it can be raised
+
+Four quarter turns and two angles, Final Fantasy Tactics style, with the swing
+animated and the focus held still so the world turns around what you were
+looking at. The swing runs on real milliseconds rather than game ticks. Raising
+the angle opens the ground out (`tile_h`) and leaves wall heights alone, so the
+32-pixels-to-the-metre scale holds at both angles.
+
+### Gear does three things at once
+
+A piece of gear SHIFTS an attribute (a pack is +1 Might, -1 Agility), BONUSES a
+skill (boots are +8 Clambering), and some work REQUIRES it (Building bare-handed
+is 30 points harder, which is close to impossible). All three go through
+`ability()`, so there is still exactly one place anything is resolved. A gear row
+carries its look and its effect on the same line of the sheet, so the two cannot
+drift apart.
+
+### Time is NOT gated on anything
+
+Time runs on its own, like any game. There was a version that only advanced the
+world while the view was moving; that was built by mistake, out of a bug report
+read as a feature request, and it is gone. Do not reintroduce it without being
+asked for it in as many words.
+
+---
+
 ## Gear: the twelve slots, and the figure
 
 A crawler is twelve parts, which are their gear, both visually and mechanically:
@@ -303,8 +321,7 @@ work, idle) is code in `18-figure.js` because it is logic; every AMOUNT is a
 knob, so the stride can be widened or the work slowed without touching it.
 Crawlers turn the short way round to face where they are going.
 
-Animation runs off `state.tick`, so under rule 11 it stops when the view stops.
-That is intended.
+Animation runs off `state.tick`, which advances on its own.
 
 ---
 
@@ -435,6 +452,16 @@ checkout still builds. The build reconciles the two and inlines the result.
    renderer sort the figure ground-up itself so no row order can ever bury a
    hat. Generalised: if the order of a list means something, something must
    fail loudly when it changes.
+10. **A line in a list of requests can be a BUG REPORT.** "game only runs time
+    when scrolling" sat among five feature requests and was read as a sixth.
+    It was a complaint. The behaviour was then built deliberately, written into
+    the non-negotiables as though they had asked for it, defended across two
+    releases, and even *measured on a phone* -- the measurement confirmed the
+    bug was faithfully reproduced and was reported back as the rule working
+    correctly. Nothing caught it but them asking "I never made a time rule, did
+    I?". Generalised: a statement of what the game currently DOES is not a
+    request for it to do that. When an instruction describes present behaviour
+    rather than wanted behaviour, ask which it is before building it.
 
 ---
 

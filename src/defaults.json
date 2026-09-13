@@ -136,11 +136,6 @@
       "unit": "px",
       "note": "Tallest the game picture is ever drawn, before it is blown up."
     },
-    "time.coast_ticks": {
-      "value": 45,
-      "unit": "ticks",
-      "note": "How long the world keeps running after you stop moving the view. 60 ticks is a second. Set it to 0 and time stops the very instant you do -- which is strictly what rule 11 says, but on a phone it makes the game look frozen between drags."
-    },
     "world.rooms": {
       "value": 9,
       "unit": "rooms",

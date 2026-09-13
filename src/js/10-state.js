@@ -26,7 +26,6 @@ function newState(seed) {
     actors: [],
     camp: null,
     rolls: 0,
-    motion: 0,
     cam: {
       fx: world.n / 2, fy: world.n / 2, fh: 0,   /* what stays in the middle */
       yaw: 0, yawTarget: 0, quarter: 0,
@@ -101,7 +100,6 @@ function panCamera(s, dx, dy) {
   cam.fx += du * cam.cos + dv * cam.sin;
   cam.fy += -du * cam.sin + dv * cam.cos;
   camRefresh(s);
-  s.motion = CFG.coastTicks + 1;
   return true;
 }
 
@@ -111,7 +109,6 @@ function rotateCamera(s, quarters) {
   if (!quarters) return false;
   s.cam.quarter += quarters;
   s.cam.yawTarget = s.cam.quarter * QUARTER;
-  s.motion = CFG.coastTicks + 1;
   return true;
 }
 
@@ -119,7 +116,6 @@ function tiltCamera(s, up) {
   const want = up === undefined ? (s.cam.pitchTarget > 0.5 ? 0 : 1) : (up ? 1 : 0);
   if (want === s.cam.pitchTarget) return false;
   s.cam.pitchTarget = want;
-  s.motion = CFG.coastTicks + 1;
   return true;
 }
 
@@ -149,7 +145,6 @@ function camAnimate(s, dtMs) {
   /* The cutaway depends on where you are standing and how steeply you look, so
      it is redone once the view settles rather than on every frame of a swing. */
   if (settled) markCutaway(s);
-  s.motion = CFG.coastTicks + 1;
   return true;
 }
 
@@ -161,6 +156,5 @@ function setZoom(s, z) {
   s.cam.zoom = next;
   if (typeof Game !== 'undefined' && Game.fit) Game.fit();
   camRefresh(s);
-  s.motion = CFG.coastTicks + 1;
   return true;
 }

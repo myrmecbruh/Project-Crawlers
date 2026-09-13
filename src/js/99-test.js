@@ -62,13 +62,12 @@ window.__test = {
     Game.render();
     return this.camera();
   },
-  motion() { return Game.state.motion; },
   loopOnce(ms) {
     const s = Game.state, before = s.tick;
     Game.paused = false; Game.last = performance.now() - (ms || 20);
     Game.loop(performance.now());
     Game.paused = true;
-    return { ticks: s.tick - before, motion: s.motion };
+    return { ticks: s.tick - before };
   },
 
   camp() {

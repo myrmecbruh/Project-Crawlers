@@ -719,33 +719,46 @@ await test('a half-built structure is half a structure on screen (rule 4)', asyn
   assert(r.shown.tags.length > 0, 'a structure carries no tags (rule 8)');
 });
 
-await test('time only runs while the view is moving', async () => {
+await test('time runs on its own, without anyone touching the view', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(2);
     window.__test.resume(); window.__test.pause();      /* reset the clock */
-    const still1 = window.__test.loopOnce(60);
-    const still2 = window.__test.loopOnce(60);
-
-    window.__test.pan(12, 0);
-    const moved = window.__test.loopOnce(60);
-
-    /* Let whatever coast there is run out, then check it really has stopped. */
-    let coasted = 0, guard = 0;
-    while (window.__test.motion() > 0 && guard++ < 300) {
-      coasted += window.__test.loopOnce(60).ticks;
-    }
-    const settled1 = window.__test.loopOnce(60);
-    const settled2 = window.__test.loopOnce(600);
-    return { still1, still2, moved, coasted, settled1, settled2,
-             coast: window.__test.cfg.coastTicks };
+    const a = window.__test.loopOnce(60);
+    const b = window.__test.loopOnce(60);
+    const c = window.__test.loopOnce(600);
+    const camBefore = window.__test.camera();
+    const long = window.__test.loopOnce(600);
+    const camAfter = window.__test.camera();
+    return { a, b, c, long, camBefore, camAfter, tick: window.__test.state.tick };
   });
-  assert(r.still1.ticks === 0 && r.still2.ticks === 0,
-    `the world ran ${r.still1.ticks}/${r.still2.ticks} ticks while nothing moved`);
-  assert(r.moved.ticks > 0, 'moving the view did not start time');
-  assert(r.settled1.ticks === 0 && r.settled2.ticks === 0,
-    `time was still running ${r.settled1.ticks}/${r.settled2.ticks} ticks after it should have stopped`);
-  assert(r.moved.ticks + r.coasted <= r.coast + 10,
-    `one nudge bought ${r.moved.ticks + r.coasted} ticks, but the coast is only ${r.coast}`);
+  assert(r.a.ticks > 0 && r.b.ticks > 0,
+    `the world ran ${r.a.ticks}/${r.b.ticks} ticks with nobody moving the view`);
+  assert(r.c.ticks > r.a.ticks,
+    `a longer frame ran ${r.c.ticks} ticks against ${r.a.ticks} for a short one`);
+  assert(r.camBefore.ox === r.camAfter.ox && r.camBefore.oy === r.camAfter.oy,
+    'time only ran because the camera drifted');
+  assert(r.tick > 10, `only ${r.tick} ticks passed in total`);
+});
+
+await test('the labyrinth gets on with it while you sit still', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    window.__test.resume(); window.__test.pause();
+    const before = { camp: window.__test.camp().summary,
+                     rolls: window.__test.rolls(),
+                     cam: window.__test.camera() };
+    for (let i = 0; i < 300; i++) window.__test.loopOnce(200);
+    const after = { camp: window.__test.camp().summary,
+                    rolls: window.__test.rolls(),
+                    cam: window.__test.camera() };
+    return { before, after };
+  });
+  assert(r.after.rolls > r.before.rolls + 20,
+    `only ${r.after.rolls - r.before.rolls} rolls happened while sitting still`);
+  assert(r.after.camp.progress > r.before.camp.progress,
+    'the camp made no progress at all while nobody touched anything');
+  assert(r.before.cam.ox === r.after.cam.ox && r.before.cam.oy === r.after.cam.oy,
+    'the view moved by itself');
 });
 
 await test('a crawler tells you what they are doing', async () => {
