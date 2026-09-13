@@ -49,6 +49,48 @@ window.__test = {
   consumed() { return Render.consumed; },
   record(on) { Render.recordItems = !!on; Game.state.viewDirty = true; },
 
+  actors() {
+    return Game.state.actors.map(function (a) {
+      return { index: a.index, name: a.name, x: a.x, y: a.y, attr: a.attr,
+               skills: a.skills, worn: a.worn, steps: a.steps,
+               stumbles: a.stumbles, pick: Game.state.world.cells.length + a.index };
+    });
+  },
+  wearHat(i, on) {
+    const a = Game.state.actors[i];
+    if (on) a.worn.hat = 'hat'; else delete a.worn.hat;
+    Game.state.geomDirty = true; Game.state.viewDirty = true;
+    return a.worn;
+  },
+  rolls() { return Game.state.rolls; },
+
+  /* A controlled bench: one crawler, one skill, one difficulty, repeated in
+     blocks, so rule 1 can be argued with numbers instead of adjectives.
+     Runs on its own seeded luck and never touches the live match. */
+  practice(opts) {
+    const bench = { rand: makeRand(opts.seed === undefined ? 1 : opts.seed),
+                    tick: 0, rolls: 0 };
+    const a = makeActor(makeRand((opts.seed === undefined ? 1 : opts.seed) + 991),
+                        0, 'bench');
+    if (opts.attr) for (const k in opts.attr) a.attr[k] = opts.attr[k];
+    const per = opts.per || 200, blocks = [];
+    for (let b = 0; b < (opts.blocks || 4); b++) {
+      const before = skillLevel(a, opts.skill);
+      let wins = 0;
+      for (let i = 0; i < per; i++) {
+        if (attempt(bench, a, opts.skill, opts.difficulty).ok) wins++;
+      }
+      const after = skillLevel(a, opts.skill);
+      blocks.push({ before: Math.round(before * 100) / 100,
+                    after: Math.round(after * 100) / 100,
+                    gain: Math.round((after - before) * 100) / 100,
+                    wins: wins, attempts: per });
+    }
+    return { blocks: blocks, attributes: a.attr, cap: CFG.skillCap,
+             base: attributeBase(a, opts.skill),
+             ability: ability(a, opts.skill) };
+  },
+
   world() {
     const w = Game.state.world;
     return { seed: w.seed, n: w.n, cells: w.cells.length };
@@ -156,6 +198,44 @@ window.__test = {
           d ? d.name + ' at ' + d.elevationText : 'nothing');
       add('the description carries tags (rule 8)',
           !!d && d.tags.length > 0, d ? d.tags.join(',') : '');
+
+      /* -- rule 2: one framework, six attributes ----------------------------- */
+      add('there are exactly six natural attributes (rule 2)',
+          ATTRIBUTE_IDS.length === 6, ATTRIBUTE_IDS.join(', '));
+      let strayAttr = null, skillCount = 0;
+      for (const sid of SKILL_IDS) {
+        skillCount++;
+        for (const pair of SKILL(sid).derives) {
+          if (ATTRIBUTE_IDS.indexOf(pair[0]) < 0) strayAttr = sid + ' -> ' + pair[0];
+        }
+        if (!SKILL(sid).derives.length) strayAttr = sid + ' -> nothing';
+      }
+      add('every skill is derived from those six and nothing else (rule 2)',
+          !strayAttr, strayAttr || (skillCount + ' skills'));
+
+      /* -- rule 1: failing is what teaches ----------------------------------- */
+      const learner = makeActor(makeRand(5), 0, 'bench');
+      const gainWin = learn(learner, 'clambering', true, 5);
+      learner.skills.clambering = 0;
+      const gainLose = learn(learner, 'clambering', false, -40);
+      learner.skills.clambering = 0;
+      const gainNear = learn(learner, 'clambering', false, -1);
+      add('failing teaches more than succeeding (rule 1)',
+          gainLose > gainWin, gainLose + ' vs ' + gainWin);
+      add('only just failing teaches most of all (rule 1)',
+          gainNear > gainLose, gainNear + ' vs ' + gainLose);
+
+      /* -- crawlers are real, and standing somewhere they could stand -------- */
+      let badGround = null;
+      for (const act of a.actors) {
+        const under = a.world.at(act.x, act.y);
+        if (!under || TILE(under.tile).footing === 'block') {
+          badGround = act.name + ' at ' + act.x + ',' + act.y;
+        }
+      }
+      add('every crawler is standing on ground they could stand on',
+          a.actors.length > 0 && !badGround,
+          badGround || (a.actors.length + ' crawlers'));
 
       /* -- an empty scene draws nothing -------------------------------------- */
       Render.batch.length = 0;

@@ -244,6 +244,226 @@ await test('same seed and same inputs give the same labyrinth (seed 777)', async
   assert(r[0].cam === r[1].cam, `camera ended at ${r[0].cam} vs ${r[1].cam}`);
 });
 
+
+await test('crawlers reach the screen, standing on the ground (rule 4)', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    const drew = window.__test.frame(1);
+    return { people: drew.people, actors: window.__test.actors(),
+             drawn: drew.items.filter((i) => i.kind === 'actor') };
+  });
+  assert(r.actors.length === 6, `${r.actors.length} crawlers were made`);
+  assert(r.people > 0, 'not one crawler reached the screen');
+  for (const d of r.drawn) {
+    assert(d.parts.includes('legs') && d.parts.includes('torso') && d.parts.includes('head'),
+      `${d.name} reached the screen as ${d.parts.join('+')}`);
+  }
+});
+
+await test('a hat on a crawler is a hat on the screen (rule 4)', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    /* Find a crawler who is actually in view, then take their hat off and on. */
+    let who = -1;
+    const drew0 = window.__test.frame(1);
+    for (const it of drew0.items) if (it.kind === 'actor') { who = it.i; break; }
+    const idx = who - window.__test.world().cells;
+
+    const n = window.__test.actors().length;
+    for (let i = 0; i < n; i++) window.__test.wearHat(i, false);
+    const bare = window.__test.frame(1);
+    const bareParts = bare.items.find((i) => i.i === who).parts;
+
+    window.__test.wearHat(idx, true);
+    const hatted = window.__test.frame(1);
+    const hatParts = hatted.items.find((i) => i.i === who).parts;
+
+    return { bareParts, hatParts, bareWorn: bare.worn, hatWorn: hatted.worn,
+             described: window.__test.describe(who) };
+  });
+  assert(!r.bareParts.includes('hat'), 'a bare head was drawn wearing a hat');
+  assert(r.hatParts.includes('hat'), 'a crawler wearing a hat was drawn without one');
+  assert(r.hatWorn.includes('hat'), 'the hat never reached the canvas');
+  assert(!r.bareWorn.includes('hat'), 'a hat reached the canvas with nobody wearing it');
+  assert(r.described.worn.includes('Hat'), 'the inspector does not list the hat');
+});
+
+await test('a figure is painted from the ground up, so nothing worn is buried', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    const n = window.__test.actors().length;
+    for (let i = 0; i < n; i++) window.__test.wearHat(i, true);
+    const drew = window.__test.frame(1);
+    const people = drew.items.filter((i) => i.kind === 'actor');
+    return { people: people.map((p) => p.parts), figure: window.__test.data.figure };
+  });
+  assert(r.people.length > 0, 'no crawler was drawn');
+  for (const parts of r.people) {
+    const heights = parts.map((id) => r.figure[id].from_m);
+    for (let i = 1; i < heights.length; i++) {
+      assert(heights[i] >= heights[i - 1],
+        `painted ${parts.join(' -> ')}, which puts ${parts[i]} underneath ${parts[i - 1]}`);
+    }
+    assert(parts[parts.length - 1] === 'hat',
+      `the hat was not the last thing painted: ${parts.join(' -> ')}`);
+  }
+});
+
+await test('the six attributes are shown in the order the spreadsheet lists them', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    const drew = window.__test.frame(1);
+    const who = drew.items.find((i) => i.kind === 'actor').i;
+    return { shown: window.__test.describe(who).attributes.map((a) => a.id),
+             sheet: Object.keys(window.__test.data.attributes) };
+  });
+  assert(r.shown.join(',') === r.sheet.join(','),
+    `shown as ${r.shown.join(',')}, spreadsheet says ${r.sheet.join(',')}`);
+  assert(r.sheet[0] === 'might' && r.sheet.length === 6,
+    `the spreadsheet order is ${r.sheet.join(',')}`);
+});
+
+await test('hovering a crawler shows their six attributes and their skills', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    window.__test.frame(400);                 /* let them get some practice in */
+    const drew = window.__test.frame(1);
+    let target = null;
+    for (const it of drew.items) {
+      if (it.kind === 'actor' && it.sx > 8 && it.sx < window.__test.cfg.lowW - 8
+        && it.sy > 8 && it.sy < window.__test.cfg.lowH - 8) { target = it; break; }
+    }
+    const hovered = window.__test.point(target.sx, target.sy);
+    return { target, hovered, described: window.__test.describe(hovered),
+             tooltip: window.__test.tooltipOnScreen(),
+             consumed: window.__test.consumed() };
+  });
+  assert(r.hovered === r.target.i, `pointed at crawler ${r.target.i}, picked ${r.hovered}`);
+  assert(r.described.kind === 'crawler', 'the inspector did not recognise a crawler');
+  assert(r.described.attributes.length === 6,
+    `${r.described.attributes.length} attributes, not six`);
+  assert(r.consumed.outlined, 'a hovered crawler was not outlined');
+  assert(r.tooltip, 'no panel appeared for a crawler');
+  assert(r.tooltip.text.includes(r.described.name), 'the panel does not name them');
+  for (const a of r.described.attributes) {
+    assert(r.tooltip.text.includes(a.abbrev),
+      `the panel never shows ${a.abbrev}`);
+  }
+  assert(r.described.skills.length > 0, 'after 400 ticks nobody has practised anything');
+  assert(r.tooltip.text.includes(r.described.skills[0].name),
+    'the panel does not show the skill they have been practising');
+  assert(r.tooltip.tags.includes('crawler'), `crawler tags: ${r.tooltip.tags}`);
+});
+
+await test('rolls really happen in a real match, not only on the bench', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(4);
+    const before = window.__test.rolls();
+    window.__test.frame(600);
+    const actors = window.__test.actors();
+    return { before, after: window.__test.rolls(), actors };
+  });
+  assert(r.before === 0 && r.after > 20,
+    `${r.after} rolls happened in 600 ticks`);
+  const moved = r.actors.filter((a) => a.steps > 0).length;
+  const tried = r.actors.filter((a) => a.steps + a.stumbles > 0).length;
+  assert(tried === 6, `only ${tried} of 6 crawlers ever tried to move`);
+  assert(moved > 0, 'every crawler failed every single attempt to move');
+  assert(r.actors.some((a) => a.stumbles > 0),
+    'nobody ever stumbled, so failure is not reachable in a real match');
+  assert(r.actors.every((a) => a.skills.clambering > 0),
+    'moving about taught nobody anything');
+});
+
+await test('crawlers only ever step where the ground actually connects', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(9);
+    const w = window.__test.state.world;
+    let last = window.__test.actors().map((a) => ({ x: a.x, y: a.y }));
+    const bad = [];
+    for (let f = 0; f < 900; f++) {
+      window.__test.frame(1);
+      const now = window.__test.actors().map((a) => ({ x: a.x, y: a.y }));
+      for (let i = 0; i < now.length; i++) {
+        const p = last[i], q = now[i];
+        const d = Math.abs(p.x - q.x) + Math.abs(p.y - q.y);
+        if (d === 0) continue;
+        if (d !== 1) { bad.push(`jumped ${d} tiles`); continue; }
+        const from = w.at(p.x, p.y), to = w.at(q.x, q.y);
+        if (TILE(to.tile).footing === 'block') bad.push('stepped into solid rock');
+        else if (!canStep(from, to, q.x - p.x, q.y - p.y)) {
+          bad.push(`stepped from ${from.h}m to ${to.h}m with no ramp`);
+        }
+      }
+      last = now;
+    }
+    return { bad, moves: window.__test.actors().reduce((n, a) => n + a.steps, 0) };
+  });
+  assert(r.moves > 10, `only ${r.moves} steps were taken in 900 ticks`);
+  assert(r.bad.length === 0, `${r.bad.length} illegal steps, e.g. ${r.bad[0]}`);
+});
+
+await test('progress slows as a crawler gets better (rule 1, seed 12, difficulty 55)', async () => {
+  const r = await page.evaluate(() => window.__test.practice({
+    seed: 12, skill: 'clambering', difficulty: 55, per: 15, blocks: 4,
+    attr: { agility: 10, endurance: 10 }
+  }));
+  const g = r.blocks.map((b) => b.gain);
+  const w = r.blocks.map((b) => b.wins);
+  const per = r.blocks[0].attempts;
+  assert(r.cap > 0, 'the bench did not report the practice ceiling');
+  const last = r.blocks[3].after;
+
+  for (let i = 1; i < g.length; i++) {
+    assert(g[i] <= g[i - 1],
+      `practice per block went ${g.join(' -> ')}, and rose instead of slowing`);
+    assert(w[i] >= w[i - 1],
+      `successes per block went ${w.join(' -> ')}, and fell instead of improving`);
+  }
+  assert(g[1] < g[0] && w[1] > w[0],
+    `while they were still improving, progress did not slow: ${g.join(' -> ')}`);
+  assert(g[0] > g[3] * 3,
+    `first block gained ${g[0]}, last gained ${g[3]} -- barely a slowdown`);
+  assert(w[0] < per / 2, `they began by succeeding ${w[0]} of ${per}`);
+  assert(w[3] > per / 2, `they ended succeeding only ${w[3]} of ${per}`);
+  /* The ceiling must not be what produced the slowdown. */
+  assert(last < r.cap,
+    `they hit the practice ceiling (${last}), so the ceiling did the slowing`);
+});
+
+await test('the slowdown comes from succeeding more, not from a hidden curve', async () => {
+  const r = await page.evaluate(() => {
+    /* Hold the success rate at zero by making the task impossible. If a curve
+       were baked into learning, progress would tail off anyway. It must not. */
+    const hard = window.__test.practice({
+      seed: 12, skill: 'clambering', difficulty: 900, per: 10, blocks: 4,
+      attr: { agility: 10, endurance: 10 }
+    });
+    return { gains: hard.blocks.map((b) => b.gain),
+             wins: hard.blocks.map((b) => b.wins),
+             last: hard.blocks[3].after, cap: hard.cap };
+  });
+  assert(r.wins.every((w) => w === 0), `they somehow succeeded: ${r.wins}`);
+  assert(r.last < r.cap, `the bench ran into the ceiling at ${r.last}`);
+  assert(r.gains.every((g) => g === r.gains[0]),
+    `steady failure gave uneven progress ${r.gains.join(' -> ')}`);
+});
+
+await test('better natural attributes really do make a better crawler (rule 2)', async () => {
+  const r = await page.evaluate(() => {
+    const opts = { seed: 31, skill: 'clambering', difficulty: 75, per: 40, blocks: 1 };
+    const poor = window.__test.practice(Object.assign({}, opts,
+      { attr: { agility: 5, endurance: 5 } }));
+    const fine = window.__test.practice(Object.assign({}, opts,
+      { attr: { agility: 16, endurance: 16 } }));
+    return { poor: poor.blocks[0].wins, fine: fine.blocks[0].wins,
+             poorBase: poor.base, fineBase: fine.base };
+  });
+  assert(r.fineBase > r.poorBase, `${r.fineBase} vs ${r.poorBase}`);
+  assert(r.fine > r.poor,
+    `the agile crawler succeeded ${r.fine}/40 and the clumsy one ${r.poor}/40`);
+});
+
 await test('the page raised no errors while all that happened', async () => {
   assert(errors.length === 0, errors.join(' | '));
 });

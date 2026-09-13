@@ -22,10 +22,19 @@ const Tooltip = {
   },
 
   describe(s, idx) {
-    if (idx < 0 || idx >= s.world.cells.length) return null;
+    if (idx < 0) return null;
+    if (Render.isActorPick(s, idx)) {
+      const a = Render.actorFromPick(s, idx);
+      if (!a) return null;
+      const d = describeActor(a);
+      d.index = idx;
+      return d;
+    }
+    if (idx >= s.world.cells.length) return null;
     const cell = s.world.cells[idx];
     const def = TILE(cell.tile);
     return {
+      kind: 'ground',
       index: idx,
       name: def.name,
       at: cell.x + ', ' + cell.y,
@@ -37,6 +46,60 @@ const Tooltip = {
       tags: def.tags.map(function (t) { return TAG(t).name; }),
       note: def.note
     };
+  },
+
+  row(k, v) {
+    return '<div class="tt-row"><span class="tt-k">' + k
+         + '</span><span class="tt-v">' + v + '</span></div>';
+  },
+
+  tagsRow(tags) {
+    let h = '<div class="tt-row"><span class="tt-k">' + N('ui.label_tags')
+          + '</span><span class="tt-v tt-tags">';
+    for (const t of tags) h += '<span class="tag">' + t + '</span>';
+    return h + '</span></div>';
+  },
+
+  head(d) {
+    return '<div class="tt-head"><b class="tt-name">' + d.name
+         + '</b> <span class="tt-at">' + d.at + '</span></div>';
+  },
+
+  groundHtml(d) {
+    return this.head(d)
+      + this.row(N('ui.label_elevation'), d.elevationText)
+      + this.row(N('ui.label_footing'), d.footingText)
+      + this.tagsRow(d.tags);
+  },
+
+  /* Rule 2 made visible: the six attributes first, then every skill with the
+     attributes it is derived from written next to it. */
+  crawlerHtml(d) {
+    let h = this.head(d);
+    h += '<div class="tt-row"><span class="tt-k">' + N('ui.label_attributes')
+       + '</span><span class="tt-v tt-attrs">';
+    for (const a of d.attributes) {
+      h += '<span class="attr"><span class="attr-k">' + a.abbrev
+         + '</span><span class="attr-v">' + a.value + '</span></span>';
+    }
+    h += '</span></div>';
+
+    h += '<div class="tt-row"><span class="tt-k">' + N('ui.label_skills')
+       + '</span><span class="tt-v">';
+    if (d.skills.length) {
+      for (const sk of d.skills) {
+        h += '<div class="skill"><span class="skill-n">' + sk.name
+           + '</span> <span class="skill-l">' + sk.level
+           + '</span> <span class="skill-f">' + sk.from + '</span></div>';
+      }
+    } else {
+      h += '<span class="tt-dim">' + N('ui.label_bare') + '</span>';
+    }
+    h += '</span></div>';
+
+    h += this.row(N('ui.label_wearing'),
+      d.worn.length ? d.worn.join(', ') : '<span class="tt-dim">' + N('ui.label_bare') + '</span>');
+    return h + this.tagsRow(d.tags);
   },
 
   render(s) {
@@ -51,21 +114,7 @@ const Tooltip = {
       return null;
     }
 
-    const rows = [
-      ['', '<b class="tt-name">' + d.name + '</b> <span class="tt-at">' + d.at + '</span>'],
-      [N('ui.label_elevation'), d.elevationText],
-      [N('ui.label_footing'), d.footingText]
-    ];
-    let html = '';
-    for (const r of rows) {
-      html += r[0]
-        ? '<div class="tt-row"><span class="tt-k">' + r[0] + '</span><span class="tt-v">' + r[1] + '</span></div>'
-        : '<div class="tt-head">' + r[1] + '</div>';
-    }
-    html += '<div class="tt-row"><span class="tt-k">' + N('ui.label_tags') + '</span><span class="tt-v tt-tags">';
-    for (const t of d.tags) html += '<span class="tag">' + t + '</span>';
-    html += '</span></div>';
-    this.el.innerHTML = html;
+    this.el.innerHTML = d.kind === 'crawler' ? this.crawlerHtml(d) : this.groundHtml(d);
     this.el.hidden = false;
     this.showing = idx;
 

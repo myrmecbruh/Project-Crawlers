@@ -150,21 +150,60 @@ needs before work begins, so the first build never fails on a missing tool.
 
 ```
 build.py              one command, one playable file
+                      (--sheet / --out build a variant without touching docs/)
+src/defaults.json     every knob and name, as the code default
 src/shell.html        the page; build.py fills in {{STYLE}} and {{CODE}}
 src/style.css         all of the page styling
 src/js/*.js           the game, assembled in filename order
   00-version.js       the ONLY place a version is declared
-  05-rand.js          seeded RNG — the simulation never touches Math.random
-  10-state.js         geometry, placeholder numbers, a fresh match
-  20-input.js         key / mouse / touch, all writing the same flags
+  05-rand.js          seeded RNG - the simulation never touches Math.random
+  08-knobs.js         the spreadsheet, inlined; K/G/N/TILE/TAG/ATTR/SKILL, CFG
+  10-state.js         one match: world, crawlers, camera, what is hovered
+  12-world.js         a chunk of labyrinth from a seed (PLACEHOLDER terrain)
+  14-actors.js        the six attributes, skills, rolls, learning, crawlers
+  20-input.js         key / mouse / touch, all writing the same state
   30-sim.js           one fixed simulation step
-  40-render.js        builds a draw batch, and records what was consumed
-  90-boot.js          canvas fitting and the fixed-timestep loop
-  99-test.js          window.__test — the only way a test touches the game
+  40-render.js        isometric blocks, figures, the pick pass, `consumed`
+  45-ui.js            the inspector: describe() returns data, render() shows it
+  90-boot.js          low-resolution buffer, scaling, the fixed-timestep loop
+  99-test.js          window.__test - the only way a test touches the game
 tests/run.mjs         headless tests, driven through window.__test
+tools/sheet.py        how the spreadsheet is laid out, read and reconciled
+tools/make_sheet.py   create docs/crawlers.xlsx (refuses to clobber hand edits)
+tools/tweak_sheet.py  a one-value copy of the sheet, for tests only
+docs/crawlers.xlsx    THE AUTHORITY on every number and name
 dist/                 built output, never committed
-docs/                 the balance sheet, once numbers matter (see below)
 ```
+
+---
+
+## The character framework (rule 2)
+
+One framework, and everything that resolves goes through it:
+
+```
+six attributes  ->  a skill  ->  ability  ->  one roll  ->  it worked, or it taught
+```
+
+- The six are **Might, Agility, Endurance, Presence, Intellect, Willpower**, in
+  that order, and they are rows in the `attributes` tab.
+- A skill names which attributes feed it and how heavily: `agility:2,endurance:1`.
+  The build refuses to build a skill that draws on anything but the six.
+- `ability = weighted attribute average x roll.attribute_weight
+            + practice x roll.skill_weight`. Practice eventually outweighs talent.
+- `attempt()` in `14-actors.js` is the ONLY place anything is ever resolved.
+  Adding a new thing a crawler can do means a new row in the `skills` tab and a
+  call to `attempt()` - never a second way of deciding whether something worked.
+
+**Rule 1 is not a curve.** There is no code anywhere that slows progress down.
+Failing teaches a lot, only just failing teaches most, succeeding teaches almost
+nothing - so a crawler who has got good at something fails less often and is
+therefore taught less often. The slowdown is a consequence, and a test holds the
+success rate at zero to prove progress does *not* tail off on its own.
+
+One consequence worth knowing: a crawler who succeeds every time still creeps
+upward forever at `learn.gain_on_success`. Set that knob to 0 if mastery should
+be a full stop rather than a crawl.
 
 ---
 
@@ -219,21 +258,26 @@ ruler is worse than no ruler.
   a session that did not publish it must pass that address explicitly, or it will
   create a second link and strand them on the old one.
 
-### A spreadsheet that is the authority on balance — not yet
+### The master spreadsheet, which is the authority
 
-Not built. Add `docs/balance.xlsx` **the first time a number matters to more than
-one thing**, and then:
+`docs/crawlers.xlsx` holds every number and every piece of wording, across eight
+tabs: `knobs`, `geometry` (read only), `names`, `tags`, `tiles`, `attributes`,
+`skills`, `figure`. `src/defaults.json` carries the same values so a fresh
+checkout still builds. The build reconciles the two and inlines the result.
 
-1. **Change a balance number in the sheet, not in the code.** If the code default
-   must move too, move both and say so.
-2. The build reads the sheet, inlines it, and **prints every number the sheet
-   moved**. A number that exists in only one of the two is the failure this
-   arrangement prevents.
-3. **Geometry is not balance.** Board dimensions and the like are read-only.
-
-This gives them a dial they can turn without a conversation, which is the point.
-
----
+1. **Change a number in the sheet, not in the code.** If the code default must
+   move too, move both and say so. (`python3 tools/make_sheet.py --force`
+   regenerates the sheet from the defaults - it DESTROYS hand edits, so only use
+   it while the sheet has none.)
+2. **A key in only one of the two stops the build, in both directions.** A dial
+   connected to nothing and a number nobody can reach are the same failure. So
+   does a skill drawing on a seventh attribute, a tile claiming an unknown tag,
+   or a figure part with no height.
+3. **Geometry is recorded, never tuned.** Editing it stops the build on purpose.
+4. **Row order is meaningful** and is preserved end to end - the attributes are
+   shown in the order the tab lists them, and a figure is authored ground-up.
+5. The build prints a receipt of every value the sheet moved. If a change is not
+   on that receipt, it did not reach the game.
 
 ## The lessons that each cost a version
 
@@ -260,6 +304,15 @@ This gives them a dial they can turn without a conversation, which is the point.
 8. **A missing asset is silence, never an error.** Nothing branches on whether a
    sound exists and nothing logs about it. This let the previous game ship and
    stay shippable for forty versions with no audio at all.
+9. **Order that carries meaning must be preserved AND asserted.** The build
+   alphabetised the data on its way into the game. Nothing errored: the six
+   attributes quietly came out agility-first instead of might-first, and a
+   crawler's legs were painted over their own head, so every hat was invisible
+   while every test still passed - the hat *was* in the draw list. Two fixes,
+   because either alone would have rotted: stop re-sorting, and make the
+   renderer sort the figure ground-up itself so no row order can ever bury a
+   hat. Generalised: if the order of a list means something, something must
+   fail loudly when it changes.
 
 ---
 

@@ -146,8 +146,10 @@ def main():
     # no network and nothing to install.
     if "{{DATA}}" not in code:
         fail("no module contains {{DATA}}; the spreadsheet would never reach the game")
-    code = code.replace("{{DATA}}", json.dumps(game_data, separators=(",", ":"),
-                                               sort_keys=True))
+    # NOT sort_keys: the order rows are written in the spreadsheet is meaningful.
+    # The six attributes are shown in the order they are listed, and a figure is
+    # authored from the ground up.
+    code = code.replace("{{DATA}}", json.dumps(game_data, separators=(",", ":")))
     style = (SRC / "style.css").read_text().strip()
 
     shell = (SRC / "shell.html").read_text()

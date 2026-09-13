@@ -1,67 +1,435 @@
 {
   "_": "Every number and name the game can be tuned with. docs/crawlers.xlsx is the AUTHORITY; this file is the default a fresh checkout builds from. build.py reconciles the two and refuses to build if a key exists in only one of them.",
-
   "knobs": {
-    "render.low_width":       { "value": 480,  "unit": "px",      "note": "Internal render width. The picture is drawn this small, then scaled up with hard pixel edges to get the sprite look." },
-    "render.low_height":      { "value": 270,  "unit": "px",      "note": "Internal render height. Keep the same shape as low_width (16:9) or the view letterboxes." },
-    "render.tile_w":          { "value": 32,   "unit": "px",      "note": "Screen width of one 1m tile diamond at zoom 1." },
-    "render.tile_h":          { "value": 16,   "unit": "px",      "note": "Screen height of one 1m tile diamond at zoom 1. Half of tile_w gives the classic 2:1 isometric view." },
-    "render.rise":            { "value": 10,   "unit": "px/m",    "note": "How many pixels of screen height one metre of elevation is worth. Raise it to make the world feel taller and more vertical." },
-    "render.occluder_fade":   { "value": 0.28, "unit": "alpha",   "note": "How solid a block stays when it is standing between you and the tile you are inspecting. 1 = never fades, 0 = disappears entirely." },
-    "render.side_shade_left": { "value": 0.78, "unit": "x",       "note": "Brightness of the left-facing wall of a block. Below 1 makes it darker than the top." },
-    "render.side_shade_right":{ "value": 0.56, "unit": "x",       "note": "Brightness of the right-facing wall of a block." },
-    "render.height_tint":     { "value": 0.035,"unit": "x/m",     "note": "How much lighter a surface gets per metre of elevation. Gives depth without lighting." },
-    "camera.zoom_start":      { "value": 1,    "unit": "x",       "note": "Zoom the game opens at." },
-    "camera.zoom_min":        { "value": 1,    "unit": "x",       "note": "Furthest out you can zoom." },
-    "camera.zoom_max":        { "value": 3,    "unit": "x",       "note": "Closest in you can zoom. Whole numbers only, so pixels stay square. Zooming in shows fewer metres, not more detail." },
-    "camera.key_pan_speed":   { "value": 3.0,  "unit": "px/tick", "note": "How fast the arrow keys slide the view." },
-    "world.chunk_tiles":      { "value": 28,   "unit": "tiles",   "note": "Width and depth of the piece of labyrinth generated. 28 tiles = 28 metres across." },
-    "world.max_elevation":    { "value": 6,    "unit": "m",       "note": "Tallest the ground is allowed to get above the floor of a chunk." },
-    "world.terrain_scale":    { "value": 6.0,  "unit": "tiles",   "note": "Size of the lumps in the ground. Bigger = broader, smoother hills; smaller = choppier." },
-    "world.ramp_chance":      { "value": 0.35, "unit": "0-1",     "note": "How often a one-metre step gets a ramp instead of being a wall you cannot climb." },
-    "world.damp_level":       { "value": 1,    "unit": "m",       "note": "At or below this elevation the ground is wet. Water and moss appear here." }
+    "render.low_width": {
+      "value": 480,
+      "unit": "px",
+      "note": "Internal render width. The picture is drawn this small, then scaled up with hard pixel edges to get the sprite look."
+    },
+    "render.low_height": {
+      "value": 270,
+      "unit": "px",
+      "note": "Internal render height. Keep the same shape as low_width (16:9) or the view letterboxes."
+    },
+    "render.tile_w": {
+      "value": 32,
+      "unit": "px",
+      "note": "Screen width of one 1m tile diamond at zoom 1."
+    },
+    "render.tile_h": {
+      "value": 16,
+      "unit": "px",
+      "note": "Screen height of one 1m tile diamond at zoom 1. Half of tile_w gives the classic 2:1 isometric view."
+    },
+    "render.rise": {
+      "value": 10,
+      "unit": "px/m",
+      "note": "How many pixels of screen height one metre of elevation is worth. Raise it to make the world feel taller and more vertical."
+    },
+    "render.occluder_fade": {
+      "value": 0.28,
+      "unit": "alpha",
+      "note": "How solid a block stays when it is standing between you and the tile you are inspecting. 1 = never fades, 0 = disappears entirely."
+    },
+    "render.side_shade_left": {
+      "value": 0.78,
+      "unit": "x",
+      "note": "Brightness of the left-facing wall of a block. Below 1 makes it darker than the top."
+    },
+    "render.side_shade_right": {
+      "value": 0.56,
+      "unit": "x",
+      "note": "Brightness of the right-facing wall of a block."
+    },
+    "render.height_tint": {
+      "value": 0.035,
+      "unit": "x/m",
+      "note": "How much lighter a surface gets per metre of elevation. Gives depth without lighting."
+    },
+    "camera.zoom_start": {
+      "value": 1,
+      "unit": "x",
+      "note": "Zoom the game opens at."
+    },
+    "camera.zoom_min": {
+      "value": 1,
+      "unit": "x",
+      "note": "Furthest out you can zoom."
+    },
+    "camera.zoom_max": {
+      "value": 3,
+      "unit": "x",
+      "note": "Closest in you can zoom. Whole numbers only, so pixels stay square. Zooming in shows fewer metres, not more detail."
+    },
+    "camera.key_pan_speed": {
+      "value": 3.0,
+      "unit": "px/tick",
+      "note": "How fast the arrow keys slide the view."
+    },
+    "world.chunk_tiles": {
+      "value": 28,
+      "unit": "tiles",
+      "note": "Width and depth of the piece of labyrinth generated. 28 tiles = 28 metres across."
+    },
+    "world.max_elevation": {
+      "value": 6,
+      "unit": "m",
+      "note": "Tallest the ground is allowed to get above the floor of a chunk."
+    },
+    "world.terrain_scale": {
+      "value": 6.0,
+      "unit": "tiles",
+      "note": "Size of the lumps in the ground. Bigger = broader, smoother hills; smaller = choppier."
+    },
+    "world.ramp_chance": {
+      "value": 0.35,
+      "unit": "0-1",
+      "note": "How often a one-metre step gets a ramp instead of being a wall you cannot climb."
+    },
+    "world.damp_level": {
+      "value": 1,
+      "unit": "m",
+      "note": "At or below this elevation the ground is wet. Water and moss appear here."
+    },
+    "roll.attribute_weight": {
+      "value": 3.0,
+      "unit": "x",
+      "note": "How much a natural attribute is worth in a roll. A 10 in the attribute is worth 30 with this at 3."
+    },
+    "roll.skill_weight": {
+      "value": 1.0,
+      "unit": "x",
+      "note": "How much practice is worth in a roll. At 1, a skill of 100 is worth 100 -- practice eventually outweighs talent."
+    },
+    "roll.noise_spread": {
+      "value": 22.0,
+      "unit": "pts",
+      "note": "How much luck swings a single attempt, either way. Lower makes the better character win more reliably."
+    },
+    "skill.cap": {
+      "value": 100.0,
+      "unit": "pts",
+      "note": "The most practice any one skill can hold."
+    },
+    "learn.gain_on_failure": {
+      "value": 2.2,
+      "unit": "pts",
+      "note": "Practice gained from a FAILED attempt. Rule 1: failing is how a character learns."
+    },
+    "learn.gain_on_success": {
+      "value": 0.35,
+      "unit": "pts",
+      "note": "Practice gained from a successful attempt. Deliberately small -- succeeding teaches you very little."
+    },
+    "learn.near_miss_bonus": {
+      "value": 1.4,
+      "unit": "pts",
+      "note": "Extra practice for only just failing. Getting close teaches most of all."
+    },
+    "learn.near_miss_margin": {
+      "value": 10.0,
+      "unit": "pts",
+      "note": "How close a failure has to be to count as only just missing."
+    },
+    "actor.count": {
+      "value": 6,
+      "unit": "people",
+      "note": "How many crawlers start in the chunk."
+    },
+    "actor.attribute_min": {
+      "value": 4,
+      "unit": "pts",
+      "note": "Lowest a natural attribute can be rolled at. Ordinary people sit near 10."
+    },
+    "actor.attribute_max": {
+      "value": 16,
+      "unit": "pts",
+      "note": "Highest a natural attribute can be rolled at."
+    },
+    "actor.hat_chance": {
+      "value": 0.5,
+      "unit": "0-1",
+      "note": "How many crawlers turn up already wearing something on their head."
+    },
+    "actor.step_ticks": {
+      "value": 26,
+      "unit": "ticks",
+      "note": "How long a crawler pauses between attempts to move. 60 ticks is a second."
+    },
+    "actor.height_m": {
+      "value": 1.75,
+      "unit": "m",
+      "note": "How tall a grown crawler is. One tile is one metre, so this is how tall they look."
+    }
   },
-
   "geometry": {
-    "world.metres_per_tile":  { "value": 1, "unit": "m",  "note": "READ ONLY. One tile is one square metre. Non-negotiable rule 7." },
-    "render.iso_ratio":       { "value": 2, "unit": "x",  "note": "READ ONLY. tile_w divided by tile_h. Changing this is changing the camera, not balancing the game." }
+    "world.metres_per_tile": {
+      "value": 1,
+      "unit": "m",
+      "note": "READ ONLY. One tile is one square metre. Non-negotiable rule 7."
+    },
+    "render.iso_ratio": {
+      "value": 2,
+      "unit": "x",
+      "note": "READ ONLY. tile_w divided by tile_h. Changing this is changing the camera, not balancing the game."
+    },
+    "figure.nominal_height_m": {
+      "value": 1.75,
+      "unit": "m",
+      "note": "READ ONLY. The height the figure tab's part measurements are written against. A crawler of a different height has every part scaled by the same ratio."
+    }
   },
-
   "names": {
-    "ui.hint_desktop":   { "text": "drag to pan  ·  scroll to zoom  ·  hover anything to inspect it" },
-    "ui.hint_touch":     { "text": "drag to pan  ·  pinch to zoom  ·  tap anything to inspect it" },
-    "ui.label_elevation":{ "text": "elevation" },
-    "ui.label_tags":     { "text": "tags" },
-    "ui.label_footing":  { "text": "footing" },
-    "ui.footing_walk":   { "text": "can be walked on" },
-    "ui.footing_block":  { "text": "solid — blocks movement" },
-    "ui.footing_ramp":   { "text": "ramp — climbs one metre" },
-    "ui.nothing_there":  { "text": "nothing there" }
+    "ui.hint_desktop": {
+      "text": "drag to pan  ·  scroll to zoom  ·  hover anything to inspect it"
+    },
+    "ui.hint_touch": {
+      "text": "drag to pan  ·  pinch to zoom  ·  tap anything to inspect it"
+    },
+    "ui.label_elevation": {
+      "text": "elevation"
+    },
+    "ui.label_tags": {
+      "text": "tags"
+    },
+    "ui.label_footing": {
+      "text": "footing"
+    },
+    "ui.footing_walk": {
+      "text": "can be walked on"
+    },
+    "ui.footing_block": {
+      "text": "solid — blocks movement"
+    },
+    "ui.footing_ramp": {
+      "text": "ramp — climbs one metre"
+    },
+    "ui.nothing_there": {
+      "text": "nothing there"
+    },
+    "ui.label_attributes": {
+      "text": "attributes"
+    },
+    "ui.label_skills": {
+      "text": "skills"
+    },
+    "ui.label_wearing": {
+      "text": "wearing"
+    },
+    "ui.label_bare": {
+      "text": "nothing"
+    },
+    "character.name_pool": {
+      "text": "Bran, Ysolde, Corwin, Maerl, Thessa, Odric, Vela, Garn, Ketta, Rhodry, Isme, Dunmar, Sable, Wren, Halgar, Nix, Orla, Tam, Brennis, Sorrel"
+    }
   },
-
   "tags": {
-    "floor":       { "name": "floor",       "note": "A surface something can stand on." },
-    "solid":       { "name": "solid",       "note": "Fills its metre. Nothing walks through it." },
-    "ramp":        { "name": "ramp",        "note": "Climbs exactly one metre between levels." },
-    "stone":       { "name": "stone",       "note": "Made of worked or natural rock." },
-    "earth":       { "name": "earth",       "note": "Soil, clay or packed dirt." },
-    "water":       { "name": "water",       "note": "Standing water. Shallow enough to wade." },
-    "organic":     { "name": "organic",     "note": "Grown, or once alive." },
-    "damp":        { "name": "damp",        "note": "Wet underfoot. Things rot and grow here." },
-    "dry":         { "name": "dry",         "note": "Dry underfoot." },
-    "unstable":    { "name": "unstable",    "note": "Loose. Shifts when weight is put on it." },
-    "grim":        { "name": "grim",        "note": "A reminder of what happened here." },
-    "blocks-sight":{ "name": "blocks sight","note": "Cannot be seen through." }
+    "floor": {
+      "name": "floor",
+      "note": "A surface something can stand on."
+    },
+    "solid": {
+      "name": "solid",
+      "note": "Fills its metre. Nothing walks through it."
+    },
+    "ramp": {
+      "name": "ramp",
+      "note": "Climbs exactly one metre between levels."
+    },
+    "stone": {
+      "name": "stone",
+      "note": "Made of worked or natural rock."
+    },
+    "earth": {
+      "name": "earth",
+      "note": "Soil, clay or packed dirt."
+    },
+    "water": {
+      "name": "water",
+      "note": "Standing water. Shallow enough to wade."
+    },
+    "organic": {
+      "name": "organic",
+      "note": "Grown, or once alive."
+    },
+    "damp": {
+      "name": "damp",
+      "note": "Wet underfoot. Things rot and grow here."
+    },
+    "dry": {
+      "name": "dry",
+      "note": "Dry underfoot."
+    },
+    "unstable": {
+      "name": "unstable",
+      "note": "Loose. Shifts when weight is put on it."
+    },
+    "grim": {
+      "name": "grim",
+      "note": "A reminder of what happened here."
+    },
+    "blocks-sight": {
+      "name": "blocks sight",
+      "note": "Cannot be seen through."
+    },
+    "person": {
+      "name": "person",
+      "note": "A thinking creature with the six attributes and skills of its own."
+    },
+    "crawler": {
+      "name": "crawler",
+      "note": "One of yours: came into the labyrinth, may yet leave it."
+    }
   },
-
   "tiles": {
-    "stone_floor":   { "name": "Stone Floor",   "tags": "floor,stone,dry",            "top": "#6e7278", "side": "#585c61", "footing": "walk",  "note": "Worked flagstone. The default footing of the labyrinth." },
-    "packed_earth":  { "name": "Packed Earth",  "tags": "floor,earth,dry",            "top": "#7d6c54", "side": "#63553f", "footing": "walk",  "note": "Trodden soil." },
-    "moss_stone":    { "name": "Mossy Stone",   "tags": "floor,stone,damp,organic",   "top": "#5f7557", "side": "#4a5c45", "footing": "walk",  "note": "Stone gone green where the water sits." },
-    "shallow_water": { "name": "Shallow Water", "tags": "floor,water,damp",           "top": "#3f6b7d", "side": "#335667", "footing": "walk",  "note": "Ankle deep. Slows a walker, ruins what it soaks." },
-    "rubble":        { "name": "Rubble",        "tags": "floor,stone,unstable,dry",   "top": "#6d6860", "side": "#57534c", "footing": "walk",  "note": "Collapsed masonry, not yet cleared." },
-    "bone_litter":   { "name": "Bone Litter",   "tags": "floor,organic,grim,dry",     "top": "#8d8672", "side": "#6f6959", "footing": "walk",  "note": "Somebody else got this far." },
-    "stone_ramp":    { "name": "Stone Ramp",    "tags": "ramp,stone,dry",             "top": "#73777d", "side": "#5b5f64", "footing": "ramp",  "note": "A climbable one-metre slope." },
-    "stone_block":   { "name": "Stone Block",   "tags": "solid,stone,blocks-sight",   "top": "#5a5d62", "side": "#46494d", "footing": "block", "note": "A full cubic metre of rock." }
+    "stone_floor": {
+      "name": "Stone Floor",
+      "tags": "floor,stone,dry",
+      "top": "#6e7278",
+      "side": "#585c61",
+      "footing": "walk",
+      "cross": 8,
+      "note": "Worked flagstone. The default footing of the labyrinth."
+    },
+    "packed_earth": {
+      "name": "Packed Earth",
+      "tags": "floor,earth,dry",
+      "top": "#7d6c54",
+      "side": "#63553f",
+      "footing": "walk",
+      "cross": 10,
+      "note": "Trodden soil."
+    },
+    "moss_stone": {
+      "name": "Mossy Stone",
+      "tags": "floor,stone,damp,organic",
+      "top": "#5f7557",
+      "side": "#4a5c45",
+      "footing": "walk",
+      "cross": 16,
+      "note": "Stone gone green where the water sits."
+    },
+    "shallow_water": {
+      "name": "Shallow Water",
+      "tags": "floor,water,damp",
+      "top": "#3f6b7d",
+      "side": "#335667",
+      "footing": "walk",
+      "cross": 26,
+      "note": "Ankle deep. Slows a walker, ruins what it soaks."
+    },
+    "rubble": {
+      "name": "Rubble",
+      "tags": "floor,stone,unstable,dry",
+      "top": "#6d6860",
+      "side": "#57534c",
+      "footing": "walk",
+      "cross": 30,
+      "note": "Collapsed masonry, not yet cleared."
+    },
+    "bone_litter": {
+      "name": "Bone Litter",
+      "tags": "floor,organic,grim,dry",
+      "top": "#8d8672",
+      "side": "#6f6959",
+      "footing": "walk",
+      "cross": 14,
+      "note": "Somebody else got this far."
+    },
+    "stone_ramp": {
+      "name": "Stone Ramp",
+      "tags": "ramp,stone,dry",
+      "top": "#73777d",
+      "side": "#5b5f64",
+      "footing": "ramp",
+      "cross": 22,
+      "note": "A climbable one-metre slope."
+    },
+    "stone_block": {
+      "name": "Stone Block",
+      "tags": "solid,stone,blocks-sight",
+      "top": "#5a5d62",
+      "side": "#46494d",
+      "footing": "block",
+      "cross": 999,
+      "note": "A full cubic metre of rock."
+    }
+  },
+  "attributes": {
+    "might": {
+      "name": "Might",
+      "abbrev": "MGT",
+      "note": "Raw physical force. Lifting, hauling, forcing, and the heavy end of any tool."
+    },
+    "agility": {
+      "name": "Agility",
+      "abbrev": "AGI",
+      "note": "Speed and fine control. Keeping your feet, quick hands, delicate work."
+    },
+    "endurance": {
+      "name": "Endurance",
+      "abbrev": "END",
+      "note": "Staying power. Long marches, cold nights, illness, a whole day of work."
+    },
+    "presence": {
+      "name": "Presence",
+      "abbrev": "PRE",
+      "note": "Effect on other people. Singing, teaching, calming a panic, bargaining."
+    },
+    "intellect": {
+      "name": "Intellect",
+      "abbrev": "INT",
+      "note": "What can be learned and worked out. Recipes, repairs, maps, lore."
+    },
+    "willpower": {
+      "name": "Willpower",
+      "abbrev": "WIL",
+      "note": "What can be made to happen anyway. Fear, pain, boredom, sticking at a hated task."
+    }
+  },
+  "skills": {
+    "clambering": {
+      "name": "Clambering",
+      "derives": "agility:2,endurance:1",
+      "note": "Keeping your feet on bad ground: water, rubble, moss, a steep ramp. Rolled every time a crawler tries to step onto a difficult tile."
+    }
+  },
+  "figure": {
+    "legs": {
+      "name": "Legs",
+      "slot": "body",
+      "colour": "#33302c",
+      "half_width": 0.15,
+      "from_m": 0.0,
+      "to_m": 0.8,
+      "note": "Always drawn."
+    },
+    "torso": {
+      "name": "Torso",
+      "slot": "body",
+      "colour": "#5c5145",
+      "half_width": 0.22,
+      "from_m": 0.78,
+      "to_m": 1.4,
+      "note": "Always drawn. The cloth colour, and the widest part of a crawler."
+    },
+    "head": {
+      "name": "Head",
+      "slot": "body",
+      "colour": "#ab977d",
+      "half_width": 0.14,
+      "from_m": 1.4,
+      "to_m": 1.72,
+      "note": "Always drawn."
+    },
+    "hat": {
+      "name": "Hat",
+      "slot": "hat",
+      "colour": "#23201d",
+      "half_width": 0.17,
+      "from_m": 1.7,
+      "to_m": 1.84,
+      "note": "Only drawn on a crawler wearing one. Keep half_width near the head's or the brim hides the face. Rule 4: if it is on them, it is on screen -- add a row here and it can be worn."
+    }
   }
 }

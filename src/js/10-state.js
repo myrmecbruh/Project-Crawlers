@@ -6,6 +6,8 @@ function newState(seed) {
     rand: makeRand(seed),
     tick: 0,
     world: world,
+    actors: [],
+    rolls: 0,
     cam: { x: 0, y: 0, zoom: CFG.zoomStart },
     /* Latched input. The simulation never learns which device it came from. */
     input: { panUp: false, panDown: false, panLeft: false, panRight: false },
@@ -16,6 +18,7 @@ function newState(seed) {
     geomDirty: true,
     viewDirty: true
   };
+  s.actors = populate(s);
   centreCamera(s);
   return s;
 }

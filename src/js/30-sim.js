@@ -1,10 +1,10 @@
 /* One fixed step. Deterministic: same seed and same inputs, same result.
    Nothing in here reads the clock or Math.random.
 
-   There is no life in the labyrinth yet -- characters and creatures wait on the
-   six attributes, and rule 2 says ask before inventing them. For now a step is
-   the view sliding under the arrow keys. */
+   The player is a head coach: nothing below waits to be told what to do. */
 function step(state) {
+  for (let i = 0; i < state.actors.length; i++) actorStep(state, state.actors[i]);
+
   const i = state.input;
   let dx = 0, dy = 0;
   if (i.panLeft) dx -= 1;

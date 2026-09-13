@@ -7,6 +7,66 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.3.0 — the six attributes, and the first people in the labyrinth
+
+Rule 2 was answered: **Might, Agility, Endurance, Presence, Intellect,
+Willpower**. That unblocked everything this release, because rule 2 does not
+merely ask for six names — it says there is *one* framework and nothing resolves
+outside it.
+
+**The framework.** Six attributes feed skills; skills give an ability; one
+function, `attempt()`, turns an ability and a difficulty into a result. There is
+no second path. A skill declares what it draws on as a weight list in the
+spreadsheet (`agility:2,endurance:1`), and the build refuses to build a skill
+that draws on a seventh attribute, or on nothing. Practice is worth as much per
+point as talent is worth per three, so a dogged crawler eventually beats a gifted
+one — which is the point of a game where people come and go.
+
+**Rule 1, built as a consequence rather than a curve.** There is no code
+anywhere that slows progress down. Failing teaches 2.2, failing *narrowly*
+teaches 3.6, succeeding teaches 0.35. A crawler who has got good at something
+fails less often and is therefore taught less often, and that is the whole
+slowdown. On seed 12 at difficulty 55 they gain 34.5, then 11.8, then 5.3, then
+5.3 per fifteen attempts, while their successes go 3, 13, 15, 15 — and they never
+reach the practice ceiling, so the ceiling is not what flattened it.
+
+The test that matters most here is the negative one: hold the success rate at
+zero by setting an impossible difficulty, and progress must come out *perfectly
+flat* — 22, 22, 22, 22. If a curve had been smuggled in anywhere, that test
+fails. It is the only way to prove rule 1's "therefore" is real.
+
+**Crawlers.** Six of them, generated from the seed, standing on ground they could
+actually stand on, wandering on their own initiative — the player is a head
+coach, and nothing waits to be told. Every step onto difficult ground is a
+Clambering roll against that tile's crossing difficulty, so the framework above is
+reachable in a real match and not only on a bench. Water and rubble are genuinely
+hard; they stumble, and stumbling is how they learn. A test walks 900 ticks and
+fails if anyone ever crosses a metre step without a ramp.
+
+**They are visible, and so is what they carry (rule 4).** A crawler is assembled
+from rows in a `figure` tab — legs, torso, head, and a hat for those who turn up
+with one. A part that is worn is a part that is drawn and there is no other path
+to the screen. Hovering one gives an outline and their six attributes, every
+skill with the attributes it derives from written beside it, what they are
+wearing, and their tags.
+
+**The mistake this release cost, and it is now lesson 9.** The build was
+alphabetising the data on its way into the game. Nothing errored. The six
+attributes silently came out agility-first instead of might-first, and — worse —
+a crawler's *legs were painted over their own head*, so every hat in the game was
+invisible. The hat test passed the whole time, because the hat genuinely was in
+the draw list; it was simply buried. It took a screenshot to catch, which is
+exactly the failure mode the project already knew about from the other direction.
+Fixed twice over, because either fix alone would have rotted: the build no longer
+re-sorts anything, and the renderer now sorts a figure from the ground up itself,
+so no row order can ever bury a hat again. Two new tests hold both ends.
+
+**Deliberately not built:** the camp. Clearing, hauling and building are the next
+release and are now cheap, because the framework they hang on exists and is
+proven. Adding one is a row in the skills tab and a call to `attempt()`.
+
+---
+
 ## v0.2.0 — the labyrinth in three dimensions, and the master sheet
 
 The game got told what it is. Nine rules went into `CLAUDE.md` as the

@@ -22,7 +22,28 @@ function TILE(id) {
   if (!t) throw new Error('unknown tile: ' + id);
   return t;
 }
-function TAG(id) { return DATA.tags[id] || { name: id, note: '' }; }
+/* Tags are vocabulary, and rule 2 says the vocabulary is agreed, not invented.
+   An unknown tag is a mistake, so it is loud rather than quietly plausible. */
+function TAG(id) {
+  const t = DATA.tags[id];
+  if (!t) throw new Error('unknown tag: ' + id);
+  return t;
+}
+function ATTR(id) {
+  const a = DATA.attributes[id];
+  if (!a) throw new Error('unknown attribute: ' + id);
+  return a;
+}
+function SKILL(id) {
+  const s = DATA.skills[id];
+  if (!s) throw new Error('unknown skill: ' + id);
+  return s;
+}
+/* The six, in the order they are always shown. Rule 2: there are six, and every
+   skill in the game is derived from them. */
+const ATTRIBUTE_IDS = Object.keys(DATA.attributes);
+const SKILL_IDS = Object.keys(DATA.skills);
+const FIGURE_IDS = Object.keys(DATA.figure);
 
 /* Named locals for everything read every frame. A stride is a name, never a
    literal, and a knob fetched by string in a hot loop is a typo waiting to
@@ -46,6 +67,21 @@ const CFG = {
   terrainScale: K('world.terrain_scale'),
   rampChance:  K('world.ramp_chance'),
   dampLevel:   K('world.damp_level'),
+  attrWeight:  K('roll.attribute_weight'),
+  skillWeight: K('roll.skill_weight'),
+  noiseSpread: K('roll.noise_spread'),
+  skillCap:    K('skill.cap'),
+  gainFail:    K('learn.gain_on_failure'),
+  gainWin:     K('learn.gain_on_success'),
+  nearMissBonus: K('learn.near_miss_bonus'),
+  nearMissMargin: K('learn.near_miss_margin'),
+  actorCount:  K('actor.count'),
+  attrMin:     K('actor.attribute_min'),
+  attrMax:     K('actor.attribute_max'),
+  hatChance:   K('actor.hat_chance'),
+  stepTicks:   K('actor.step_ticks'),
+  actorHeight: K('actor.height_m'),
+  figureNominal: G('figure.nominal_height_m'),
   metresPerTile: G('world.metres_per_tile'),
   isoRatio:    G('render.iso_ratio')
 };
