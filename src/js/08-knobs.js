@@ -130,6 +130,7 @@ const CFG = {
   idleSway:    K('anim.idle_sway'),
   turnTicks:   K('anim.turn_ticks'),
   maxSteps:    K('time.max_steps_per_frame'),
+  outlineWidth: K('render.outline_width'),
   lightAmbient: K('render.light_ambient'),
   lightDiffuse: K('render.light_diffuse'),
   figureNominal: G('figure.nominal_height_m'),

@@ -264,17 +264,43 @@ window.__test = {
                  footing: TILE(c.tile).footing, index: c.y * Game.state.world.n + c.x } : null;
   },
   project(x, y, h) { return Render.project(Game.state, x, y, h); },
-  describe(i) { return Tooltip.describe(Game.state, i); },
+  describe(i) { return Inspector.describe(Game.state, i); },
 
-  /* What the inspector is actually showing on the page right now. */
+  /* What the hover tooltip is showing right now. */
   tooltipOnScreen() {
     const el = document.getElementById('tooltip');
     if (!el || el.hidden) return null;
+    return { showing: Inspector.showing, text: el.textContent,
+             lines: el.childElementCount };
+  },
+
+  /* What the pinned panel is showing, and how big it is. */
+  panelOnScreen() {
+    const el = document.getElementById('panel');
+    if (!el || el.hidden) return null;
+    const folds = Array.from(el.querySelectorAll('.fold')).map((f) => ({
+      id: f.dataset.section, open: f.getAttribute('aria-expanded') === 'true',
+      count: f.querySelector('.fold-count').textContent
+    }));
     return {
-      showing: Tooltip.showing,
-      text: el.textContent,
-      tags: Array.from(el.querySelectorAll('.tag')).map((n) => n.textContent)
+      pinned: Inspector.pinned, text: el.textContent, folds: folds,
+      rows: el.querySelectorAll('.gear').length,
+      skills: el.querySelectorAll('.skill').length,
+      attrs: el.querySelectorAll('.attr').length,
+      tags: Array.from(el.querySelectorAll('.tag')).map((n) => n.textContent),
+      height: el.offsetHeight, width: el.offsetWidth
     };
+  },
+  /* Click a fold open or shut, the way a finger would. */
+  clickFold(id) {
+    const el = document.querySelector('#panel [data-section="' + id + '"]');
+    if (el) el.click();
+    return this.panelOnScreen();
+  },
+  closePanel() {
+    const el = document.querySelector('#panel [data-close]');
+    if (el) el.click();
+    return this.panelOnScreen();
   },
 
   /* Does the ruler measure? Run on a throwaway match; the live one is restored. */

@@ -295,6 +295,11 @@
       "value": 64,
       "unit": "ticks",
       "note": "The most the world is allowed to advance in a single drawn frame. Stops a slow machine, or a tab left in the background, from lurching forward all at once."
+    },
+    "render.outline_width": {
+      "value": 2,
+      "unit": "px",
+      "note": "How thick the highlight ring around a selected thing is drawn. It is drawn UNDER the thing and half of it is covered, so 2 here shows as a 1 pixel line around the silhouette."
     }
   },
   "geometry": {
@@ -416,6 +421,24 @@
     },
     "ui.button_faster": {
       "text": "faster (.)"
+    },
+    "ui.colour_outline": {
+      "text": "#ffe9a8"
+    },
+    "ui.label_inspect": {
+      "text": "click to inspect"
+    },
+    "ui.label_close": {
+      "text": "close"
+    },
+    "ui.section_attributes": {
+      "text": "attributes"
+    },
+    "ui.section_skills": {
+      "text": "skills"
+    },
+    "ui.section_gear": {
+      "text": "gear"
     }
   },
   "tags": {

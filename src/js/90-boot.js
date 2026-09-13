@@ -30,6 +30,7 @@ const Game = {
     document.getElementById('hint').textContent =
       N(touch ? 'ui.hint_touch' : 'ui.hint_desktop');
     this.bindButtons();
+    Inspector.bind();
     this.refreshControls();
 
     this.last = performance.now();
@@ -109,7 +110,7 @@ const Game = {
     }
     if (s.viewDirty) {
       Render.draw(s);
-      Tooltip.render(s);
+      Inspector.render(s);
     }
     this.ctx.drawImage(Render.buf, 0, 0);
   },

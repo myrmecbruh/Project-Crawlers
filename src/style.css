@@ -83,19 +83,87 @@ body {
 #hint { opacity: 0.6; }
 #readout { opacity: 0.4; font-variant-numeric: tabular-nums; }
 
+/* The hover tooltip: one line, follows the pointer, never clickable. */
 #tooltip {
   position: fixed;
-  z-index: 10;
-  min-width: 150px;
-  max-width: 280px;
-  padding: 7px 9px;
+  z-index: 11;
+  max-width: 200px;
+  padding: 4px 7px;
   background: var(--panel);
   border: 1px solid var(--edge);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.4;
+}
+#tooltip .tt-sum { color: #b8c8d8; }
+#tooltip .tt-hint { opacity: 0.3; font-size: 10px; letter-spacing: 0.04em; }
+
+/* The pinned panel: clicked open, stays put, and can be clicked. */
+#panel {
+  position: fixed;
+  z-index: 12;
+  top: 14px;
+  right: 14px;
+  width: 224px;
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
+  padding: 7px 9px 8px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   line-height: 1.5;
 }
-.tt-head { margin-bottom: 3px; }
+.pn-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--edge);
+}
+.pn-head .tt-at { flex: 1 1 auto; }
+.pn-close {
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  min-width: 24px;
+  min-height: 24px;
+  color: var(--ink);
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.pn-close:hover { color: var(--ink-bright); border-color: var(--edge); }
+.pn-close:focus-visible { outline: 2px solid #c9a35e; outline-offset: 1px; }
+
+/* A fold: the header is the button, and the long lists start shut. */
+.fold {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-top: 1px solid rgba(120, 150, 190, 0.1);
+  padding: 4px 0 3px;
+  margin-top: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+.fold:hover { color: var(--ink-bright); }
+.fold:focus-visible { outline: 2px solid #c9a35e; outline-offset: -2px; }
+.fold-arrow { flex: 0 0 10px; opacity: 0.5; }
+.fold-label { flex: 1 1 auto; letter-spacing: 0.04em; }
+.fold-count { opacity: 0.4; font-variant-numeric: tabular-nums; font-size: 10px; }
+.fold.open .fold-label { color: var(--ink-bright); }
+.fold-body { padding: 2px 0 4px 16px; }
+
 .tt-name { color: var(--ink-bright); font-weight: 600; }
 .tt-at { opacity: 0.35; }
 .tt-row { display: flex; gap: 8px; }
@@ -105,26 +173,29 @@ body {
 .tt-dim { opacity: 0.4; }
 .bar { display: inline-block; width: 58px; height: 6px; background: rgba(120,160,200,0.16); vertical-align: middle; }
 .bar-fill { display: block; height: 100%; background: #c9a35e; }
-.tt-attrs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px 6px; }
+.tt-attrs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px 10px; }
 .attr { display: flex; justify-content: space-between; gap: 5px; }
 .attr-k { opacity: 0.45; }
 .attr-v { color: var(--ink-bright); font-variant-numeric: tabular-nums; }
-.tt-gear { display: grid; grid-template-columns: 1fr; gap: 0; }
-.gear { display: flex; gap: 6px; align-items: baseline; }
-.gear-s { flex: 0 0 58px; opacity: 0.38; font-size: 10px; letter-spacing: 0.04em; }
-.gear-n { color: #c3d2e0; }
-.gear-e { opacity: 0.55; font-size: 10px; color: #9fb48c; }
-.gear-off .gear-n { opacity: 0.25; }
 .attr-v.up { color: #9fc47f; }
 .attr-v.down { color: #c98d7a; }
 .skill { display: flex; gap: 6px; align-items: baseline; }
 .skill-n { color: #b8c8d8; }
 .skill-l { color: var(--ink-bright); font-variant-numeric: tabular-nums; }
 .skill-f { opacity: 0.35; font-size: 10px; letter-spacing: 0.05em; }
+.gear { display: flex; gap: 6px; align-items: baseline; }
+.gear-s { flex: 0 0 54px; opacity: 0.38; font-size: 10px; letter-spacing: 0.04em; }
+.gear-n { color: #c3d2e0; }
+.gear-e { opacity: 0.55; font-size: 10px; color: #9fb48c; }
+.gear-off .gear-n { opacity: 0.25; }
 .tag {
   background: rgba(120, 160, 200, 0.13);
   border: 1px solid rgba(120, 160, 200, 0.18);
   color: #9fb4c8;
   padding: 0 4px;
   font-size: 11px;
+}
+
+@media (max-width: 560px) {
+  #panel { left: 12px; right: 12px; width: auto; top: 12px; max-height: 52vh; }
 }

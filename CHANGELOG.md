@@ -7,6 +7,39 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.8.0 — a silhouette highlight, and an inspector that folds
+
+**The highlight follows the shape now.** Selecting a crawler used to draw a box
+round them, because a posed figure has no single flat top to trace. It now
+traces the silhouette: the thing's own polygons are painted in the highlight
+colour *underneath* it, fattened by a stroke, and then the thing is drawn on top
+and covers all of it except the ring that stuck out. Internal edges never show
+because they are covered. One pass, any shape — it works identically for a posed
+figure, a block of rock and a half-built store, and nothing needed to know which
+it was dealing with.
+
+**The popups are called the inspector**, and it is now two things rather than
+one that was trying to be both:
+
+- **the tooltip** follows the pointer, gives the name and one line, and cannot
+  be clicked;
+- **the panel** is pinned by clicking or tapping, stays put, and *can* be
+  clicked — which is the whole reason the lists can fold.
+
+The panel opens with the six attributes showing and **skills and gear folded
+away** behind clickable headers that carry their counts (`gear 4/12`). Twelve
+gear slots unfolded is exactly what had made the old popup bury the game.
+
+**A real bug, found by the tests rather than by looking.** The panel's click
+handler had closed over the match that existed when the page loaded. It worked
+perfectly in play — the match is never replaced there — but starting a new one
+left every fold and the close button quietly wired to a game nobody was playing.
+It now reads the current match at click time. Worth noting because it is a class
+of bug that only shows up where state is swapped, which is to say only in tests
+and only later, in whatever feature first restarts a match mid-session.
+
+---
+
 ## v0.7.0 — pause, and four speeds
 
 A pause button and a speed control, to the left of the view controls: pause,

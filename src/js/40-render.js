@@ -255,6 +255,45 @@ const Render = {
     ctx.fill();
   },
 
+  /* Every polygon a thing is made of, so it can be haloed as one shape. */
+  shapeOf(item) {
+    if (item.kind === 'actor') {
+      const out = [];
+      for (let i = 0; i < item.parts.length; i++) {
+        const fs = item.parts[i].faces;
+        for (let g = 0; g < fs.length; g++) out.push(fs[g].pts);
+      }
+      return out;
+    }
+    if (item.kind === 'site') {
+      return [item.shape.top, item.shape.left, item.shape.right];
+    }
+    return item.solid ? [item.top, item.left, item.right] : [item.top];
+  },
+
+  /* The highlight: the thing's own shapes, fattened by a stroke, painted in one
+     colour UNDERNEATH it. The thing is then drawn on top and covers all of it
+     except the ring that stuck out -- which is the silhouette, and only the
+     silhouette. Internal edges never show, because they are covered. */
+  halo(ctx, polys, colour, width) {
+    ctx.save();
+    ctx.fillStyle = colour;
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = width;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    for (let i = 0; i < polys.length; i++) {
+      const pts = polys[i];
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
+
   outline(ctx, pts, colour) {
     ctx.strokeStyle = colour;
     ctx.lineWidth = 1;
@@ -291,6 +330,9 @@ const Render = {
     }
 
     const items = this.recordItems ? [] : null;
+    let outlined = false;
+
+    const outlineColour = N('ui.colour_outline');
 
     for (let k = 0; k < b.length; k++) {
       const it = b[k];
@@ -303,6 +345,15 @@ const Render = {
       if (focus && k > focusPos && this.occludes(it, focus)) {
         alpha = Math.min(alpha, CFG.occluderFade);
         faded++;
+      }
+
+      /* The highlighted thing is never faded -- it is the one you are looking
+         at -- and its halo goes down first, at full strength. */
+      if (focus && k === focusPos) {
+        alpha = 1;
+        ctx.globalAlpha = 1;
+        this.halo(ctx, this.shapeOf(it), outlineColour, CFG.outlineWidth);
+        outlined = true;
       }
       ctx.globalAlpha = alpha;
 
@@ -364,20 +415,6 @@ const Render = {
     }
 
     ctx.globalAlpha = 1;
-    let outlined = false;
-    if (focus) {
-      if (focus.kind === 'actor') {
-        /* A posed figure has no one flat top to trace, so it is boxed. */
-        ctx.strokeStyle = '#ffe9a8';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(Math.round(focus.minX) - 1.5, Math.round(focus.minY) - 1.5,
-                       Math.round(focus.maxX - focus.minX) + 3,
-                       Math.round(focus.maxY - focus.minY) + 3);
-      } else {
-        this.outline(ctx, focus.kind === 'site' ? focus.shape.top : focus.top, '#ffe9a8');
-      }
-      outlined = true;
-    }
 
     this.consumed = {
       tick: s.tick, count: drawn, kinds: kinds,

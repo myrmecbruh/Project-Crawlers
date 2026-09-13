@@ -136,6 +136,7 @@ await test('hovering a block outlines it and names it on screen (rule 8)', async
       target, hovered,
       consumed: window.__test.consumed(),
       tooltip: window.__test.tooltipOnScreen(),
+      panel: window.__test.panelOnScreen(),
       described: window.__test.describe(hovered)
     };
   });
@@ -149,9 +150,9 @@ await test('hovering a block outlines it and names it on screen (rule 8)', async
     `tooltip says "${r.tooltip.text}", block is "${r.described.name}"`);
   assert(r.tooltip.text.includes(`${r.described.elevation} m`),
     `tooltip does not show the elevation (${r.described.elevation} m)`);
-  assert(r.tooltip.tags.length > 0 &&
-    r.tooltip.tags.join(',') === r.described.tags.join(','),
-    `tooltip tags ${r.tooltip.tags} vs ${r.described.tags}`);
+  assert(r.tooltip.text.includes(r.described.footingText),
+    `the tooltip says "${r.tooltip.text}" but never mentions the footing`);
+  assert(r.panel === null, 'a panel appeared without anything being clicked');
 });
 
 await test('pointing away from the labyrinth shows nothing', async () => {
@@ -495,35 +496,112 @@ await test('the six attributes are shown in the order the spreadsheet lists them
     `the spreadsheet order is ${r.sheet.join(',')}`);
 });
 
-await test('hovering a crawler shows their six attributes and their skills', async () => {
+await test('hovering names a crawler; clicking opens the panel on them', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(1); window.__test.record(true);
-    for (let i = 0; i < 20; i++) window.__test.frame(60);   /* let them get to work */
-    window.__test.centreOn(0);
-    const drew = window.__test.frame(1);
+    for (let i = 0; i < 20; i++) window.__test.frame(60);
     const found = window.__test.pointAtAnyActor();
-    const target = found.found ? { i: found.pick } : null;
     const hovered = found.found ? found.pick : -1;
-    return { target, hovered, described: window.__test.describe(hovered),
-             tooltip: window.__test.tooltipOnScreen(),
+    const tip = window.__test.tooltipOnScreen();
+    const beforeClick = window.__test.panelOnScreen();
+    window.__test.select(hovered);                 /* as a click or a tap does */
+    return { found, hovered, tip, beforeClick,
+             panel: window.__test.panelOnScreen(),
+             described: window.__test.describe(hovered),
              consumed: window.__test.consumed() };
   });
-  assert(r.target, 'no crawler was anywhere in view');
-  assert(r.hovered === r.target.i, `pointed at crawler ${r.target.i}, picked ${r.hovered}`);
+  assert(r.found.found, `could not get at a crawler: ${r.found.why}`);
   assert(r.described.kind === 'crawler', 'the inspector did not recognise a crawler');
-  assert(r.described.attributes.length === 6,
-    `${r.described.attributes.length} attributes, not six`);
   assert(r.consumed.outlined, 'a hovered crawler was not outlined');
-  assert(r.tooltip, 'no panel appeared for a crawler');
-  assert(r.tooltip.text.includes(r.described.name), 'the panel does not name them');
-  for (const a of r.described.attributes) {
-    assert(r.tooltip.text.includes(a.abbrev),
-      `the panel never shows ${a.abbrev}`);
+  assert(r.tip, 'no tooltip appeared over a crawler');
+  assert(r.tip.text.includes(r.described.name), 'the tooltip does not name them');
+  assert(r.tip.lines <= 3, `the hover tooltip is ${r.tip.lines} lines; it should be brief`);
+  assert(r.beforeClick === null, 'the panel was open before anything was clicked');
+  assert(r.panel, 'clicking a crawler opened no panel');
+  assert(r.panel.pinned === r.hovered, 'the panel is pinned to something else');
+  assert(r.panel.text.includes(r.described.name), 'the panel does not name them');
+});
+
+await test('the panel starts folded, and the folds open when clicked', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    for (let i = 0; i < 20; i++) window.__test.frame(60);
+    window.__test.select(window.__test.pointAtAnyActor().pick);
+    const shut = window.__test.panelOnScreen();
+    const openGear = window.__test.clickFold('gear');
+    const shutAgain = window.__test.clickFold('gear');
+    const closed = window.__test.closePanel();
+    return { shut, openGear, shutAgain, closed,
+             slots: Object.keys(window.__test.data.slots).length };
+  });
+  const fold = (p, id) => p.folds.find((f) => f.id === id);
+  assert(r.shut.folds.length === 3,
+    `the panel has ${r.shut.folds.length} folds, expected attributes, skills and gear`);
+  assert(fold(r.shut, 'gear').open === false && fold(r.shut, 'skills').open === false,
+    'the long lists are open by default, which is what made the popup too big');
+  assert(fold(r.shut, 'attributes').open === true, 'the attributes are hidden by default');
+  assert(r.shut.rows === 0, `${r.shut.rows} gear rows show while gear is folded`);
+  assert(fold(r.openGear, 'gear').open === true, 'clicking the gear fold did not open it');
+  assert(r.openGear.rows === r.slots,
+    `opened gear shows ${r.openGear.rows} rows, not all ${r.slots} slots`);
+  assert(r.openGear.height > r.shut.height, 'opening a fold did not make the panel taller');
+  assert(fold(r.shutAgain, 'gear').open === false, 'clicking again did not fold it back');
+  assert(r.closed === null, 'the close button did not close the panel');
+});
+
+await test('folded, the panel is small; opened, it is the whole story', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    for (let i = 0; i < 30; i++) window.__test.frame(60);
+    const found = window.__test.pointAtAnyActor();
+    window.__test.select(found.pick);
+    const shut = window.__test.panelOnScreen();
+    window.__test.clickFold('gear');
+    window.__test.clickFold('skills');
+    return { shut, all: window.__test.panelOnScreen(),
+             d: window.__test.describe(found.pick), viewport: innerHeight };
+  });
+  assert(r.shut.height < r.viewport * 0.45,
+    `folded, the panel is ${r.shut.height}px of a ${r.viewport}px window`);
+  assert(r.shut.attrs === 6, `${r.shut.attrs} attributes show while folded`);
+  for (const a of r.d.attributes) {
+    assert(r.shut.text.includes(a.abbrev), `the panel never shows ${a.abbrev}`);
   }
-  assert(r.described.skills.length > 0, 'after 1200 ticks nobody has practised anything');
-  assert(r.tooltip.text.includes(r.described.skills[0].name),
-    'the panel does not show the skill they have been practising');
-  assert(r.tooltip.tags.includes('crawler'), `crawler tags: ${r.tooltip.tags}`);
+  assert(r.all.rows === 12, `opened right up, the panel shows ${r.all.rows} gear rows`);
+  assert(r.all.skills === r.d.skills.length,
+    `the panel shows ${r.all.skills} skills, they have ${r.d.skills.length}`);
+  assert(r.all.tags.includes('crawler'), `panel tags: ${r.all.tags}`);
+});
+
+await test('a selected thing is ringed by its silhouette, not boxed', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    for (let i = 0; i < 20; i++) window.__test.frame(60);
+    const found = window.__test.pointAtAnyActor();
+    window.__test.select(found.pick);
+    const drew = window.__test.redraw();
+    const me = drew.items.find((i) => i.i === found.pick);
+
+    /* Count the highlight pixels. A BOX round this figure would need at least
+       its perimeter; a silhouette ring is far less, and none of it is straight. */
+    const px = Render.buf.getContext('2d').getImageData(0, 0, Render.w, Render.h).data;
+    let ring = 0, cols = {};
+    for (let p = 0; p < px.length; p += 4) {
+      if (px[p] > 235 && px[p + 1] > 218 && px[p + 1] < 248
+        && px[p + 2] > 145 && px[p + 2] < 190) {
+        ring++;
+        cols[(p / 4) % Render.w] = 1;
+      }
+    }
+    const w = me.maxX - me.minX, h = me.maxY - me.minY;
+    return { ring, outlined: drew.outlined, spread: Object.keys(cols).length,
+             boxW: Math.round(w), boxH: Math.round(h) };
+  });
+  assert(r.outlined, 'nothing was outlined at all');
+  assert(r.ring > 30, `only ${r.ring} highlight pixels reached the buffer`);
+  /* A box would light up every column across its width, edge to edge. A figure
+     is narrow at the head and wide at the feet, so far fewer columns are lit. */
+  assert(r.spread > 3, `the highlight covers only ${r.spread} columns`);
 });
 
 await test('rolls really happen in a real match, not only on the bench', async () => {

@@ -175,7 +175,7 @@ src/js/*.js           the game, assembled in filename order
   20-input.js         key / mouse / touch, all writing the same state
   30-sim.js           one fixed simulation step
   40-render.js        isometric blocks, figures, the pick pass, `consumed`
-  45-ui.js            the inspector: describe() returns data, render() shows it
+  45-ui.js            the inspector: a hover tooltip and a pinned foldable panel
   90-boot.js          the pixel-perfect buffer, whole-number zoom, the loop
   99-test.js          window.__test - the only way a test touches the game
 tests/run.mjs         headless tests, driven through window.__test
@@ -240,6 +240,33 @@ perfectly flat, which is the only way to prove no curve was smuggled in.
   to; the player is a head coach.
 - A structure grows to its real height as it is built, so how far the camp has
   got is something you can see rather than read.
+
+---
+
+## The inspector (what the popups are called)
+
+Two surfaces, and the difference is the point:
+
+- **the tooltip** follows the pointer, says the thing's name and ONE line, and
+  is not clickable (`pointer-events: none`). Rule 8 is satisfied here.
+- **the panel** is pinned by clicking or tapping, stays put, and CAN be clicked
+  -- which is what lets the long lists fold. It opens with the six attributes
+  showing and **skills and gear folded**, because twelve gear slots unfolded is
+  what made the old popup bury the game.
+
+`describe()` returns plain data; `renderTip()` and `renderPanel()` put it on the
+page. Split so a test can prove both that the description is right and that it
+reached the screen.
+
+**A selected thing is ringed by its own silhouette**, not boxed: its polygons
+are painted in the highlight colour underneath it, fattened by a stroke, and the
+thing is then drawn on top and covers everything but the ring that stuck out.
+Internal edges never show because they are covered. One pass, any shape, and it
+works the same for a posed figure, a block and a half-built store.
+
+The panel's click handler reads `Game.state` at click time rather than closing
+over the match that existed when the page loaded -- otherwise a new match leaves
+it wired to a game nobody is playing.
 
 ---
 
