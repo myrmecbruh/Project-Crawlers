@@ -1348,6 +1348,117 @@ await test('the view rides the crawler you picked, and lets go when you pan', as
   assert(r.cam3.follow === -1, 'tapping the ground still left the view riding someone');
 });
 
+/* ---- v0.12.1: the controls a walking crawler broke --------------------- */
+
+/* Aim at a crawler through the real pick buffer, then return where to press
+   in CLIENT pixels, so a test can use real mouse events rather than the
+   harness's shortcut. The game is frozen while aiming so the figure holds
+   still; the caller decides when to let it run. */
+async function aimAtCrawler() {
+  return page.evaluate(() => {
+    Game.paused = true;
+    Game.state.selected = -1; Game.state.cam.follow = -1;
+    const got = window.__test.pointAtAnyActor();
+    if (!got.found) { Game.paused = false; return null; }
+    const c = document.getElementById('screen').getBoundingClientRect();
+    return { want: got.pick, name: got.name,
+             x: c.left + got.sx * (c.width / Render.w),
+             y: c.top + got.sy * (c.width / Render.w) };
+  });
+}
+
+await test('you select the crawler you pressed on, not the floor they walked off', async () => {
+  let hits = 0, tries = 0, misses = [];
+  for (let t = 0; t < 4; t++) {
+    const aim = await aimAtCrawler();
+    if (!aim) continue;
+    tries++;
+    await page.mouse.move(aim.x, aim.y);
+    await page.mouse.down();
+    /* Let them walk the whole time the button is held -- which is exactly what
+       a real click does, and long enough for a crawler to leave the square. */
+    await page.evaluate(() => { Game.paused = false; });
+    await page.waitForTimeout(400);
+    await page.mouse.up();
+    await page.waitForTimeout(120);
+    const got = await page.evaluate(() => Game.state.selected);
+    if (got === aim.want) hits++; else misses.push(`pressed ${aim.want}, got ${got}`);
+  }
+  assert(tries >= 2, `only ${tries} crawlers could be aimed at`);
+  assert(hits === tries,
+    `${hits}/${tries} presses kept their crawler: ${misses.join('; ')}`);
+});
+
+await test('picking a crawler does not leave a second box naming something else', async () => {
+  const aim = await aimAtCrawler();
+  assert(aim, 'no crawler could be aimed at');
+  await page.mouse.move(aim.x, aim.y);
+  await page.mouse.down(); await page.mouse.up();
+  await page.evaluate(() => { Game.paused = false; });
+  await page.waitForTimeout(350);
+  const r = await page.evaluate(() => ({
+    selected: Game.state.selected,
+    panel: document.getElementById('panel').hidden ? null
+         : document.getElementById('panel').textContent.replace(/\s+/g, ' ').trim(),
+    tip: document.getElementById('tooltip').hidden ? null
+       : document.getElementById('tooltip').textContent.replace(/\s+/g, ' ').trim()
+  }));
+  assert(r.selected === aim.want, `the wrong thing got pinned: ${r.selected}`);
+  assert(r.panel && r.panel.includes(aim.name), `the panel does not name ${aim.name}`);
+  /* The view locks onto them, which slides the world under the pointer. The
+     tooltip must not then announce whatever drifted beneath the cursor. */
+  assert(r.tip === null,
+    `a tooltip is up beside the panel saying "${r.tip}" while the panel says ${aim.name}`);
+});
+
+await test('the panel stops rebuilding itself, so its buttons can be pressed', async () => {
+  const aim = await aimAtCrawler();
+  assert(aim, 'no crawler could be aimed at');
+  await page.mouse.move(aim.x, aim.y);
+  await page.mouse.down(); await page.mouse.up();
+  await page.evaluate(() => { Game.paused = false; });
+  await page.waitForTimeout(200);
+
+  /* Count how often the panel's children are replaced while a crawler walks.
+     At 60 a second the close button is destroyed between a press and its
+     release, and no click ever completes. */
+  const churn = await page.evaluate(() => new Promise((res) => {
+    let n = 0;
+    const mo = new MutationObserver((ms) => { for (const m of ms) if (m.type === 'childList') n++; });
+    mo.observe(document.getElementById('panel'), { childList: true, subtree: true });
+    setTimeout(() => { mo.disconnect(); res(n); }, 1000);
+  }));
+  assert(churn < 15, `the panel rebuilt its own buttons ${churn} times in a second`);
+
+  /* And prove it by pressing the close button for real. */
+  const followed = await page.evaluate(() => Game.state.cam.follow);
+  assert(followed >= 0, 'the view is not riding the crawler, so this proves nothing');
+  await page.click('.pn-close', { timeout: 4000 });
+  const after = await page.evaluate(() => ({
+    selected: Game.state.selected, follow: Game.state.cam.follow,
+    panel: document.getElementById('panel').hidden
+  }));
+  assert(after.selected === -1, 'the close button did not deselect');
+  assert(after.panel, 'the panel is still on screen after closing it');
+  assert(after.follow === -1, 'closing the panel left the view still riding them');
+});
+
+await test('the pick pass is painted only when something reads it', async () => {
+  const n = await page.evaluate(() => new Promise((res) => {
+    const s = Game.state;
+    s.selected = Render.actorBase(s) + 0;      /* follow someone, so the view */
+    s.cam.follow = 0;                          /* moves every single frame    */
+    s.pointer.over = false;                    /* but nobody is pointing      */
+    let painted = 0;
+    const orig = Render.drawPick.bind(Render);
+    Render.drawPick = (st) => { painted++; return orig(st); };
+    setTimeout(() => { Render.drawPick = orig; res(painted); }, 1000);
+  }));
+  assert(n <= 2,
+    `the scene was painted a second time into the pick buffer ${n} times in a `
+    + 'second with no pointer on the canvas');
+});
+
 await test('the page raised no errors while all that happened', async () => {
   assert(errors.length === 0, errors.join(' | '));
 });

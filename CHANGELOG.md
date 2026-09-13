@@ -7,6 +7,55 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.12.1 — the controls that walking broke
+
+Four bugs, all children of v0.12.0. Making crawlers move continuously turned
+several things that had quietly been "true most of the time" into "false every
+frame", and the interface fell over.
+
+**The close button, and the folds, could not be clicked at all.** `renderPanel()`
+writes `innerHTML` every time it is called, and it is called whenever the view
+is dirty. Riding a crawler calls `camRefresh()` every frame, which marks the view
+dirty every frame, so the panel destroyed and rebuilt its own buttons **sixty
+times a second**. The listener is delegated on the panel so it survived; the
+BUTTON did not. A click needs the same element under the press and the release,
+and the element the player pressed was gone a sixtieth of a second later. Both
+surfaces now write to the DOM only when the words actually changed — the panel
+went from 60 rebuilds a second to 2. Measured with a MutationObserver, and the
+test presses the real close button rather than asserting about state.
+
+**You clicked a crawler and selected the rock behind them.** Selection read
+`state.hover`, which is sampled each frame, at the moment the button came UP. A
+real click lasts about a tenth of a second and a crawler crosses a square in
+0.37s, so they routinely walked out from under the cursor mid-click. The pick is
+now taken at the press and held until the release. Pressing on a crawler and
+holding the button for 400ms while they walk: **1 in 6 kept their crawler before,
+6 in 6 after.**
+
+**Two boxes appeared at once, naming different things.** This was the same event
+seen from the other end: picking a crawler locks the view onto them, the whole
+world slides, and whatever drifts under the stationary pointer gets a tooltip —
+beside a panel naming the crawler. The tooltip now says nothing until the pointer
+is actually moved again (`pointer.quiet`), and never describes the thing that is
+already pinned. Both are right independently of the camera: something that slid
+under a still cursor was not pointed at, and a second box repeating the panel was
+never useful.
+
+**Everything felt sluggish.** Painting the whole scene a second time in identity
+colours, for the pick buffer, cost 2.74ms of a 16ms frame and was being done
+after every geometry rebuild — which, once the view rides a walking crawler, is
+every frame, forever, whether or not anything was going to read it. It is now
+painted on demand, inside `pickAt()`. On a phone, where there is no hover at all,
+it now runs on a tap instead of sixty times a second.
+
+Closing the panel also lets go of the crawler, which it should have done from the
+start: nothing is pinned, so nothing should be ridden.
+
+The general shape of all four: **v0.12.0 changed how often things move, and every
+piece of code that had been sampling "the current state" got away with it only
+because the answer used to sit still.** Continuous motion is not a bigger version
+of discrete motion.
+
 ## v0.12.0 — walking, and the crawler you are watching
 
 Three things about the same moment: you have picked someone, and you want to

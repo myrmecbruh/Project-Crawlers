@@ -288,6 +288,24 @@ falls back to `state.hover`, so the crawler you pinned keeps their outline while
 they walk away from where you were pointing. It was the other way round once, and
 the ring came off them the moment the pointer moved.
 
+**Both surfaces write to the DOM only when their words changed.** They are
+rendered every dirty frame, and riding a crawler makes every frame dirty. Writing
+`innerHTML` unconditionally destroyed and rebuilt the close button and the fold
+headers sixty times a second, so no click ever completed -- a click needs the same
+element under the press and the release. The listener is delegated and survived;
+the button did not. Anything that rewrites a container a user can press must
+compare first.
+
+**A selection is taken at the PRESS, not the release.** Crawlers walk, a click
+lasts about a tenth of a second, and a crawler crosses a square in 0.37s -- so
+reading `state.hover` on pointerup selected whatever they had walked off. 1 press
+in 6 kept its crawler; now 6 in 6.
+
+**The tooltip holds its tongue until the pointer moves** (`pointer.quiet`, set on
+click, cleared on the next real move), and never describes what the panel has
+already pinned. Picking a crawler locks the view onto them, the world slides, and
+whatever drifts under a stationary cursor was not pointed at.
+
 **A selected thing is ringed by its own silhouette**, not boxed: its polygons
 are painted in the highlight colour underneath it, fattened by a stroke, and the
 thing is then drawn on top and covers everything but the ring that stuck out.
@@ -480,6 +498,11 @@ is.
   `followCamera()` is called from `Game.render()`, NOT from `Game.loop()` --
   `render()` is the one place every path draws through, including the test
   harness's `Game.frame()`, which never enters the loop.
+- **Riding a crawler makes every frame a moving frame**, so anything that used to
+  happen "when the view changes" now happens sixty times a second. The pick pass
+  is therefore painted **on demand inside `pickAt()`**, not after every rebuild:
+  it is the most expensive thing in a frame (2.74ms of 16ms) and nothing reads it
+  unless a pointer is asking. On a phone there is no hover, so it runs on a tap.
 
 ---
 
@@ -599,6 +622,21 @@ checkout still builds. The build reconciles the two and inlines the result.
     I?". Generalised: a statement of what the game currently DOES is not a
     request for it to do that. When an instruction describes present behaviour
     rather than wanted behaviour, ask which it is before building it.
+
+11. **Making something move continuously breaks every piece of code that was
+    sampling "the current state" and getting away with it.** v0.12.0 made
+    crawlers walk between squares instead of appearing in the next one. Four
+    things broke at once, and none of them looked related: the close button and
+    the folds stopped working (the panel rewrote its own buttons 60 times a
+    second, so no press and release ever landed on the same element); clicking a
+    crawler selected the rock behind them (the selection was read on pointerUP,
+    by which time they had walked off); a second popup appeared contradicting the
+    first (locking the view slid the world under a stationary cursor); and
+    everything felt sluggish (the pick buffer was being repainted every frame for
+    nobody). Generalised: when something starts moving every frame, go and look at
+    everything that reads a position, everything that rewrites a container a user
+    can press, and everything that was being recomputed "when the view changes" --
+    because "when the view changes" has just become "always".
 
 ---
 

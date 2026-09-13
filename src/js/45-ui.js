@@ -95,13 +95,22 @@ const Inspector = {
   renderTip(s) {
     this.ensure();
     if (!this.tip) return null;
-    const d = this.describe(s, s.hover);
-    if (!d) { this.tip.hidden = true; this.showing = -1; return null; }
+    /* A click can move the world out from under the pointer -- picking a
+       crawler locks the view onto them -- so whatever slid beneath the cursor
+       is not something the player pointed at. Say nothing until they move. */
+    const d = s.pointer.quiet ? null : this.describe(s, s.hover);
+    /* And never describe the thing that is already pinned: the panel is
+       saying it, and two boxes naming different things reads as a bug. */
+    if (!d || d.index === s.selected) {
+      this.tip.hidden = true; this.showing = -1; return null;
+    }
 
-    this.tip.innerHTML =
-      '<b class="tt-name">' + d.name + '</b>'
+    const html = '<b class="tt-name">' + d.name + '</b>'
       + '<span class="tt-sum">' + this.summary(d) + '</span>'
-      + (s.selected === d.index ? '' : '<span class="tt-hint">' + N('ui.label_inspect') + '</span>');
+      + '<span class="tt-hint">' + N('ui.label_inspect') + '</span>';
+    /* Only touch the DOM when the words changed. This runs every drawn frame,
+       and replacing the nodes under a finger is what killed the buttons. */
+    if (html !== this.tipHtml) { this.tip.innerHTML = html; this.tipHtml = html; }
     this.tip.hidden = false;
     this.showing = d.index;
 
@@ -226,7 +235,13 @@ const Inspector = {
          + this.tagsRow(d.tags);
     }
 
-    this.panel.innerHTML = h;
+    /* Rebuilding this every frame destroys the close button and the fold
+       headers between a press and its release, so no click ever completes.
+       Write only when the words actually changed. */
+    if (h !== this.panelHtml) {
+      this.panel.innerHTML = h;
+      this.panelHtml = h;
+    }
     this.panel.hidden = false;
     this.pinned = d.index;
     return d;
@@ -245,6 +260,7 @@ const Inspector = {
       if (!s) return;
       if (e.target.closest('[data-close]')) {
         s.selected = -1;
+        s.cam.follow = -1;     /* let go of them too: nothing is pinned now */
         s.viewDirty = true;
         this.renderPanel(s);
         return;

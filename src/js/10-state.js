@@ -41,7 +41,9 @@ function newState(seed) {
       ox: 0, oy: 0, cos: 1, sin: 0, tileH: CFG.tileHLow
     },
     input: { panUp: false, panDown: false, panLeft: false, panRight: false },
-    pointer: { over: false, bx: 0, by: 0, clientX: 0, clientY: 0 },
+    /* `quiet` means the pointer has not moved since the last click, so
+       whatever is under it slid there rather than being aimed at. */
+    pointer: { over: false, bx: 0, by: 0, clientX: 0, clientY: 0, quiet: false },
     hover: -1,
     selected: -1,
     geomDirty: true,

@@ -22,7 +22,7 @@ const VIEW_KEYS = {
 };
 
 function bindInput(state, canvas, toBuffer) {
-  const drag = { active: false, moved: 0, lastX: 0, lastY: 0, id: null };
+  const drag = { active: false, moved: 0, lastX: 0, lastY: 0, id: null, pick: -1 };
   const pinch = { active: false, start: 0, zoom: 1 };
 
   function key(e, down) {
@@ -49,17 +49,32 @@ function bindInput(state, canvas, toBuffer) {
     state.pointer.clientY = e.clientY;
   }
 
+  /* Any real movement of the pointer means the player is aiming again. */
+  function stirred() {
+    if (!state.pointer.quiet) return;
+    state.pointer.quiet = false;
+    state.viewDirty = true;
+  }
+
   canvas.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'touch' && pinch.active) return;
     drag.active = true; drag.moved = 0;
     drag.lastX = e.clientX; drag.lastY = e.clientY; drag.id = e.pointerId;
     track(e);
+    /* Read what is under the finger NOW, at the press, and select that on
+       release. Crawlers walk, so a hundred milliseconds of click is long
+       enough for one to slide away and leave you holding the rock behind
+       them. What you aimed at is what you pressed on. */
+    drag.pick = Render.pickAt(state, state.pointer.bx, state.pointer.by);
     if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
 
   canvas.addEventListener('pointermove', (e) => {
+    const moved = Math.abs(e.clientX - state.pointer.clientX)
+                + Math.abs(e.clientY - state.pointer.clientY);
     track(e);
+    if (moved > 0) stirred();
     if (!drag.active || e.pointerId !== drag.id) return;
     const dx = e.clientX - drag.lastX, dy = e.clientY - drag.lastY;
     drag.moved += Math.abs(dx) + Math.abs(dy);
@@ -75,8 +90,11 @@ function bindInput(state, canvas, toBuffer) {
     if (!drag.active) return;
     /* A press that did not travel is a tap: inspect whatever is under it. */
     if (drag.moved <= DRAG_SLOP) {
-      state.selected = state.hover;
+      state.selected = drag.pick;
       setFollow(state, state.selected);
+      /* Selecting a crawler locks the view onto them, which slides the world
+         under the pointer. Whatever ends up there was not pointed at. */
+      state.pointer.quiet = true;
       state.viewDirty = true;
     }
     drag.active = false; drag.id = null;

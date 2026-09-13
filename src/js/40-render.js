@@ -377,6 +377,7 @@ const Render = {
 
     b.sort(function (p, q) { return p.depth - q.depth; });
     s.geomDirty = false;
+    this.pickStale = true;     /* the pick buffer is now a frame behind */
     return b;
   },
 
@@ -598,6 +599,7 @@ const Render = {
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, this.w, this.h);
+    this.pickStale = false;
     for (let k = 0; k < b.length; k++) {
       const it = b[k];
       const id = it.i + 1;
@@ -632,6 +634,12 @@ const Render = {
 
   pickAt(s, bx, by) {
     if (!this.pick) return -1;
+    /* Painting the whole scene a second time in identity colours is the most
+       expensive thing in a frame, and nothing reads it unless a pointer is
+       actually asking. So it is repainted here, on demand, rather than after
+       every rebuild -- which, now that crawlers walk and the view can ride
+       one, is every single frame. */
+    if (this.pickStale) this.drawPick(s);
     const x = Math.floor(bx), y = Math.floor(by);
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return -1;
     const d = this.pctx.getImageData(x, y, 1, 1).data;
