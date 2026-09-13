@@ -26,6 +26,10 @@ function newState(seed) {
     actors: [],
     camp: null,
     rolls: 0,
+    /* The player's own clock. Paused stops the world; speed multiplies it.
+       Neither touches the camera, which always moves on real time. */
+    paused: false,
+    speed: 0,
     cam: {
       fx: world.n / 2, fy: world.n / 2, fh: 0,   /* what stays in the middle */
       yaw: 0, yawTarget: 0, quarter: 0,
@@ -45,6 +49,26 @@ function newState(seed) {
   centreCamera(s);
   markCutaway(s);
   return s;
+}
+
+/* How fast the world is running, as a multiplier. Paused is nothing at all. */
+function speedOf(s) { return s.paused ? 0 : SPEED(s.speed).multiplier; }
+function speedName(s) { return s.paused ? N('ui.label_paused') : SPEED(s.speed).name; }
+
+function setPaused(s, on) {
+  const want = on === undefined ? !s.paused : !!on;
+  if (want === s.paused) return false;
+  s.paused = want;
+  s.viewDirty = true;
+  return true;
+}
+
+function setSpeed(s, i) {
+  const want = Math.max(0, Math.min(SPEED_IDS.length - 1, i));
+  if (want === s.speed) return false;
+  s.speed = want;
+  s.viewDirty = true;
+  return true;
 }
 
 function tileHeightPx(s) {

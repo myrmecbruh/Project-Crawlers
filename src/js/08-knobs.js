@@ -46,6 +46,11 @@ const SKILL_IDS = Object.keys(DATA.skills);
 const FIGURE_IDS = Object.keys(DATA.figure);
 const BONE_IDS = Object.keys(DATA.bones);
 const SLOT_IDS = Object.keys(DATA.slots);
+const SPEED_IDS = Object.keys(DATA.speeds);
+function SPEED(i) {
+  const id = SPEED_IDS[Math.max(0, Math.min(SPEED_IDS.length - 1, i))];
+  return DATA.speeds[id];
+}
 const GEAR_IDS = Object.keys(DATA.gear);
 function GEAR(id) {
   const g = DATA.gear[id];
@@ -124,6 +129,7 @@ const CFG = {
   idleTicks:   K('anim.idle_ticks'),
   idleSway:    K('anim.idle_sway'),
   turnTicks:   K('anim.turn_ticks'),
+  maxSteps:    K('time.max_steps_per_frame'),
   lightAmbient: K('render.light_ambient'),
   lightDiffuse: K('render.light_diffuse'),
   figureNominal: G('figure.nominal_height_m'),

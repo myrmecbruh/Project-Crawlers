@@ -105,6 +105,23 @@ window.__test = {
     return out;
   },
   pan(dx, dy) { panCamera(Game.state, dx, dy); Game.render(); },
+  /* The player's clock, which is not the same thing as the test freeze. */
+  clock() {
+    const s = Game.state;
+    return { paused: s.paused, speed: s.speed, name: speedName(s),
+             multiplier: speedOf(s), steps: SPEED_IDS.length };
+  },
+  setPaused(on) { setPaused(Game.state, on); Game.refreshControls(); return this.clock(); },
+  setSpeed(i) { setSpeed(Game.state, i); Game.refreshControls(); return this.clock(); },
+  controlsOnScreen() {
+    const g = (id) => document.getElementById(id);
+    return { pause: g('pause') ? g('pause').textContent : null,
+             pressed: g('pause') ? g('pause').getAttribute('aria-pressed') : null,
+             speed: g('speed') ? g('speed').textContent : null,
+             slowerOff: g('slower') ? g('slower').disabled : null,
+             fasterOff: g('faster') ? g('faster').disabled : null };
+  },
+
   camera() {
     const c = Game.state.cam;
     return { fx: c.fx, fy: c.fy, fh: c.fh, ox: c.ox, oy: c.oy,

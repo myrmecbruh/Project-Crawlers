@@ -7,6 +7,32 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.7.0 — pause, and four speeds
+
+A pause button and a speed control, to the left of the view controls: pause,
+minus, the current speed, plus. Space pauses; comma and full stop change speed.
+The buttons switch themselves off at either end and the pause button shows
+whether it is on, because a paused game and a broken one otherwise look
+identical.
+
+Speeds are **rows in the sheet** — 1×, 2×, 4×, 8× — so a faster one is a new row
+and an unused one can be deleted. The build refuses a list whose first row is not
+1×, since the first row is what "normal" means, and refuses two rows at the same
+multiplier. `time.max_steps_per_frame` caps how far the world may lurch in one
+drawn frame, so a slow machine or a backgrounded tab catches up smoothly instead
+of jumping.
+
+**Pause does not touch the camera.** The swing and the tilt were already on real
+milliseconds rather than game ticks, which turns out to be exactly what this
+needed: the view still turns and rises while the world is frozen. A test pauses
+the world, swings the view a quarter, and fails if either the swing did not
+finish or a single tick went by.
+
+There are now two clocks with the same name, so they are kept apart on purpose:
+`Game.paused` is the test freeze, `state.paused` is the player's.
+
+---
+
 ## v0.6.1 — time was never supposed to stop
 
 **"game only runs time when scrolling" was a bug report.** It arrived in a list

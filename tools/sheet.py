@@ -9,6 +9,7 @@ the code the sheet cannot reach. reconcile() treats that as a build error, not a
 warning, because a dial that is not connected to anything is worse than no dial.
 """
 
+import collections
 import json
 import pathlib
 
@@ -24,6 +25,7 @@ SECTIONS = {
     "skills":   ("id",  ["name", "derives", "needs_tag", "without", "note"], False),
     "bones":    ("id",  ["name", "parent", "x", "y", "z", "note"], False),
     "slots":    ("id",  ["name", "note"], False),
+    "speeds":   ("id",  ["name", "multiplier", "note"], False),
     "gear":     ("id",  ["name", "slot", "tags", "attr", "bonus", "note"], False),
     "figure":   ("id",  ["name", "slot", "item", "bone", "colour", "ox", "oy",
                          "from_m", "to_m", "w_top", "w_bot", "d_top", "d_bot",
@@ -52,7 +54,8 @@ def norm(col, v):
     if blank(v):
         return ""
     if col in ("value", "cross", "clear", "half_width", "from_m", "to_m",
-               "height_m", "difficulty", "without", "x", "y", "z", "ox", "oy",
+               "height_m", "difficulty", "without", "multiplier",
+               "x", "y", "z", "ox", "oy",
                "w_top", "w_bot", "d_top", "d_bot"):
         try:
             f = float(v)
@@ -169,6 +172,10 @@ def for_game(merged):
                     for k, r in merged["bones"].items()}
     out["slots"] = {k: {"name": str(r["name"]), "note": str(r.get("note", ""))}
                     for k, r in merged["slots"].items()}
+    out["speeds"] = {k: {"name": str(r["name"]),
+                         "multiplier": norm("multiplier", r["multiplier"]),
+                         "note": str(r.get("note", ""))}
+                     for k, r in merged["speeds"].items()}
     def pairs_of(text):
         out_ = []
         if blank(text):
@@ -274,6 +281,24 @@ def check_vocabulary(game):
             if tag not in known:
                 errors.append("structures: '%s' claims the tag '%s', which is not "
                               "in the tags sheet" % (stid, tag))
+
+    speeds = list(game["speeds"].items())
+    if len(speeds) < 2:
+        errors.append("speeds: there is only one speed, so the control would do "
+                      "nothing")
+    for sid, sp in speeds:
+        if not (sp["multiplier"] > 0):
+            errors.append("speeds: '%s' runs at %s, which is not a speed"
+                          % (sid, sp["multiplier"]))
+    if speeds and speeds[0][1]["multiplier"] != 1:
+        errors.append("speeds: the first row is '%s' at %sx; the first row is "
+                      "normal speed and must be 1"
+                      % (speeds[0][0], speeds[0][1]["multiplier"]))
+    seen_mult = set()
+    for sid, sp in speeds:
+        if sp["multiplier"] in seen_mult:
+            errors.append("speeds: two rows both run at %sx" % sp["multiplier"])
+        seen_mult.add(sp["multiplier"])
 
     # A crawler is twelve parts, which are their gear. That is a rule, so the
     # build checks it rather than trusting the sheet to stay that way.
@@ -464,6 +489,9 @@ def selftest():
                       "willpower")[i + 1:]),
         "bones": {"root": {"name": "Root", "parent": "", "x": 0, "y": 0, "z": 0, "note": ""},
                   "chest": {"name": "Chest", "parent": "root", "x": 0, "y": 0, "z": 1, "note": ""}},
+        "speeds": collections.OrderedDict([
+            ("normal", {"name": "1x", "multiplier": 1, "note": ""}),
+            ("fast", {"name": "2x", "multiplier": 2, "note": ""})]),
         "slots": dict((s_, {"name": s_, "note": ""}) for s_ in
                       ("head", "neck", "back", "torso", "gloves", "mainhand",
                        "offhand", "belt", "legs", "feet", "trinket1", "trinket2")),
@@ -533,6 +561,12 @@ def selftest():
     m, _, _ = reconcile(d4, s4)
     add("gear nothing draws stops the build (rule 4)",
         any("would show nothing" in e for e in check_vocabulary(for_game(m))),
+        str(check_vocabulary(for_game(m))[:1]))
+
+    s5 = sheet_from(base, speeds__normal__multiplier=3)
+    m, _, _ = reconcile(base, s5)
+    add("normal speed must really be normal",
+        any("must be 1" in e for e in check_vocabulary(for_game(m))),
         str(check_vocabulary(for_game(m))[:1]))
 
     m, _, _ = reconcile(base, None)

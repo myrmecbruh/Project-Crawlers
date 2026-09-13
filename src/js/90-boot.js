@@ -30,9 +30,28 @@ const Game = {
     document.getElementById('hint').textContent =
       N(touch ? 'ui.hint_touch' : 'ui.hint_desktop');
     this.bindButtons();
+    this.refreshControls();
 
     this.last = performance.now();
     requestAnimationFrame((t) => this.loop(t));
+  },
+
+  /* The buttons say what the clock is doing, because a paused game and a broken
+     one look identical otherwise. */
+  refreshControls() {
+    const s = this.state;
+    const pause = document.getElementById('pause');
+    if (pause) {
+      pause.textContent = s.paused ? '\u25B6' : '\u2758\u2758';
+      pause.classList.toggle('on', s.paused);
+      pause.setAttribute('aria-pressed', s.paused ? 'true' : 'false');
+    }
+    const label = document.getElementById('speed');
+    if (label) label.textContent = speedName(s);
+    const slower = document.getElementById('slower');
+    const faster = document.getElementById('faster');
+    if (slower) slower.disabled = s.speed === 0;
+    if (faster) faster.disabled = s.speed === SPEED_IDS.length - 1;
   },
 
   zoom() { return this.state ? this.state.cam.zoom : CFG.zoomStart; },
@@ -45,6 +64,9 @@ const Game = {
       if (!el) return;
       el.addEventListener('click', (e) => { fn(); e.preventDefault(); });
     };
+    hit('pause', () => { setPaused(this.state); this.refreshControls(); });
+    hit('slower', () => { setSpeed(this.state, this.state.speed - 1); this.refreshControls(); });
+    hit('faster', () => { setSpeed(this.state, this.state.speed + 1); this.refreshControls(); });
     hit('turn-left', () => rotateCamera(this.state, -1));
     hit('turn-right', () => rotateCamera(this.state, 1));
     hit('tilt', () => {
@@ -124,9 +146,19 @@ const Game = {
     this.keyPan();
     camAnimate(s, dt);
 
-    this.acc += dt;
-    let steps = 0;
-    while (this.acc >= TICK_MS && steps < 8) { step(s); this.acc -= TICK_MS; steps++; }
+    /* The player's clock: paused stops the world, speed multiplies it. The
+       camera above is untouched by both -- it always moves on real time. */
+    const rate = speedOf(s);
+    if (rate > 0) {
+      this.acc += dt * rate;
+      let steps = 0;
+      while (this.acc >= TICK_MS && steps < CFG.maxSteps) {
+        step(s); this.acc -= TICK_MS; steps++;
+      }
+      if (this.acc > TICK_MS * CFG.maxSteps) this.acc = 0;   /* do not bank a backlog */
+    } else {
+      this.acc = 0;
+    }
 
     this.render();
     if ((this.frames = (this.frames || 0) + 1) % 12 === 0) this.readout();

@@ -41,7 +41,17 @@ body {
 }
 #controls {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+#controls .sep { width: 10px; }
+#speed {
+  min-width: 30px;
+  text-align: center;
+  color: var(--ink-bright);
+  font-variant-numeric: tabular-nums;
 }
 #controls button {
   font: inherit;
@@ -58,6 +68,7 @@ body {
 #controls button:hover { color: var(--ink-bright); border-color: rgba(150,190,230,0.4); }
 #controls button:active { background: #182029; }
 #controls button:focus-visible { outline: 2px solid #c9a35e; outline-offset: 1px; }
+#controls button:disabled { opacity: 0.3; cursor: default; }
 #controls button.on { color: #c9a35e; border-color: rgba(201,163,94,0.5); }
 
 #hud {

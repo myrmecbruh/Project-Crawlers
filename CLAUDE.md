@@ -275,12 +275,22 @@ is 30 points harder, which is close to impossible). All three go through
 carries its look and its effect on the same line of the sheet, so the two cannot
 drift apart.
 
-### Time is NOT gated on anything
+### The clock: time runs on its own, and the player owns it
 
-Time runs on its own, like any game. There was a version that only advanced the
+Time runs by itself, like any game. There was a version that only advanced the
 world while the view was moving; that was built by mistake, out of a bug report
 read as a feature request, and it is gone. Do not reintroduce it without being
 asked for it in as many words.
+
+The player pauses and sets the speed. Speeds are rows in the `speeds` tab -- add
+one, delete one, change a multiplier -- and the build refuses a list whose first
+row is not 1x, since the first row is what "normal" means. `time.max_steps_per_frame`
+caps how far the world may lurch in a single drawn frame.
+
+**Pause and speed never touch the camera.** The swing and the tilt run on real
+milliseconds, so the view still turns smoothly while the world is frozen, and a
+test asserts exactly that. Two clocks, kept apart on purpose:
+`Game.paused` is the TEST freeze; `state.paused` is the player's.
 
 ---
 
@@ -321,9 +331,8 @@ work, idle) is code in `18-figure.js` because it is logic; every AMOUNT is a
 knob, so the stride can be widened or the work slowed without touching it.
 Crawlers turn the short way round to face where they are going.
 
-Animation runs off `state.tick`, which advances on its own.
-
----
+Animation runs off `state.tick`, so it follows the player's clock: it stops
+when they pause and runs fast when they speed up.
 
 ---
 
@@ -340,9 +349,8 @@ Animation runs off `state.tick`, which advances on its own.
   which quarter you are looking from (`BEHIND` in `10-state.js`), and how much
   is hidden depends on the angle, so it is recomputed when the view settles --
   not every frame.
-- The swing and the tilt advance on **real milliseconds**, not game ticks,
-  because rule 11 stops game time when you are not moving and the view must
-  still move smoothly.
+- The swing and the tilt advance on **real milliseconds**, not game ticks, so
+  the view keeps moving smoothly even when the player has the world paused.
 
 ---
 
@@ -399,9 +407,9 @@ ruler is worse than no ruler.
 
 ### The master spreadsheet, which is the authority
 
-`docs/crawlers.xlsx` holds every number and every piece of wording, across twelve
+`docs/crawlers.xlsx` holds every number and every piece of wording, across thirteen
 tabs: `knobs`, `geometry` (read only), `names`, `tags`, `tiles`, `attributes`,
-`skills`, `figure`, `structures`, `bones`, `slots`, `gear`. `src/defaults.json` carries the same values so a fresh
+`skills`, `figure`, `structures`, `bones`, `slots`, `gear`, `speeds`. `src/defaults.json` carries the same values so a fresh
 checkout still builds. The build reconciles the two and inlines the result.
 
 1. **Change a number in the sheet, not in the code.** If the code default must

@@ -6,6 +6,11 @@
 <div id="app">
   <canvas id="screen"></canvas>
   <div id="controls">
+    <button id="pause" type="button" aria-pressed="false" title="pause (space)">&#10072;&#10072;</button>
+    <button id="slower" type="button" title="slower (,)">&#8722;</button>
+    <span id="speed" aria-live="polite">1&times;</span>
+    <button id="faster" type="button" title="faster (.)">&#43;</button>
+    <span class="sep"></span>
     <button id="turn-left" type="button" title="turn the view left (Q)">&#8630;</button>
     <button id="tilt" type="button" title="look down from higher up (R)">&#9650;</button>
     <button id="turn-right" type="button" title="turn the view right (E)">&#8631;</button>

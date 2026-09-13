@@ -910,6 +910,113 @@ await test('turning the view does not disturb the labyrinth or the camp', async 
   assert(r.before.camp.progress === r.after.camp.progress, 'turning the view built the camp');
 });
 
+
+await test('pause stops the world, and the world starts again after it', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    window.__test.resume(); window.__test.pause();       /* reset the clock */
+    window.__test.setSpeed(0); window.__test.setPaused(false);
+
+    const runningA = window.__test.loopOnce(120).ticks;
+    const campBefore = window.__test.camp().summary.progress;
+    const rollsBefore = window.__test.rolls();
+
+    window.__test.setPaused(true);
+    let paused = 0;
+    for (let i = 0; i < 20; i++) paused += window.__test.loopOnce(200).ticks;
+    const campPaused = window.__test.camp().summary.progress;
+    const rollsPaused = window.__test.rolls();
+
+    window.__test.setPaused(false);
+    const runningB = window.__test.loopOnce(120).ticks;
+    return { runningA, paused, runningB, campBefore, campPaused,
+             rollsBefore, rollsPaused, clock: window.__test.clock() };
+  });
+  assert(r.runningA > 0, 'the world was not running to begin with');
+  assert(r.paused === 0, `the world ran ${r.paused} ticks while paused`);
+  assert(r.campPaused === r.campBefore,
+    `the camp went from ${r.campBefore}% to ${r.campPaused}% while paused`);
+  assert(r.rollsPaused === r.rollsBefore,
+    `${r.rollsPaused - r.rollsBefore} rolls happened while paused`);
+  assert(r.runningB > 0, 'the world did not start again after unpausing');
+  assert(r.clock.paused === false && r.clock.multiplier > 0, 'the clock is confused');
+});
+
+await test('each speed runs the world that many times faster', async () => {
+  const r = await page.evaluate(() => {
+    const out = [];
+    for (let i = 0; i < window.__test.clock().steps; i++) {
+      window.__test.seed(5);
+      window.__test.resume(); window.__test.pause();
+      window.__test.setPaused(false);
+      const clock = window.__test.setSpeed(i);
+      let ticks = 0;
+      for (let k = 0; k < 10; k++) ticks += window.__test.loopOnce(100).ticks;
+      out.push({ i, name: clock.name, mult: clock.multiplier, ticks });
+    }
+    return out;
+  });
+  assert(r.length >= 3, `only ${r.length} speeds exist`);
+  assert(r[0].mult === 1, `the first speed is ${r[0].mult}x, not normal`);
+  const base = r[0].ticks;
+  assert(base > 20, `normal speed only ran ${base} ticks in a second of frames`);
+  for (const q of r) {
+    const want = base * q.mult;
+    assert(Math.abs(q.ticks - want) <= want * 0.2 + 2,
+      `${q.name} ran ${q.ticks} ticks where ${q.mult}x of ${base} is about ${want}`);
+  }
+  for (let i = 1; i < r.length; i++) {
+    assert(r[i].ticks > r[i - 1].ticks,
+      `${r[i].name} was no faster than ${r[i - 1].name}`);
+  }
+});
+
+await test('the view still moves while the world is paused', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    window.__test.setPaused(true);
+    const before = { cam: window.__test.camera(), tick: window.__test.state.tick };
+    /* A swing is real time, not game time, so it must finish while paused. */
+    rotateCamera(window.__test.state, 1);
+    let frames = 0;
+    while (window.__test.camStep(16) && frames++ < 200) { /* swing it out */ }
+    const after = { cam: window.__test.camera(), tick: window.__test.state.tick };
+    window.__test.setPaused(false);
+    return { before, after, frames };
+  });
+  assert(r.frames > 3, `the swing finished in ${r.frames} frames while paused`);
+  assert(r.after.cam.quarter === 1, `the view ended on quarter ${r.after.cam.quarter}`);
+  assert(r.after.tick === r.before.tick,
+    `${r.after.tick - r.before.tick} ticks passed while paused`);
+});
+
+await test('the controls say what the clock is doing', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    window.__test.setPaused(false);
+    window.__test.setSpeed(0);
+    const slowest = window.__test.controlsOnScreen();
+    window.__test.setSpeed(99);
+    const fastest = window.__test.controlsOnScreen();
+    const name = window.__test.clock().name;
+    window.__test.setPaused(true);
+    const paused = window.__test.controlsOnScreen();
+    window.__test.setPaused(false);
+    const running = window.__test.controlsOnScreen();
+    return { slowest, fastest, paused, running, name };
+  });
+  assert(r.slowest.slowerOff === true && r.slowest.fasterOff === false,
+    'at normal speed the slower button is not switched off');
+  assert(r.fastest.fasterOff === true && r.fastest.slowerOff === false,
+    'at top speed the faster button is not switched off');
+  assert(r.fastest.speed === r.name,
+    `the screen says ${r.fastest.speed}, the game says ${r.name}`);
+  assert(r.paused.pressed === 'true' && r.running.pressed === 'false',
+    'the pause button does not show whether it is on');
+  assert(r.paused.pause !== r.running.pause,
+    'the pause button looks the same paused as running');
+});
+
 await test('the page raised no errors while all that happened', async () => {
   assert(errors.length === 0, errors.join(' | '));
 });

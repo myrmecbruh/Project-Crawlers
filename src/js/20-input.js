@@ -15,7 +15,10 @@ const DRAG_SLOP = 4;   /* px of movement before a tap becomes a drag */
 const VIEW_KEYS = {
   KeyQ: (s) => rotateCamera(s, -1),
   KeyE: (s) => rotateCamera(s, 1),
-  KeyR: (s) => tiltCamera(s)
+  KeyR: (s) => tiltCamera(s),
+  Space: (s) => setPaused(s),
+  Comma: (s) => setSpeed(s, s.speed - 1),
+  Period: (s) => setSpeed(s, s.speed + 1)
 };
 
 function bindInput(state, canvas, toBuffer) {
@@ -25,6 +28,7 @@ function bindInput(state, canvas, toBuffer) {
   function key(e, down) {
     if (down && VIEW_KEYS[e.code] && !e.repeat) {
       VIEW_KEYS[e.code](state);
+      if (typeof Game !== 'undefined' && Game.refreshControls) Game.refreshControls();
       e.preventDefault();
       return;
     }

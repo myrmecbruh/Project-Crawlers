@@ -290,6 +290,11 @@
       "value": 0.55,
       "unit": "0-1",
       "note": "How likely a crawler is to turn up already wearing any given piece of gear."
+    },
+    "time.max_steps_per_frame": {
+      "value": 64,
+      "unit": "ticks",
+      "note": "The most the world is allowed to advance in a single drawn frame. Stops a slow machine, or a tab left in the background, from lurching forward all at once."
     }
   },
   "geometry": {
@@ -311,10 +316,10 @@
   },
   "names": {
     "ui.hint_desktop": {
-      "text": "drag to pan  ·  scroll to zoom  ·  Q/E turn, R raises the angle  ·  hover to inspect"
+      "text": "drag to pan  ·  scroll to zoom  ·  Q/E turn, R raises  ·  space pauses, , and . change speed"
     },
     "ui.hint_touch": {
-      "text": "drag to pan  ·  pinch to zoom  ·  buttons turn and raise the view  ·  tap to inspect"
+      "text": "drag to pan  ·  pinch to zoom  ·  the buttons turn, raise, pause and change speed"
     },
     "ui.label_elevation": {
       "text": "elevation"
@@ -396,6 +401,21 @@
     },
     "ui.label_empty": {
       "text": "nothing"
+    },
+    "ui.label_paused": {
+      "text": "paused"
+    },
+    "ui.label_speed": {
+      "text": "speed"
+    },
+    "ui.button_pause": {
+      "text": "pause (space)"
+    },
+    "ui.button_slower": {
+      "text": "slower (,)"
+    },
+    "ui.button_faster": {
+      "text": "faster (.)"
     }
   },
   "tags": {
@@ -1645,6 +1665,28 @@
       "attr": "willpower:1,presence:-1",
       "bonus": "",
       "note": "Somebody's knuckle, on a thong."
+    }
+  },
+  "speeds": {
+    "normal": {
+      "name": "1×",
+      "multiplier": 1,
+      "note": "Real time. One tick is a sixtieth of a second. The first row is always normal speed."
+    },
+    "fast": {
+      "name": "2×",
+      "multiplier": 2,
+      "note": "Twice as fast."
+    },
+    "faster": {
+      "name": "4×",
+      "multiplier": 4,
+      "note": "Four times. About right for watching a camp go up."
+    },
+    "fastest": {
+      "name": "8×",
+      "multiplier": 8,
+      "note": "Eight times. Add a row here for a faster one, or delete one you never use."
     }
   }
 }
