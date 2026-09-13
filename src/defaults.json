@@ -1,30 +1,20 @@
 {
   "_": "Every number and name the game can be tuned with. docs/crawlers.xlsx is the AUTHORITY; this file is the default a fresh checkout builds from. build.py reconciles the two and refuses to build if a key exists in only one of them.",
   "knobs": {
-    "render.low_width": {
-      "value": 480,
-      "unit": "px",
-      "note": "Internal render width. The picture is drawn this small, then scaled up with hard pixel edges to get the sprite look."
-    },
-    "render.low_height": {
-      "value": 270,
-      "unit": "px",
-      "note": "Internal render height. Keep the same shape as low_width (16:9) or the view letterboxes."
-    },
     "render.tile_w": {
-      "value": 32,
+      "value": 64,
       "unit": "px",
-      "note": "Screen width of one 1m tile diamond at zoom 1."
+      "note": "Screen width of one square metre of ground. Twice tile_h makes the classic two-to-one isometric view."
     },
     "render.tile_h": {
-      "value": 16,
+      "value": 32,
       "unit": "px",
-      "note": "Screen height of one 1m tile diamond at zoom 1. Half of tile_w gives the classic 2:1 isometric view."
+      "note": "Screen height of one square metre of ground, seen from this angle."
     },
     "render.rise": {
-      "value": 10,
+      "value": 32,
       "unit": "px/m",
-      "note": "How many pixels of screen height one metre of elevation is worth. Raise it to make the world feel taller and more vertical."
+      "note": "LOCKED SCALE: how many pixels tall one metre is. Everything in the game is drawn against this, so a 1.6 m crawler is 52 px tall. Changing it rescales the entire world."
     },
     "render.occluder_fade": {
       "value": 0.28,
@@ -46,50 +36,20 @@
       "unit": "x/m",
       "note": "How much lighter a surface gets per metre of elevation. Gives depth without lighting."
     },
-    "camera.zoom_start": {
-      "value": 1,
-      "unit": "x",
-      "note": "Zoom the game opens at."
-    },
-    "camera.zoom_min": {
-      "value": 1,
-      "unit": "x",
-      "note": "Furthest out you can zoom."
-    },
-    "camera.zoom_max": {
-      "value": 3,
-      "unit": "x",
-      "note": "Closest in you can zoom. Whole numbers only, so pixels stay square. Zooming in shows fewer metres, not more detail."
-    },
     "camera.key_pan_speed": {
-      "value": 3.0,
+      "value": 4.0,
       "unit": "px/tick",
       "note": "How fast the arrow keys slide the view."
     },
     "world.chunk_tiles": {
-      "value": 28,
+      "value": 56,
       "unit": "tiles",
-      "note": "Width and depth of the piece of labyrinth generated. 28 tiles = 28 metres across."
+      "note": "Width and depth of the piece of labyrinth generated. 56 tiles = 56 metres across."
     },
     "world.max_elevation": {
-      "value": 6,
+      "value": 5,
       "unit": "m",
-      "note": "Tallest the ground is allowed to get above the floor of a chunk."
-    },
-    "world.terrain_scale": {
-      "value": 6.0,
-      "unit": "tiles",
-      "note": "Size of the lumps in the ground. Bigger = broader, smoother hills; smaller = choppier."
-    },
-    "world.ramp_chance": {
-      "value": 0.35,
-      "unit": "0-1",
-      "note": "How often a one-metre step gets a ramp instead of being a wall you cannot climb."
-    },
-    "world.damp_level": {
-      "value": 1,
-      "unit": "m",
-      "note": "At or below this elevation the ground is wet. Water and moss appear here."
+      "note": "How many different floor levels the rooms and halls are spread across."
     },
     "roll.attribute_weight": {
       "value": 3.0,
@@ -117,9 +77,9 @@
       "note": "Practice gained from a FAILED attempt. Rule 1: failing is how a character learns."
     },
     "learn.gain_on_success": {
-      "value": 0.35,
+      "value": 0,
       "unit": "pts",
-      "note": "Practice gained from a successful attempt. Deliberately small -- succeeding teaches you very little."
+      "note": "Practice gained from a successful attempt. Zero: succeeding teaches nothing at all, so a crawler who has mastered something stops improving until the labyrinth gives them something harder."
     },
     "learn.near_miss_bonus": {
       "value": 1.4,
@@ -134,7 +94,7 @@
     "actor.count": {
       "value": 6,
       "unit": "people",
-      "note": "How many crawlers start in the chunk."
+      "note": "How many crawlers turn up in the labyrinth."
     },
     "actor.attribute_min": {
       "value": 4,
@@ -157,9 +117,104 @@
       "note": "How long a crawler pauses between attempts to move. 60 ticks is a second."
     },
     "actor.height_m": {
-      "value": 1.75,
+      "value": 1.625,
       "unit": "m",
-      "note": "How tall a grown crawler is. One tile is one metre, so this is how tall they look."
+      "note": "How tall a grown crawler is. At the locked scale of 32 pixels per metre this makes them 52 pixels tall."
+    },
+    "render.zoom_start": {
+      "value": 2,
+      "unit": "x",
+      "note": "How many real screen pixels one game pixel takes up when the game opens. Zooming does NOT make the world bigger -- it makes the pixels bigger, so the picture stays perfectly sharp."
+    },
+    "render.zoom_min": {
+      "value": 1,
+      "unit": "x",
+      "note": "Furthest out. One game pixel to one screen pixel, showing the most ground."
+    },
+    "render.zoom_max": {
+      "value": 6,
+      "unit": "x",
+      "note": "Closest in. Whole numbers only, which is what keeps every edge hard."
+    },
+    "render.max_buffer_w": {
+      "value": 960,
+      "unit": "px",
+      "note": "Widest the game picture is ever drawn, before it is blown up. Caps the work on a very large screen."
+    },
+    "render.max_buffer_h": {
+      "value": 540,
+      "unit": "px",
+      "note": "Tallest the game picture is ever drawn, before it is blown up."
+    },
+    "time.coast_ticks": {
+      "value": 0,
+      "unit": "ticks",
+      "note": "How long the world keeps running after you stop moving the view. 0 means time stops the instant you do."
+    },
+    "world.rooms": {
+      "value": 9,
+      "unit": "rooms",
+      "note": "How many rooms to carve out of the rock. Halls are then dug between them."
+    },
+    "world.room_min": {
+      "value": 5,
+      "unit": "m",
+      "note": "Smallest a room can be, along one side."
+    },
+    "world.room_max": {
+      "value": 13,
+      "unit": "m",
+      "note": "Largest a room can be, along one side."
+    },
+    "world.hall_width": {
+      "value": 2,
+      "unit": "m",
+      "note": "How wide the halls between rooms are."
+    },
+    "world.rock_height": {
+      "value": 2,
+      "unit": "m",
+      "note": "How far the solid rock rises above the floor beside it. This is what makes a wall a wall. Tall rock hides more of what is behind it, so this and the cutaway settings work against each other."
+    },
+    "camp.bedrolls": {
+      "value": 4,
+      "unit": "beds",
+      "note": "How many bedrolls the crawlers lay out around the fire."
+    },
+    "camp.stores": {
+      "value": 1,
+      "unit": "stores",
+      "note": "How many stores the crawlers put up."
+    },
+    "camp.windbreaks": {
+      "value": 2,
+      "unit": "windbreaks",
+      "note": "How many windbreaks the crawlers put up."
+    },
+    "camp.site_spread": {
+      "value": 3,
+      "unit": "m",
+      "note": "How far from the fire the rest of the camp is laid out."
+    },
+    "camp.progress_per_success": {
+      "value": 25,
+      "unit": "pts",
+      "note": "How much of a structure one successful effort raises. 100 finishes it."
+    },
+    "camp.work_ticks": {
+      "value": 18,
+      "unit": "ticks",
+      "note": "How long a crawler takes between efforts. 60 ticks is a second."
+    },
+    "render.cutaway_fade": {
+      "value": 0.38,
+      "unit": "alpha",
+      "note": "How solid a wall of rock stays when it is standing between you and a floor behind it. This is the see-through fourth wall. 1 = never fades and rooms hide behind their own near walls; 0 = those walls vanish entirely."
+    },
+    "render.cutaway_depth": {
+      "value": 2,
+      "unit": "m",
+      "note": "How close a wall has to be to the floor it is hiding before it turns translucent. Small numbers fade only the near wall of a room, which is what you want; large numbers fade half the labyrinth into a haze."
     }
   },
   "geometry": {
@@ -221,6 +276,42 @@
     },
     "character.name_pool": {
       "text": "Bran, Ysolde, Corwin, Maerl, Thessa, Odric, Vela, Garn, Ketta, Rhodry, Isme, Dunmar, Sable, Wren, Halgar, Nix, Orla, Tam, Brennis, Sorrel"
+    },
+    "ui.label_progress": {
+      "text": "progress"
+    },
+    "ui.label_state": {
+      "text": "state"
+    },
+    "ui.label_doing": {
+      "text": "doing"
+    },
+    "ui.label_ground": {
+      "text": "ground"
+    },
+    "ui.state_planned": {
+      "text": "marked out, not started"
+    },
+    "ui.state_clearing": {
+      "text": "ground still needs clearing"
+    },
+    "ui.state_building": {
+      "text": "going up"
+    },
+    "ui.state_built": {
+      "text": "finished"
+    },
+    "ui.doing_walking": {
+      "text": "walking to the camp"
+    },
+    "ui.doing_clearing": {
+      "text": "clearing ground"
+    },
+    "ui.doing_building": {
+      "text": "building"
+    },
+    "ui.doing_idle": {
+      "text": "looking about"
     }
   },
   "tags": {
@@ -279,6 +370,42 @@
     "crawler": {
       "name": "crawler",
       "note": "One of yours: came into the labyrinth, may yet leave it."
+    },
+    "structure": {
+      "name": "structure",
+      "note": "Something raised by hand that was not there before."
+    },
+    "fire": {
+      "name": "fire",
+      "note": "Gives light and warmth, and will go out if nobody feeds it."
+    },
+    "rest": {
+      "name": "rest",
+      "note": "Somewhere to sleep or recover."
+    },
+    "shelter": {
+      "name": "shelter",
+      "note": "Keeps the weather and the dark off."
+    },
+    "store": {
+      "name": "store",
+      "note": "Holds things so they are not carried."
+    },
+    "wood": {
+      "name": "wood",
+      "note": "Made of timber: burns, rots, can be repaired."
+    },
+    "cloth": {
+      "name": "cloth",
+      "note": "Made of fabric: light, tears, soaks."
+    },
+    "unbuilt": {
+      "name": "unbuilt",
+      "note": "Planned and marked out, but not finished."
+    },
+    "warm": {
+      "name": "warm",
+      "note": "Holds off the cold. Crawlers will come to it."
     }
   },
   "tiles": {
@@ -289,6 +416,7 @@
       "side": "#585c61",
       "footing": "walk",
       "cross": 8,
+      "clear": 20,
       "note": "Worked flagstone. The default footing of the labyrinth."
     },
     "packed_earth": {
@@ -298,6 +426,7 @@
       "side": "#63553f",
       "footing": "walk",
       "cross": 10,
+      "clear": 25,
       "note": "Trodden soil."
     },
     "moss_stone": {
@@ -307,6 +436,7 @@
       "side": "#4a5c45",
       "footing": "walk",
       "cross": 16,
+      "clear": 35,
       "note": "Stone gone green where the water sits."
     },
     "shallow_water": {
@@ -316,6 +446,7 @@
       "side": "#335667",
       "footing": "walk",
       "cross": 26,
+      "clear": 60,
       "note": "Ankle deep. Slows a walker, ruins what it soaks."
     },
     "rubble": {
@@ -325,6 +456,7 @@
       "side": "#57534c",
       "footing": "walk",
       "cross": 30,
+      "clear": 55,
       "note": "Collapsed masonry, not yet cleared."
     },
     "bone_litter": {
@@ -334,6 +466,7 @@
       "side": "#6f6959",
       "footing": "walk",
       "cross": 14,
+      "clear": 30,
       "note": "Somebody else got this far."
     },
     "stone_ramp": {
@@ -343,6 +476,7 @@
       "side": "#5b5f64",
       "footing": "ramp",
       "cross": 22,
+      "clear": 40,
       "note": "A climbable one-metre slope."
     },
     "stone_block": {
@@ -352,6 +486,7 @@
       "side": "#46494d",
       "footing": "block",
       "cross": 999,
+      "clear": 999,
       "note": "A full cubic metre of rock."
     }
   },
@@ -390,8 +525,78 @@
   "skills": {
     "clambering": {
       "name": "Clambering",
-      "derives": "agility:2,endurance:1",
-      "note": "Keeping your feet on bad ground: water, rubble, moss, a steep ramp. Rolled every time a crawler tries to step onto a difficult tile."
+      "derives": "might:1,agility:1",
+      "note": "Climbing, scrambling, and keeping your feet on ground that does not want you to. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "labouring": {
+      "name": "Labouring",
+      "derives": "might:1,endurance:1",
+      "note": "Hauling, digging, clearing ground, and still doing it an hour later. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "wrangling": {
+      "name": "Wrangling",
+      "derives": "might:1,presence:1",
+      "note": "Handling animals, and dragging people out of trouble whether they like it or not. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "building": {
+      "name": "Building",
+      "derives": "might:1,intellect:1",
+      "note": "Raising structures that stay up. Knowing where the weight goes, and being able to put it there. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "fighting": {
+      "name": "Fighting",
+      "derives": "might:1,willpower:1",
+      "note": "The one fifth of the game that is violence. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "ranging": {
+      "name": "Ranging",
+      "derives": "agility:1,endurance:1",
+      "note": "Covering ground: travelling far, moving quietly, getting back again. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "performing": {
+      "name": "Performing",
+      "derives": "agility:1,presence:1",
+      "note": "Singing, playing, dancing, and holding a room while you do it. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "crafting": {
+      "name": "Crafting",
+      "derives": "agility:1,intellect:1",
+      "note": "Making and mending: tools, clothes, meals, anything that takes hands and a recipe. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "tinkering": {
+      "name": "Tinkering",
+      "derives": "agility:1,willpower:1",
+      "note": "Locks, traps, and anything fiddly that punishes a shaking hand. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "tending": {
+      "name": "Tending",
+      "derives": "endurance:1,presence:1",
+      "note": "Nursing, feeding, and keeping people upright who would rather lie down. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "foraging": {
+      "name": "Foraging",
+      "derives": "endurance:1,intellect:1",
+      "note": "Hunting, fishing, gathering, and knowing which of it is safe to eat. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "enduring": {
+      "name": "Enduring",
+      "derives": "endurance:1,willpower:1",
+      "note": "Cold, hunger, pain, boredom and the dark. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "bargaining": {
+      "name": "Bargaining",
+      "derives": "presence:1,intellect:1",
+      "note": "Trading, persuading, and working out what somebody actually wants. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "leading": {
+      "name": "Leading",
+      "derives": "presence:1,willpower:1",
+      "note": "Rallying, calming a panic, and holding a group together when it wants to scatter. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+    },
+    "studying": {
+      "name": "Studying",
+      "derives": "intellect:1,willpower:1",
+      "note": "Lore, mapmaking, deciphering, and sitting with a problem until it gives. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     }
   },
   "figure": {
@@ -430,6 +635,48 @@
       "from_m": 1.7,
       "to_m": 1.84,
       "note": "Only drawn on a crawler wearing one. Keep half_width near the head's or the brim hides the face. Rule 4: if it is on them, it is on screen -- add a row here and it can be worn."
+    }
+  },
+  "structures": {
+    "campfire": {
+      "name": "Campfire",
+      "tags": "structure,fire,warm",
+      "colour": "#b4541f",
+      "half_width": 0.38,
+      "height_m": 0.55,
+      "skill": "building",
+      "difficulty": 55,
+      "note": "The heart of a camp. Everything else is laid out around it."
+    },
+    "bedroll": {
+      "name": "Bedroll",
+      "tags": "structure,rest,cloth",
+      "colour": "#6b5a44",
+      "half_width": 0.4,
+      "height_m": 0.22,
+      "skill": "building",
+      "difficulty": 35,
+      "note": "Somewhere to sleep. The easiest thing in a camp to put up."
+    },
+    "store": {
+      "name": "Store",
+      "tags": "structure,store,wood",
+      "colour": "#5d4a30",
+      "half_width": 0.36,
+      "height_m": 0.85,
+      "skill": "building",
+      "difficulty": 45,
+      "note": "Keeps supplies off the wet floor."
+    },
+    "windbreak": {
+      "name": "Windbreak",
+      "tags": "structure,shelter,wood",
+      "colour": "#4f4436",
+      "half_width": 0.46,
+      "height_m": 1.45,
+      "skill": "building",
+      "difficulty": 65,
+      "note": "The hardest thing in a starting camp, and the one that makes it feel like one."
     }
   }
 }

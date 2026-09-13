@@ -79,18 +79,20 @@ The characters act on their own initiative.
 
 ## The non-negotiables
 
-*Nine rules about what this game **is**. Each is one sentence of rule and a
+*Eleven rules about what this game **is**. Each is one sentence of rule and a
 paragraph of what it protects. Do not re-litigate these; do not quietly drift
 away from them. Add to the list the moment something is argued twice.*
 
-**1. Characters improve by failing forward, so progress slows as they get better.**
-Failure is the teacher. A character who fails at a task learns more from it than
-one who succeeds, and the better they already are, the less each attempt returns.
-Any progression curve that speeds up with mastery is wrong, and any system that
-punishes failure with nothing but lost time is wrong too.
+**1. Characters improve by failing forward. Succeeding teaches them NOTHING.**
+Failure is the only teacher; failing narrowly teaches most of all. A crawler who
+has mastered something stops improving entirely until the labyrinth gives them
+something harder. The slowdown in rule 1 is therefore never a curve in the code:
+it is what happens when someone stops failing. Any progression that speeds up
+with mastery is wrong, and so is any system that punishes failure with nothing
+but lost time.
 
-**2. Every roll comes from a skill, and every skill comes from the six natural
-attributes. Ask, never invent.** There is one framework for how characters and
+**2. Every roll comes from a skill; every skill is one PAIR of the six natural
+attributes; all fifteen pairs exist. Ask, never invent.** There is one framework for how characters and
 creatures function, and a new feature is not finished until it is wired into that
 framework. When a feature needs a new tag, skill, stat or system, **ask, with
 suggestions, and wait.** Inventing a parallel system is the failure this rule
@@ -128,6 +130,18 @@ could be adjusted later.** Numbers and names live in `docs/crawlers.xlsx`, which
 is the authority. This is also the safety net under rule 2: anything proposed in
 the sheet is theirs to rename, retune or delete without a conversation.
 
+**10. The picture is pixel perfect, and the scale is locked at 32 pixels to the
+metre.** A crawler is 52 px tall and stays 52 px tall. Zoom changes how many
+REAL screen pixels one game pixel covers -- by a whole number -- and the picture
+is drawn smaller to match; it never scales the world. The camera only ever sits
+on whole pixels. No fractional scaling, no smoothing, nothing that puts an edge
+halfway across a pixel.
+
+**11. Time only runs while the view is moving.** Stop scrolling and the
+labyrinth stops with you. This is the idle-game clock: the world advances
+because the player is looking around it. Nothing in the simulation may move the
+camera, or time would wind itself forward for ever.
+
 ---
 
 ## Commands
@@ -158,14 +172,15 @@ src/js/*.js           the game, assembled in filename order
   00-version.js       the ONLY place a version is declared
   05-rand.js          seeded RNG - the simulation never touches Math.random
   08-knobs.js         the spreadsheet, inlined; K/G/N/TILE/TAG/ATTR/SKILL, CFG
-  10-state.js         one match: world, crawlers, camera, what is hovered
-  12-world.js         a chunk of labyrinth from a seed (PLACEHOLDER terrain)
+  10-state.js         one match: world, crawlers, camp, camera, what is hovered
+  12-world.js         rooms and halls from a seed; the walking and sight rules
   14-actors.js        the six attributes, skills, rolls, learning, crawlers
+  16-camp.js          choosing a room, laying out a camp, and working at it
   20-input.js         key / mouse / touch, all writing the same state
   30-sim.js           one fixed simulation step
   40-render.js        isometric blocks, figures, the pick pass, `consumed`
   45-ui.js            the inspector: describe() returns data, render() shows it
-  90-boot.js          low-resolution buffer, scaling, the fixed-timestep loop
+  90-boot.js          the pixel-perfect buffer, whole-number zoom, the loop
   99-test.js          window.__test - the only way a test touches the game
 tests/run.mjs         headless tests, driven through window.__test
 tools/sheet.py        how the spreadsheet is laid out, read and reconciled
@@ -182,28 +197,50 @@ dist/                 built output, never committed
 One framework, and everything that resolves goes through it:
 
 ```
-six attributes  ->  a skill  ->  ability  ->  one roll  ->  it worked, or it taught
+six attributes  ->  a skill (one PAIR of them)  ->  ability  ->  one roll
 ```
 
 - The six are **Might, Agility, Endurance, Presence, Intellect, Willpower**, in
   that order, and they are rows in the `attributes` tab.
-- A skill names which attributes feed it and how heavily: `agility:2,endurance:1`.
-  The build refuses to build a skill that draws on anything but the six.
-- `ability = weighted attribute average x roll.attribute_weight
+- **A skill is exactly one pair of the six, and all fifteen pairs exist.** That
+  makes the skill list a complete grid rather than a list somebody keeps adding
+  to. The build refuses to build if a pair is missing, doubled, self-paired, or
+  drawn from anything but the six. Clambering is MGT+AGI, Labouring MGT+END,
+  Building MGT+INT, Studying INT+WIL, and so on for all fifteen.
+- Each skill is a FAMILY of work, not one action: Crafting covers cooking,
+  sewing and mending; Studying covers lore, mapmaking and deciphering.
+- `ability = average of the pair x roll.attribute_weight
             + practice x roll.skill_weight`. Practice eventually outweighs talent.
 - `attempt()` in `14-actors.js` is the ONLY place anything is ever resolved.
-  Adding a new thing a crawler can do means a new row in the `skills` tab and a
-  call to `attempt()` - never a second way of deciding whether something worked.
+  A new thing a crawler can do is a call to `attempt()` naming one of the
+  fifteen -- never a second way of deciding whether something worked.
 
 **Rule 1 is not a curve.** There is no code anywhere that slows progress down.
-Failing teaches a lot, only just failing teaches most, succeeding teaches almost
-nothing - so a crawler who has got good at something fails less often and is
-therefore taught less often. The slowdown is a consequence, and a test holds the
-success rate at zero to prove progress does *not* tail off on its own.
+Failing teaches 2.2, only just failing teaches 3.6, and **succeeding teaches 0**.
+A crawler who has got good at something fails less often and is therefore taught
+less often; master it entirely and they stop dead until something harder turns
+up. A test holds the success rate at zero and requires progress to come out
+perfectly flat, which is the only way to prove no curve was smuggled in.
 
-One consequence worth knowing: a crawler who succeeds every time still creeps
-upward forever at `learn.gain_on_success`. Set that knob to 0 if mastery should
-be a full stop rather than a crawl.
+---
+
+## The labyrinth, and the camp
+
+- `12-world.js` cuts **rooms** out of solid rock and digs **halls** between them.
+  Rooms sit on different levels; halls do all their climbing in the rock, a
+  metre at a time, with a ramp at every step.
+- A hall takes its level from **every room it passes through**, which is why it
+  can cross a third room without cutting it in half.
+- Connectivity is **measured, not hoped for**. After digging, the generator
+  floods the place, digs again to whatever is cut off, and finally **fills in
+  any room it still cannot reach**. So "every room is walkable from every other"
+  is true by construction, and a test checks it across many seeds.
+- `16-camp.js`: the crawlers pick the largest room they can *all* reach, walk to
+  it, clear the ground (Labouring against the floor's `clear` difficulty) and
+  raise the camp (Building against each structure's difficulty). Nobody is told
+  to; the player is a head coach.
+- A structure grows to its real height as it is built, so how far the camp has
+  got is something you can see rather than read.
 
 ---
 
@@ -260,9 +297,9 @@ ruler is worse than no ruler.
 
 ### The master spreadsheet, which is the authority
 
-`docs/crawlers.xlsx` holds every number and every piece of wording, across eight
+`docs/crawlers.xlsx` holds every number and every piece of wording, across nine
 tabs: `knobs`, `geometry` (read only), `names`, `tags`, `tiles`, `attributes`,
-`skills`, `figure`. `src/defaults.json` carries the same values so a fresh
+`skills`, `figure`, `structures`. `src/defaults.json` carries the same values so a fresh
 checkout still builds. The build reconciles the two and inlines the result.
 
 1. **Change a number in the sheet, not in the code.** If the code default must

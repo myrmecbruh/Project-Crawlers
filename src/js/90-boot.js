@@ -1,29 +1,29 @@
-/* The low-resolution pipeline and the fixed-timestep loop.
+/* The pixel-perfect pipeline and the fixed-timestep loop.
  *
- * The world is drawn into a small buffer and that buffer is blown up by the
- * browser with hard pixel edges. That is the whole trick behind "3D that looks
- * like sprite work": the geometry is real, the resolution is not.
+ * The world is drawn into a buffer of whole game pixels, and that buffer is
+ * blown up by a WHOLE NUMBER. No fractional scaling anywhere, no smoothing, and
+ * the camera only ever sits on whole pixels -- which is what keeps every edge
+ * hard and stops the ground shimmering as the view slides.
+ *
+ * Time only runs while the view is moving. Stop scrolling and the labyrinth
+ * stops with you.
  */
 const Game = {
   state: null,
   canvas: null,
   ctx: null,
-  cssScale: 1,
   acc: 0,
   last: 0,
   paused: false,   /* tests stop the clock so a frame means exactly one step */
 
   start(seed) {
-    Render.ensure();
     this.canvas = document.getElementById('screen');
-    this.canvas.width = CFG.lowW;
-    this.canvas.height = CFG.lowH;
     this.ctx = this.canvas.getContext('2d', { alpha: false });
-    this.ctx.imageSmoothingEnabled = false;
 
+    this.fit();
     this.state = newState(seed === undefined ? 1 : seed);
     this.fit();
-    addEventListener('resize', () => this.fit());
+    addEventListener('resize', () => { this.fit(); if (this.state) this.state.viewDirty = true; });
     bindInput(this.state, this.canvas, (cx, cy) => this.toBuffer(cx, cy));
 
     document.getElementById('version').textContent = 'v' + VERSION;
@@ -35,26 +35,32 @@ const Game = {
     requestAnimationFrame((t) => this.loop(t));
   },
 
-  /* Whole-number scaling wherever it fits, so pixels stay square. Below 1:1 --
-     a narrow phone -- it scales fractionally rather than cropping the world. */
+  zoom() { return this.state ? this.state.cam.zoom : CFG.zoomStart; },
+
+  /* The picture is as big as the window allows at this zoom, in whole game
+     pixels, capped so a very large screen does not cost a fortune to draw. */
   fit() {
-    const availW = Math.max(160, innerWidth - 32);
-    const availH = Math.max(120, innerHeight - 24 - 40);
-    let s = Math.min(availW / CFG.lowW, availH / CFG.lowH);
-    if (s >= 1) s = Math.floor(s);
-    this.cssScale = s;
-    this.canvas.style.width = Math.round(CFG.lowW * s) + 'px';
-    this.canvas.style.height = Math.round(CFG.lowH * s) + 'px';
+    const z = this.zoom();
+    const availW = Math.max(200, innerWidth - 32);
+    const availH = Math.max(160, innerHeight - 24 - 40);
+    const w = Math.min(CFG.maxBufW, Math.floor(availW / z));
+    const h = Math.min(CFG.maxBufH, Math.floor(availH / z));
+    Render.resize(w, h);
+    this.canvas.width = Render.w;
+    this.canvas.height = Render.h;
+    this.ctx.imageSmoothingEnabled = false;
+    this.canvas.style.width = (Render.w * z) + 'px';
+    this.canvas.style.height = (Render.h * z) + 'px';
+    if (this.state) { this.state.geomDirty = true; this.state.viewDirty = true; }
   },
 
   toBuffer(clientX, clientY) {
     const r = this.canvas.getBoundingClientRect();
-    return { x: (clientX - r.left) / this.cssScale,
-             y: (clientY - r.top) / this.cssScale };
+    const z = this.zoom();
+    return { x: (clientX - r.left) / z, y: (clientY - r.top) / z,
+             screenX: clientX - r.left, screenY: clientY - r.top };
   },
 
-  /* Rebuild only what changed. Nothing moves in the labyrinth yet, so a still
-     camera costs a blit and nothing else. */
   render() {
     const s = this.state;
     if (s.geomDirty) { Render.build(s); Render.drawPick(s); }
@@ -69,7 +75,8 @@ const Game = {
     this.ctx.drawImage(Render.buf, 0, 0);
   },
 
-  /* One frame, forced: exactly one step and one full redraw. Tests use this. */
+  /* One frame, forced: exactly one step and one full redraw. Tests use this,
+     and it ignores whether the view is moving. */
   frame() {
     step(this.state);
     this.state.geomDirty = true;
@@ -77,15 +84,44 @@ const Game = {
     this.render();
   },
 
+  /* The arrow keys pan here rather than inside the simulation, because panning
+     is what lets time run -- if the simulation did it, time would wind itself. */
+  keyPan() {
+    const i = this.state.input;
+    let dx = 0, dy = 0;
+    if (i.panLeft) dx -= 1;
+    if (i.panRight) dx += 1;
+    if (i.panUp) dy -= 1;
+    if (i.panDown) dy += 1;
+    if (!dx && !dy) return;
+    const d = Math.hypot(dx, dy);
+    panCamera(this.state, dx / d * CFG.keyPan, dy / d * CFG.keyPan);
+  },
+
   loop(t) {
     if (this.paused) { this.last = t; requestAnimationFrame((tt) => this.loop(tt)); return; }
     const dt = Math.min(t - this.last, 250); /* a backgrounded tab must not fast-forward */
     this.last = t;
-    this.acc += dt;
-    let steps = 0;
-    while (this.acc >= TICK_MS && steps < 8) { step(this.state); this.acc -= TICK_MS; steps++; }
+    const s = this.state;
+
+    this.keyPan();
+
+    if (s.motion > 0) {
+      this.acc += dt;
+      let steps = 0;
+      while (this.acc >= TICK_MS && steps < 8) {
+        step(s);
+        s.motion = Math.max(0, s.motion - 1);
+        this.acc -= TICK_MS;
+        steps++;
+        if (s.motion === 0) break;
+      }
+    } else {
+      this.acc = 0;   /* time does not bank up while you are still */
+    }
+
     this.render();
-    if ((this.state.tick & 15) === 0) this.readout();
+    if ((this.frames = (this.frames || 0) + 1) % 12 === 0) this.readout();
     requestAnimationFrame((tt) => this.loop(tt));
   },
 
@@ -93,8 +129,11 @@ const Game = {
     const el = document.getElementById('readout');
     if (!el) return;
     const s = this.state;
-    el.textContent = 'seed ' + s.seed + ' · ' + s.world.n + '×' + s.world.n
-      + ' m · zoom ' + s.cam.zoom + '×';
+    const camp = campSummary(s.camp);
+    el.textContent = 'seed ' + s.seed
+      + ' · ' + (s.motion > 0 ? 'time running' : 'time still')
+      + ' · camp ' + camp.built + '/' + camp.sites
+      + ' · zoom ' + s.cam.zoom + '×';
   }
 };
 

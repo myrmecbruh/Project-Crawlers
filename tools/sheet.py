@@ -19,10 +19,12 @@ SECTIONS = {
     "geometry": ("key", ["value", "unit", "note"], True),
     "names":    ("key", ["text"], False),
     "tags":     ("id",  ["name", "note"], False),
-    "tiles":    ("id",  ["name", "tags", "top", "side", "footing", "cross", "note"], False),
+    "tiles":    ("id",  ["name", "tags", "top", "side", "footing", "cross", "clear", "note"], False),
     "attributes": ("id", ["name", "abbrev", "note"], False),
     "skills":   ("id",  ["name", "derives", "note"], False),
     "figure":   ("id",  ["name", "slot", "colour", "half_width", "from_m", "to_m", "note"], False),
+    "structures": ("id", ["name", "tags", "colour", "half_width", "height_m",
+                          "skill", "difficulty", "note"], False),
 }
 
 # Columns that are documentation. They may be edited freely and are never
@@ -44,7 +46,8 @@ def norm(col, v):
     trimmed, because a spreadsheet loves a trailing space."""
     if blank(v):
         return ""
-    if col in ("value", "cross", "half_width", "from_m", "to_m"):
+    if col in ("value", "cross", "clear", "half_width", "from_m", "to_m",
+               "height_m", "difficulty"):
         try:
             f = float(v)
             return int(f) if f == int(f) else round(f, 10)
@@ -122,6 +125,7 @@ def for_game(merged):
             "side": str(r["side"]).strip(),
             "footing": norm("footing", r["footing"]),
             "cross": norm("cross", r["cross"]),
+            "clear": norm("clear", r["clear"]),
             "note": str(r.get("note", "")),
         }
 
@@ -140,6 +144,16 @@ def for_game(merged):
             pairs.append([attr.strip(), float(w) if w.strip() else 1.0])
         out["skills"][k] = {"name": str(r["name"]), "derives": pairs,
                             "note": str(r.get("note", ""))}
+
+    out["structures"] = {k: {"name": str(r["name"]),
+                             "tags": [t for t in norm("tags", r["tags"]).split(",") if t],
+                             "colour": str(r["colour"]).strip(),
+                             "half_width": norm("half_width", r["half_width"]),
+                             "height_m": norm("height_m", r["height_m"]),
+                             "skill": str(r["skill"]).strip().lower(),
+                             "difficulty": norm("difficulty", r["difficulty"]),
+                             "note": str(r.get("note", ""))}
+                         for k, r in merged["structures"].items()}
 
     out["figure"] = {k: {"name": str(r["name"]), "slot": norm("slot", r["slot"]),
                          "colour": str(r["colour"]).strip(),
@@ -184,6 +198,43 @@ def check_vocabulary(game):
                               "of the six attributes" % (sid, attr))
             if w <= 0:
                 errors.append("skills: '%s' weights '%s' at %s" % (sid, attr, w))
+
+    # Rule from the user: a skill is one PAIR of the six attributes, and every
+    # pair exists exactly once. That makes the skill list a complete, checkable
+    # grid rather than a list somebody keeps adding to.
+    seen = {}
+    for sid, sk in game["skills"].items():
+        if len(sk["derives"]) != 2:
+            errors.append("skills: '%s' is built from %d attributes; every skill "
+                          "is a pair" % (sid, len(sk["derives"])))
+            continue
+        pair = tuple(sorted(a for a, _w in sk["derives"]))
+        if pair[0] == pair[1]:
+            errors.append("skills: '%s' pairs '%s' with itself" % (sid, pair[0]))
+        elif pair in seen:
+            errors.append("skills: '%s' and '%s' are both %s + %s"
+                          % (seen[pair], sid, pair[0], pair[1]))
+        else:
+            seen[pair] = sid
+    if attrs and len(attrs) == 6:
+        want = set()
+        ordered = list(game["attributes"])
+        for i in range(len(ordered)):
+            for j in range(i + 1, len(ordered)):
+                want.add(tuple(sorted((ordered[i], ordered[j]))))
+        for pair in sorted(want - set(seen)):
+            errors.append("skills: nothing is %s + %s yet; every pair of the six "
+                          "is a skill" % pair)
+
+    known_skills = set(game["skills"])
+    for stid, st in game["structures"].items():
+        if st["skill"] not in known_skills:
+            errors.append("structures: '%s' is raised with '%s', which is not a "
+                          "skill" % (stid, st["skill"]))
+        for tag in st["tags"]:
+            if tag not in known:
+                errors.append("structures: '%s' claims the tag '%s', which is not "
+                              "in the tags sheet" % (stid, tag))
 
     for fid, f in game["figure"].items():
         if f["slot"] not in ("body", "hat", "back", "held"):
@@ -282,13 +333,22 @@ def selftest():
         "names": {"n1": {"text": "hello"}},
         "tags": {"t1": {"name": "t1", "note": ""}},
         "tiles": {"x": {"name": "X", "tags": "t1", "top": "#000", "side": "#111",
-                        "footing": "walk", "cross": 10, "note": ""}},
+                        "footing": "walk", "cross": 10, "clear": 10, "note": ""}},
         "attributes": {a: {"name": a, "abbrev": a[:3].upper(), "note": ""}
                        for a in ("might", "agility", "endurance", "presence",
                                  "intellect", "willpower")},
-        "skills": {"s1": {"name": "S1", "derives": "agility:2,might:1", "note": ""}},
+        "skills": dict(
+            (a[:3] + "_" + b[:3],
+             {"name": a + "/" + b, "derives": a + ":1," + b + ":1", "note": ""})
+            for i, a in enumerate(("might", "agility", "endurance", "presence",
+                                   "intellect", "willpower"))
+            for b in ("might", "agility", "endurance", "presence", "intellect",
+                      "willpower")[i + 1:]),
         "figure": {"torso": {"name": "Torso", "slot": "body", "colour": "#444",
                              "half_width": 0.2, "from_m": 0.4, "to_m": 1.3, "note": ""}},
+        "structures": {"fire": {"name": "Fire", "tags": "t1", "colour": "#900",
+                                "half_width": 0.3, "height_m": 0.5,
+                                "skill": "mig_agi", "difficulty": 40, "note": ""}},
     }
 
     def sheet_from(base_, **patch):
@@ -324,14 +384,24 @@ def selftest():
     add("a tile claiming an unknown tag stops the build",
         len(check_vocabulary(for_game(m))) == 1, "")
 
-    m, _, _ = reconcile(base, sheet_from(base, skills__s1__derives="agility:2,charm:1"))
+    m, _, _ = reconcile(base, sheet_from(base, skills__mig_agi__derives="agility:1,charm:1"))
+    errs = check_vocabulary(for_game(m))
     add("a skill from an attribute nobody has stops the build (rule 2)",
-        len(check_vocabulary(for_game(m))) == 1,
-        str(check_vocabulary(for_game(m))))
+        any("not one of the six attributes" in e for e in errs), str(errs[:1]))
 
     m, _, _ = reconcile(base, None)
-    add("six attributes, no more and no less (rule 2)",
+    add("six attributes, and all fifteen pairs present (rule 2)",
         not check_vocabulary(for_game(m)), str(check_vocabulary(for_game(m))))
+
+    s2 = sheet_from(base)
+    del s2["skills"]["mig_agi"]
+    d2 = {k: dict(v) for k, v in base.items()}
+    d2["skills"] = {k: v for k, v in base["skills"].items() if k != "mig_agi"}
+    m, _, _ = reconcile(d2, s2)
+    add("a missing attribute pair stops the build",
+        any("might + agility" in e or "agility + might" in e
+            for e in check_vocabulary(for_game(m))),
+        str(check_vocabulary(for_game(m))[:1]))
 
     m, _, _ = reconcile(base, None)
     add("with no sheet at all, the defaults still build",

@@ -5,6 +5,10 @@ window.__test = {
   cfg: CFG,
   data: DATA,
 
+  /* The picture's size in game pixels. It follows the window and the zoom, so
+     a test must ask rather than assume. */
+  buffer() { return { w: Render.w, h: Render.h, zoom: Game.state.cam.zoom }; },
+
   get state() { return Game.state; },
 
   /* Stop the animation clock. Without this a test races the real loop and
@@ -39,6 +43,56 @@ window.__test = {
   select(i) { Game.state.selected = i; Game.state.viewDirty = true; Game.render(); },
 
   zoom(z) { setZoom(Game.state, z); Game.render(); return Game.state.cam.zoom; },
+  /* Zoom while holding a point of the picture still, as the wheel does. */
+  zoomAt(bx, by, z) {
+    const was = Game.state.cam.zoom;
+    setZoom(Game.state, z, bx * was, by * was);
+    Game.render();
+    return Game.state.cam.zoom;
+  },
+  motion() { return Game.state.motion; },
+  loopOnce(ms) {
+    const s = Game.state, before = s.tick;
+    Game.paused = false; Game.last = performance.now() - (ms || 20);
+    Game.loop(performance.now());
+    Game.paused = true;
+    return { ticks: s.tick - before, motion: s.motion };
+  },
+
+  camp() {
+    const c = Game.state.camp;
+    if (!c) return null;
+    const sum = campSummary(c);
+    return {
+      room: { index: c.room.index, x: c.room.x, y: c.room.y,
+              w: c.room.w, h: c.room.h, elev: c.room.elev },
+      summary: sum,
+      sites: c.sites.map(function (st) {
+        return { index: st.index, structure: st.structure, x: st.x, y: st.y,
+                 cleared: st.cleared, progress: st.progress, built: st.built,
+                 efforts: st.efforts, room: Game.state.world.at(st.x, st.y).room,
+                 pick: Render.siteBase(Game.state) + st.index };
+      })
+    };
+  },
+  rooms() {
+    return Game.state.world.rooms.map(function (r) {
+      return { index: r.index, x: r.x, y: r.y, w: r.w, h: r.h,
+               elev: r.elev, floor: r.floor, area: r.area };
+    });
+  },
+  /* Can every room be walked to from this one? Measured, never assumed. */
+  connectivity() {
+    const w = Game.state.world, n = w.n;
+    const start = w.rooms[0];
+    const field = reachableFrom(w, start.x + (start.w >> 1), start.y + (start.h >> 1));
+    const out = [];
+    for (const r of w.rooms) {
+      const i = (r.y + (r.h >> 1)) * n + (r.x + (r.w >> 1));
+      out.push({ room: r.index, elev: r.elev, steps: field[i] });
+    }
+    return out;
+  },
   pan(dx, dy) { panCamera(Game.state, dx, dy); Game.render(); },
   camera() { return { x: Game.state.cam.x, y: Game.state.cam.y, zoom: Game.state.cam.zoom }; },
 
@@ -52,7 +106,7 @@ window.__test = {
   actors() {
     return Game.state.actors.map(function (a) {
       return { index: a.index, name: a.name, x: a.x, y: a.y, attr: a.attr,
-               skills: a.skills, worn: a.worn, steps: a.steps,
+               skills: a.skills, worn: a.worn, steps: a.steps, doing: a.doing,
                stumbles: a.stumbles, pick: Game.state.world.cells.length + a.index };
     });
   },
@@ -63,6 +117,57 @@ window.__test = {
     return a.worn;
   },
   rolls() { return Game.state.rolls; },
+
+  /* Put the camera on a crawler AND get the pointer onto them. They are
+     scattered over 56 metres and something may be standing in front, so a test
+     that wants to inspect one has to go and look, then probe down the figure
+     until the pick really is them. */
+  pointAtActor(i) {
+    this.centreOn(i);
+    const s = Game.state, want = Render.actorBase(s) + i;
+    Render.recordItems = true;
+    s.geomDirty = true; s.viewDirty = true;
+    Game.frame();
+    const item = Render.consumed.items.find(function (q) { return q.i === want; });
+    if (!item) return { found: false, why: 'not drawn' };
+    for (let dy = 0; dy <= 24; dy += 2) {
+      for (const dx of [0, -2, 2, -4, 4]) {
+        if (this.point(item.sx + dx, item.sy + dy) === want) {
+          return { found: true, pick: want, sx: item.sx + dx, sy: item.sy + dy,
+                   name: item.name, parts: item.parts };
+        }
+      }
+    }
+    return { found: false, why: 'hidden behind something', sx: item.sx, sy: item.sy };
+  },
+
+  /* Any crawler the pointer can actually reach. Some are behind a wall or
+     under a windbreak, and which ones depends on the tick. */
+  pointAtAnyActor() {
+    for (let i = 0; i < Game.state.actors.length; i++) {
+      const got = this.pointAtActor(i);
+      if (got.found) { got.index = i; return got; }
+    }
+    return { found: false, why: 'every crawler is out of sight' };
+  },
+
+  /* Draw the same moment again, without advancing it. A test comparing two
+     pictures of one instant must not have time pass in between. */
+  redraw() {
+    const s = Game.state;
+    s.geomDirty = true; s.viewDirty = true;
+    Render.build(s); Render.drawPick(s); Render.draw(s);
+    return Render.consumed;
+  },
+
+  /* Put the camera on a crawler. */
+  centreOn(i) {
+    const s = Game.state, a = s.actors[i];
+    const p = Render.project(s, a.x + 0.5, a.y + 0.5, surfaceHeight(s.world.at(a.x, a.y)));
+    panCamera(s, p.x - Render.w / 2, p.y - Render.h / 2);
+    Game.render();
+    return { x: a.x, y: a.y };
+  },
 
   /* A controlled bench: one crawler, one skill, one difficulty, repeated in
      blocks, so rule 1 can be argued with numbers instead of adjectives.
@@ -143,14 +248,16 @@ window.__test = {
       Game.state = a;
       const p0 = Render.project(a, 4, 4, 0);
       const pUp = Render.project(a, 4, 4, 1);
-      add('a metre of elevation lifts the picture',
-          p0.y - pUp.y === CFG.rise * a.cam.zoom,
-          (p0.y - pUp.y) + 'px for 1 m at zoom ' + a.cam.zoom);
+      add('one metre is exactly render.rise pixels, at any zoom',
+          p0.y - pUp.y === CFG.rise, (p0.y - pUp.y) + 'px for 1 m');
       const pRight = Render.project(a, 5, 4, 0);
       add('one tile east is half a tile wide, half a tile down',
-          Math.abs(pRight.x - p0.x - CFG.tileW / 2 * a.cam.zoom) < 1e-9
-          && Math.abs(pRight.y - p0.y - CFG.tileH / 2 * a.cam.zoom) < 1e-9,
+          Math.abs(pRight.x - p0.x - CFG.tileW / 2) < 1e-9
+          && Math.abs(pRight.y - p0.y - CFG.tileH / 2) < 1e-9,
           'dx=' + (pRight.x - p0.x) + ' dy=' + (pRight.y - p0.y));
+      add('a crawler stands 52 pixels tall at the locked scale',
+          Math.round(CFG.actorHeight * CFG.rise) === 52,
+          Math.round(CFG.actorHeight * CFG.rise) + 'px for ' + CFG.actorHeight + ' m');
 
       /* -- everything built reached the buffer ------------------------------ */
       Render.recordItems = true;
@@ -158,9 +265,12 @@ window.__test = {
       const drew = Render.draw(a);
       add('the renderer consumed everything it built',
           drew.count === built, 'built ' + built + ', drew ' + drew.count);
-      add('the buffer is the size the spreadsheet says',
-          drew.bufW === CFG.lowW && drew.bufH === CFG.lowH,
-          drew.bufW + 'x' + drew.bufH);
+      add('the picture is a whole number of game pixels',
+          drew.bufW === Math.round(drew.bufW) && drew.bufH === Math.round(drew.bufH)
+          && drew.bufW > 0, drew.bufW + 'x' + drew.bufH);
+      add('the camera sits on whole pixels, so nothing shimmers',
+          a.cam.x === Math.round(a.cam.x) && a.cam.y === Math.round(a.cam.y),
+          a.cam.x + ',' + a.cam.y);
 
       /* -- painter's order: back to front ----------------------------------- */
       let ordered = true;
@@ -179,7 +289,7 @@ window.__test = {
       let front = null;
       for (let k = drew.items.length - 1; k >= 0; k--) {
         const it = drew.items[k];
-        if (it.sx > 8 && it.sx < CFG.lowW - 8 && it.sy > 8 && it.sy < CFG.lowH - 8) {
+        if (it.sx > 8 && it.sx < Render.w - 8 && it.sy > 8 && it.sy < Render.h - 8) {
           front = it; break;
         }
       }
@@ -202,16 +312,28 @@ window.__test = {
       /* -- rule 2: one framework, six attributes ----------------------------- */
       add('there are exactly six natural attributes (rule 2)',
           ATTRIBUTE_IDS.length === 6, ATTRIBUTE_IDS.join(', '));
-      let strayAttr = null, skillCount = 0;
+      let strayAttr = null;
+      const pairsSeen = {};
       for (const sid of SKILL_IDS) {
-        skillCount++;
-        for (const pair of SKILL(sid).derives) {
+        const der = SKILL(sid).derives;
+        if (der.length !== 2) { strayAttr = sid + ' has ' + der.length + ' attributes'; continue; }
+        for (const pair of der) {
           if (ATTRIBUTE_IDS.indexOf(pair[0]) < 0) strayAttr = sid + ' -> ' + pair[0];
         }
-        if (!SKILL(sid).derives.length) strayAttr = sid + ' -> nothing';
+        pairsSeen[der.map(function (q) { return q[0]; }).sort().join('+')] = sid;
       }
-      add('every skill is derived from those six and nothing else (rule 2)',
-          !strayAttr, strayAttr || (skillCount + ' skills'));
+      add('every skill is one pair of those six and nothing else (rule 2)',
+          !strayAttr, strayAttr || (SKILL_IDS.length + ' skills'));
+      let missing = [];
+      for (let i = 0; i < ATTRIBUTE_IDS.length; i++) {
+        for (let j = i + 1; j < ATTRIBUTE_IDS.length; j++) {
+          const key = [ATTRIBUTE_IDS[i], ATTRIBUTE_IDS[j]].sort().join('+');
+          if (!pairsSeen[key]) missing.push(key);
+        }
+      }
+      add('all fifteen pairs of the six exist, each exactly once',
+          SKILL_IDS.length === 15 && !missing.length && Object.keys(pairsSeen).length === 15,
+          missing.length ? 'missing ' + missing.join(', ') : SKILL_IDS.length + ' skills');
 
       /* -- rule 1: failing is what teaches ----------------------------------- */
       const learner = makeActor(makeRand(5), 0, 'bench');
@@ -225,6 +347,41 @@ window.__test = {
       add('only just failing teaches most of all (rule 1)',
           gainNear > gainLose, gainNear + ' vs ' + gainLose);
 
+      /* -- the labyrinth is rooms and halls, and all of it is walkable ------- */
+      add('the labyrinth has rooms', a.world.rooms.length >= 4,
+          a.world.rooms.length + ' rooms');
+      const levels = {};
+      for (const r of a.world.rooms) levels[r.elev] = 1;
+      add('the rooms are spread across several levels',
+          Object.keys(levels).length >= 2, 'levels ' + Object.keys(levels).join(','));
+      const start = a.world.rooms[0];
+      const field = reachableFrom(a.world, start.x + (start.w >> 1), start.y + (start.h >> 1));
+      let unreached = 0;
+      for (const r of a.world.rooms) {
+        if (field[(r.y + (r.h >> 1)) * a.world.n + (r.x + (r.w >> 1))] < 0) unreached++;
+      }
+      add('every room can be walked to from every other',
+          unreached === 0, unreached + ' rooms cut off');
+      let rock = 0, cut = 0;
+      for (const c of a.world.cells) {
+        if (TILE(c.tile).footing === 'block') { rock++; if (c.cutaway) cut++; }
+      }
+      add('some rock is cut away so rooms are not hidden by their own walls',
+          cut > 0 && cut < rock, cut + ' of ' + rock + ' rock columns fade');
+
+      /* -- the camp -------------------------------------------------------- */
+      add('the crawlers picked a room to camp in', !!a.camp,
+          a.camp ? 'room ' + a.camp.room.index + ' at ' + a.camp.room.elev + ' m' : 'none');
+      let offPlan = 0;
+      if (a.camp) {
+        for (const st of a.camp.sites) {
+          if (a.world.at(st.x, st.y).room !== a.camp.room.index) offPlan++;
+        }
+      }
+      add('every part of the camp is laid out inside that room',
+          a.camp && a.camp.sites.length > 0 && offPlan === 0,
+          a.camp ? a.camp.sites.length + ' sites, ' + offPlan + ' astray' : '');
+
       /* -- crawlers are real, and standing somewhere they could stand -------- */
       let badGround = null;
       for (const act of a.actors) {
@@ -236,6 +393,14 @@ window.__test = {
       add('every crawler is standing on ground they could stand on',
           a.actors.length > 0 && !badGround,
           badGround || (a.actors.length + ' crawlers'));
+      let cannotReach = 0;
+      if (a.camp) {
+        for (const act of a.actors) {
+          if (a.camp.sites[0].field[act.y * a.world.n + act.x] < 0) cannotReach++;
+        }
+      }
+      add('every crawler can actually walk to the camp',
+          cannotReach === 0, cannotReach + ' cut off from it');
 
       /* -- an empty scene draws nothing -------------------------------------- */
       Render.batch.length = 0;

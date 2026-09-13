@@ -98,7 +98,8 @@ function makeActor(rand, index, name) {
     worn: rand() < CFG.hatChance ? { hat: 'hat' } : {},
     x: 0, y: 0,
     cooldown: Math.floor(rand() * CFG.stepTicks),
-    lastRoll: null,
+    lastRoll: null, lastWork: null,
+    site: -1, doing: 'idle',
     steps: 0, stumbles: 0
   };
 }
@@ -110,9 +111,12 @@ function namePool() {
 
 function populate(state) {
   const w = state.world, rand = state.rand, pool = namePool();
+  /* Scattered through the rooms, not heaped in one -- gathering is something
+     the player should be able to watch happen. */
   const open = [];
   for (let i = 0; i < w.cells.length; i++) {
-    if (TILE(w.cells[i].tile).footing !== 'block') open.push(i);
+    const c = w.cells[i];
+    if (c.room >= 0 && TILE(c.tile).footing === 'walk') open.push(i);
   }
   const actors = [];
   for (let i = 0; i < CFG.actorCount && open.length; i++) {
@@ -152,16 +156,26 @@ function surfaceHeight(cell) {
   return cell.h + (cell.slope ? 0.5 : 0);
 }
 
-const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const MOVE_SKILL = 'clambering';
 
-/* A crawler's own initiative. The player is a head coach, not a hand: nothing
-   here waits to be told. For now that initiative is "wander", and every step
-   onto difficult ground is a Clambering roll -- which is how the framework
-   above is reachable in a real match rather than only in a test. */
-function actorStep(state, actor) {
-  if (actor.cooldown > 0) { actor.cooldown--; return null; }
-  actor.cooldown = CFG.stepTicks;
+/* Try to move one metre. Every step onto difficult ground is a Clambering roll
+   against how hard that floor is to cross -- water and rubble are genuinely
+   worth failing at. */
+function tryStep(state, actor, to, dx, dy) {
+  const roll = attempt(state, actor, MOVE_SKILL, TILE(to.tile).cross);
+  if (roll.ok) {
+    actor.x = to.x;
+    actor.y = to.y;
+    actor.steps++;
+  } else {
+    actor.stumbles++;
+  }
+  state.viewDirty = true;
+  state.geomDirty = true;
+  return roll;
+}
 
+function wander(state, actor) {
   const w = state.world;
   const here = w.at(actor.x, actor.y);
   const options = [];
@@ -171,18 +185,41 @@ function actorStep(state, actor) {
     if (to && canStep(here, to, d[0], d[1])) options.push({ d: d, to: to });
   }
   if (!options.length) return null;
-
   const choice = options[Math.floor(state.rand() * options.length)];
-  const roll = attempt(state, actor, 'clambering', TILE(choice.to.tile).cross);
-  if (roll.ok) {
-    actor.x = choice.to.x;
-    actor.y = choice.to.y;
-    actor.steps++;
-  } else {
-    actor.stumbles++;
+  return tryStep(state, actor, choice.to, choice.d[0], choice.d[1]);
+}
+
+/* A crawler's own initiative. The player is a head coach, not a hand: nothing
+   here waits to be told. They pick the nearest bit of the camp that still needs
+   doing, walk to it, and work at it. */
+function actorStep(state, actor) {
+  if (actor.cooldown > 0) { actor.cooldown--; return null; }
+
+  const camp = state.camp;
+  if (!camp) { actor.cooldown = CFG.stepTicks; return wander(state, actor); }
+
+  let site = actor.site >= 0 ? camp.sites[actor.site] : null;
+  if (!site || site.built) {
+    if (site) site.workers = Math.max(0, site.workers - 1);
+    const next = claimSite(state, actor);
+    if (next < 0) { actor.cooldown = CFG.stepTicks; actor.site = -1; return wander(state, actor); }
+    actor.site = next;
+    site = camp.sites[next];
+    site.workers++;
   }
-  state.viewDirty = true;
-  return roll;
+
+  if (actor.x === site.x && actor.y === site.y) {
+    actor.cooldown = CFG.campWorkTicks;
+    actor.doing = site.cleared ? 'building' : 'clearing';
+    return workSite(state, actor, site);
+  }
+
+  actor.cooldown = CFG.stepTicks;
+  actor.doing = 'walking';
+  const here = state.world.at(actor.x, actor.y);
+  const move = stepToward(state.world, here, site.field);
+  if (!move) return wander(state, actor);
+  return tryStep(state, actor, move.cell, move.dx, move.dy);
 }
 
 /* ---- describing one, for the inspector ----------------------------------- */
@@ -209,6 +246,8 @@ function describeActor(actor) {
     worn: worn,
     steps: actor.steps,
     stumbles: actor.stumbles,
+    doing: actor.doing,
+    lastWork: actor.lastWork,
     tags: CRAWLER_TAGS.map(function (t) { return TAG(t).name; })
   };
 }

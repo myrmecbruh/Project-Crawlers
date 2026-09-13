@@ -30,6 +30,24 @@ const Tooltip = {
       d.index = idx;
       return d;
     }
+    if (Render.isSitePick(s, idx)) {
+      const site = Render.siteFromPick(s, idx);
+      if (!site) return null;
+      const def = STRUCT(site.structure);
+      return {
+        kind: 'site', index: idx, name: def.name,
+        at: site.x + ', ' + site.y,
+        built: site.built, progress: site.built ? 100 : site.progress,
+        state: site.built ? N('ui.state_built')
+             : !site.cleared ? N('ui.state_clearing')
+             : site.progress > 0 ? N('ui.state_building') : N('ui.state_planned'),
+        ground: TILE(s.world.at(site.x, site.y).tile).name,
+        efforts: site.efforts,
+        tags: def.tags.map(function (t) { return TAG(t).name; })
+              .concat(site.built ? [] : [TAG('unbuilt').name]),
+        note: def.note
+      };
+    }
     if (idx >= s.world.cells.length) return null;
     const cell = s.world.cells[idx];
     const def = TILE(cell.tile);
@@ -72,6 +90,23 @@ const Tooltip = {
       + this.tagsRow(d.tags);
   },
 
+  siteHtml(d) {
+    return this.head(d)
+      + this.row(N('ui.label_state'), d.state)
+      + this.row(N('ui.label_progress'),
+          '<span class="bar"><span class="bar-fill" style="width:' + d.progress + '%"></span></span> '
+          + d.progress + '%')
+      + this.row(N('ui.label_ground'), d.ground)
+      + this.tagsRow(d.tags);
+  },
+
+  doingText(doing) {
+    if (doing === 'walking') return N('ui.doing_walking');
+    if (doing === 'clearing') return N('ui.doing_clearing');
+    if (doing === 'building') return N('ui.doing_building');
+    return N('ui.doing_idle');
+  },
+
   /* Rule 2 made visible: the six attributes first, then every skill with the
      attributes it is derived from written next to it. */
   crawlerHtml(d) {
@@ -97,6 +132,7 @@ const Tooltip = {
     }
     h += '</span></div>';
 
+    h += this.row(N('ui.label_doing'), this.doingText(d.doing));
     h += this.row(N('ui.label_wearing'),
       d.worn.length ? d.worn.join(', ') : '<span class="tt-dim">' + N('ui.label_bare') + '</span>');
     return h + this.tagsRow(d.tags);
@@ -114,7 +150,9 @@ const Tooltip = {
       return null;
     }
 
-    this.el.innerHTML = d.kind === 'crawler' ? this.crawlerHtml(d) : this.groundHtml(d);
+    this.el.innerHTML = d.kind === 'crawler' ? this.crawlerHtml(d)
+                      : d.kind === 'site' ? this.siteHtml(d)
+                      : this.groundHtml(d);
     this.el.hidden = false;
     this.showing = idx;
 

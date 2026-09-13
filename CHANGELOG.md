@@ -7,6 +7,78 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.4.0 — rooms, halls, a camp, and a locked pixel scale
+
+Six decisions arrived at once. Five are in; the sixth is answered below.
+
+**The scale is locked at 32 pixels to the metre, and the picture is pixel
+perfect.** Zoom no longer touches the world — it changes how many real screen
+pixels one game pixel covers, by a whole number, and the picture is drawn
+smaller to match. A crawler is 52 px tall at every zoom. The camera only ever
+sits on whole pixels, which is what stops ground shimmering along an edge as the
+view slides. A test walks every zoom from 1 to 6 and fails if the camera, the
+picture size or the zoom is ever fractional, and another asserts a metre is
+exactly `render.rise` pixels before and after zooming.
+
+**Time only runs while the view is moving.** Stop scrolling and the labyrinth
+stops with you. That forced one structural change worth recording: the arrow
+keys now pan from the loop rather than from inside the simulation, because if
+the simulation moved the camera then time would wind itself forward for ever.
+
+**Every skill is one pair of the six attributes, and all fifteen pairs exist.**
+Clambering is Might+Agility, Labouring Might+Endurance, Building Might+Intellect,
+Studying Intellect+Willpower, and so on. That turns the skill list from
+something people keep adding to into a complete grid that can be checked: the
+build refuses if a pair is missing, doubled, self-paired, or drawn from anything
+but the six. Each is a family of work rather than a single action — Crafting
+covers cooking, sewing and mending. **All fifteen names are proposals in the
+spreadsheet and are meant to be argued with.**
+
+**Nothing is learned from succeeding.** `learn.gain_on_success` is 0. Failing
+teaches 2.2, only just failing teaches 3.6, succeeding teaches nothing, so a
+crawler who masters something stops dead until the labyrinth offers something
+harder. Rule 1 now has no soft edge at all.
+
+**Rooms and halls.** Solid rock with rooms cut out of it and halls dug between,
+across six levels, connected by ramps that climb a metre at a time. Two things
+here took real work and are worth not undoing:
+
+A hall takes its elevation from **every room it passes through**, not just from
+its two ends. That is why a hall can cross a third room without cutting it in
+half — the room is an anchor, not an obstacle. The first version anchored only
+the ends, and eight of nine rooms came out sealed off.
+
+And connectivity is now **measured rather than hoped for**. Halls cross each
+other and the last one dug wins, so a room can always end up walled in. The
+generator floods the place, digs again to whatever is cut off, and finally fills
+back in any room it still cannot reach — because a room nobody can walk to is
+not a room, it is a rumour, and leaving one in the list would make "every room is
+reachable" a hope instead of a fact. Forty seeds, zero rooms cut off.
+
+**The camp.** The crawlers choose the largest room they can *all* reach, walk to
+it, clear the ground and put up a fire, four bedrolls, a store and two
+windbreaks. Clearing is a Labouring roll against the floor's clearing
+difficulty; raising is a Building roll against the structure's. Nobody is told
+to do any of it. A structure grows to its real height as it goes up, so how far
+the camp has got is something you can see rather than read.
+
+**The see-through fourth wall, and a lesson about "correct but unusable".** Rock
+that stands between the camera and a floor behind it goes translucent. The rule
+falls straight out of the projection — a column of height H hides the cell k
+steps back when H ≥ h + k·(tile_h/rise) — and the first version applied it to
+every column that qualified. It was correct and the picture was unusable: most
+of the rock in view qualified, and the whole scene turned to milky haze. Fixed
+with a depth limit (only the near wall fades) and by halving the height of the
+rock. The screenshot is what caught it; no test would have.
+
+**On the Blender human base meshes.** They download fine — 48 MB, one .blend
+file holding 24 assets. They are not usable here, for reasons that are about
+what they are rather than about getting hold of them, and the argument is in the
+reply rather than buried here: they are sculpting clay, not game characters, and
+a 52-pixel-tall figure needs a readable silhouette rather than a realistic mesh.
+
+---
+
 ## v0.3.0 — the six attributes, and the first people in the labyrinth
 
 Rule 2 was answered: **Might, Agility, Endurance, Presence, Intellect,

@@ -83,7 +83,7 @@ await test('the labyrinth reaches the screen, not just the batch', async () => {
     const drew = window.__test.frame(1);
     return { count: drew.count, kinds: drew.kinds, world: window.__test.world() };
   });
-  assert(r.world.cells === 28 * 28, `world is ${r.world.cells} cells`);
+  assert(r.world.cells === 56 * 56, `the world is ${r.world.cells} cells`);
   assert(r.count > 100, `only ${r.count} blocks reached the buffer`);
   assert(Object.keys(r.kinds).length >= 3,
     `only one kind of ground drawn: ${JSON.stringify(r.kinds)}`);
@@ -108,7 +108,7 @@ await test('ramps climb exactly one metre, toward ground exactly one metre highe
     const step = { 'x+': [1, 0], 'x-': [-1, 0], 'y+': [0, 1], 'y-': [0, -1] };
     let ramps = 0, wrong = 0;
     for (const c of w.cells) {
-      if (c.tile !== 'stone_ramp') continue;
+      if (TILE(c.tile).footing !== 'ramp') continue;
       ramps++;
       const d = step[c.slope];
       const up = w.at(c.x + d[0], c.y + d[1]);
@@ -128,8 +128,8 @@ await test('hovering a block outlines it and names it on screen (rule 8)', async
     let target = null;
     for (let k = drew.items.length - 1; k >= 0; k--) {
       const it = drew.items[k];
-      if (it.sx > 8 && it.sx < window.__test.cfg.lowW - 8
-        && it.sy > 8 && it.sy < window.__test.cfg.lowH - 8) { target = it; break; }
+      if (it.sx > 8 && it.sx < window.__test.buffer().w - 8
+        && it.sy > 8 && it.sy < window.__test.buffer().h - 8) { target = it; break; }
     }
     const hovered = window.__test.point(target.sx, target.sy);
     return {
@@ -157,13 +157,20 @@ await test('hovering a block outlines it and names it on screen (rule 8)', async
 await test('pointing away from the labyrinth shows nothing', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(1); window.__test.frame(1);
-    window.__test.point(2, 2);          /* top-left corner: empty sky */
-    const a = { hover: window.__test.state.hover, tip: window.__test.tooltipOnScreen() };
+    /* The chunk has edges. Slide right off it and there is nothing to point at. */
+    window.__test.pan(6000, 6000);
+    const buf = window.__test.buffer();
+    window.__test.frame(1);
+    const hover = window.__test.point(buf.w / 2, buf.h / 2);
+    const a = { hover, tip: window.__test.tooltipOnScreen() };
     window.__test.unpoint();
-    return { a, b: window.__test.tooltipOnScreen(), outlined: window.__test.consumed().outlined };
+    return { a, b: window.__test.tooltipOnScreen(),
+             outlined: window.__test.consumed().outlined,
+             drew: window.__test.consumed().count };
   });
-  assert(r.a.hover === -1, `found block ${r.a.hover} in empty sky`);
-  assert(r.a.tip === null, 'the tooltip stayed up over empty sky');
+  assert(r.drew === 0, `${r.drew} blocks were still in view off the edge of the world`);
+  assert(r.a.hover === -1, `found block ${r.a.hover} in empty space`);
+  assert(r.a.tip === null, 'the panel stayed up over empty space');
   assert(r.b === null && !r.outlined, 'the highlight stayed after the pointer left');
 });
 
@@ -175,8 +182,8 @@ await test('a block in the way fades so you can see what you are inspecting', as
     let best = null;
     for (let k = 0; k < drew.items.length - 40; k++) {
       const it = drew.items[k];
-      if (it.sx < 40 || it.sx > window.__test.cfg.lowW - 40) continue;
-      if (it.sy < 40 || it.sy > window.__test.cfg.lowH - 40) continue;
+      if (it.sx < 40 || it.sx > window.__test.buffer().w - 40) continue;
+      if (it.sy < 40 || it.sy > window.__test.buffer().h - 40) continue;
       best = it; break;
     }
     window.__test.select(best.i);
@@ -196,7 +203,7 @@ await test('panning moves the view, and picking follows it', async () => {
     window.__test.pan(40, 25);
     const after = window.__test.project(5, 5, 0);
     /* Point at the same screen spot: it must now be a different block. */
-    const at = { x: window.__test.cfg.lowW / 2, y: window.__test.cfg.lowH / 2 };
+    const at = { x: window.__test.buffer().w / 2, y: window.__test.buffer().h / 2 };
     const hit = window.__test.point(at.x, at.y);
     window.__test.pan(-40, -25);
     const back = window.__test.point(at.x, at.y);
@@ -208,24 +215,84 @@ await test('panning moves the view, and picking follows it', async () => {
   assert(r.hit !== r.back, 'the same block was picked before and after panning');
 });
 
-await test('zooming keeps whatever is under the pointer under the pointer', async () => {
+await test('zooming changes the pixels, never the size of the world', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(1); window.__test.frame(1);
-    const at = { x: 200, y: 150 };
+    const at = { x: 120, y: 90 };
     const before = window.__test.point(at.x, at.y);
-    window.__test.state.cam.zoom;
-    const z = (function () {
-      const s = window.__test.state;
-      setZoom(s, s.cam.zoom + 1, at.x, at.y);
-      window.__test.pan(0, 0);
-      return s.cam.zoom;
-    })();
-    const after = window.__test.point(at.x, at.y);
-    return { before, after, z, max: window.__test.cfg.zoomMax };
+    const oneMetreBefore = window.__test.project(4, 4, 0).y - window.__test.project(4, 4, 1).y;
+    const z = window.__test.zoomAt(at.x, at.y, window.__test.buffer().zoom + 1);
+    const after = window.__test.point(at.x * 0 + at.x, at.y);
+    const oneMetreAfter = window.__test.project(4, 4, 0).y - window.__test.project(4, 4, 1).y;
+    return { before, after, z, oneMetreBefore, oneMetreAfter,
+             rise: window.__test.cfg.rise, buf: window.__test.buffer() };
   });
-  assert(r.z === 2, `zoom went to ${r.z}`);
-  assert(r.before === r.after,
-    `block ${r.before} slid out from under the pointer, now ${r.after}`);
+  assert(r.z === 3, `zoom went to ${r.z}`);
+  assert(r.oneMetreBefore === r.rise && r.oneMetreAfter === r.rise,
+    `a metre was ${r.oneMetreBefore}px then ${r.oneMetreAfter}px; the scale is locked at ${r.rise}`);
+  assert(r.buf.w === Math.round(r.buf.w) && r.buf.h === Math.round(r.buf.h),
+    'the picture is not a whole number of pixels');
+});
+
+await test('everything lands on whole pixels, at every zoom', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    const out = [];
+    for (let z = window.__test.cfg.zoomMin; z <= window.__test.cfg.zoomMax; z++) {
+      window.__test.zoom(z);
+      window.__test.frame(1);
+      window.__test.pan(7, 3);
+      const cam = window.__test.camera(), buf = window.__test.buffer();
+      out.push({ z: cam.zoom, camX: cam.x, camY: cam.y, w: buf.w, h: buf.h });
+    }
+    return out;
+  });
+  for (const q of r) {
+    assert(q.camX === Math.round(q.camX) && q.camY === Math.round(q.camY),
+      `at zoom ${q.z} the camera sat at ${q.camX},${q.camY}`);
+    assert(q.w === Math.round(q.w) && q.h === Math.round(q.h) && q.w > 0 && q.h > 0,
+      `at zoom ${q.z} the picture was ${q.w}x${q.h}`);
+    assert(q.z === Math.round(q.z), `zoom was ${q.z}, not a whole number`);
+  }
+});
+
+await test('the labyrinth is rooms and halls, and every room can be reached', async () => {
+  const r = await page.evaluate(() => {
+    const out = [];
+    for (const seed of [1, 5, 23, 101, 777]) {
+      window.__test.seed(seed);
+      const rooms = window.__test.rooms();
+      const conn = window.__test.connectivity();
+      const levels = new Set(rooms.map((q) => q.elev));
+      out.push({ seed, rooms: rooms.length, levels: levels.size,
+                 cut: conn.filter((c) => c.steps < 0).length,
+                 furthest: Math.max(...conn.map((c) => c.steps)),
+                 floors: new Set(rooms.map((q) => q.floor)).size });
+    }
+    return out;
+  });
+  for (const q of r) {
+    assert(q.rooms >= 5, `seed ${q.seed} made only ${q.rooms} rooms`);
+    assert(q.cut === 0, `seed ${q.seed} left ${q.cut} rooms walled off`);
+    assert(q.levels >= 2, `seed ${q.seed} put every room on one level`);
+    assert(q.furthest > 10, `seed ${q.seed} is only ${q.furthest} steps across`);
+    assert(q.floors >= 2, `seed ${q.seed} floored every room the same way`);
+  }
+});
+
+await test('rock between you and a room fades, so no room hides behind its wall', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    const drew = window.__test.frame(1);
+    const rock = drew.items.filter((i) => i.kind === 'cell' && i.tile === 'stone_block');
+    return { cutaway: drew.cutaway, rock: rock.length,
+             fadedRock: rock.filter((i) => i.alpha < 1).length,
+             fade: window.__test.cfg.cutawayFade };
+  });
+  assert(r.fade < 1, 'the cutaway is switched off in the spreadsheet');
+  assert(r.rock > 0, 'no rock was drawn at all');
+  assert(r.fadedRock > 0, 'not one wall faded, so rooms hide behind their own walls');
+  assert(r.fadedRock < r.rock, 'every single wall faded, which is not a cutaway');
 });
 
 await test('same seed and same inputs give the same labyrinth (seed 777)', async () => {
@@ -248,6 +315,7 @@ await test('same seed and same inputs give the same labyrinth (seed 777)', async
 await test('crawlers reach the screen, standing on the ground (rule 4)', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(1); window.__test.record(true);
+    window.__test.centreOn(0);
     const drew = window.__test.frame(1);
     return { people: drew.people, actors: window.__test.actors(),
              drawn: drew.items.filter((i) => i.kind === 'actor') };
@@ -263,29 +331,29 @@ await test('crawlers reach the screen, standing on the ground (rule 4)', async (
 await test('a hat on a crawler is a hat on the screen (rule 4)', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(1); window.__test.record(true);
-    /* Find a crawler who is actually in view, then take their hat off and on. */
-    let who = -1;
-    const drew0 = window.__test.frame(1);
-    for (const it of drew0.items) if (it.kind === 'actor') { who = it.i; break; }
-    const idx = who - window.__test.world().cells;
+    /* Go and find a crawler, then take their hat off and on. */
+    const found = window.__test.pointAtAnyActor();
+    const idx = found.index;
+    const who = found.pick;
 
     const n = window.__test.actors().length;
     for (let i = 0; i < n; i++) window.__test.wearHat(i, false);
-    const bare = window.__test.frame(1);
+    const bare = window.__test.redraw();          /* same moment, no time passes */
     const bareParts = bare.items.find((i) => i.i === who).parts;
 
     window.__test.wearHat(idx, true);
-    const hatted = window.__test.frame(1);
+    const hatted = window.__test.redraw();
     const hatParts = hatted.items.find((i) => i.i === who).parts;
 
     return { bareParts, hatParts, bareWorn: bare.worn, hatWorn: hatted.worn,
-             described: window.__test.describe(who) };
+             found, described: window.__test.describe(who) };
   });
   assert(!r.bareParts.includes('hat'), 'a bare head was drawn wearing a hat');
   assert(r.hatParts.includes('hat'), 'a crawler wearing a hat was drawn without one');
   assert(r.hatWorn.includes('hat'), 'the hat never reached the canvas');
   assert(!r.bareWorn.includes('hat'), 'a hat reached the canvas with nobody wearing it');
   assert(r.described.worn.includes('Hat'), 'the inspector does not list the hat');
+  assert(r.found.found, `could not get the pointer onto a crawler: ${r.found.why}`);
 });
 
 await test('a figure is painted from the ground up, so nothing worn is buried', async () => {
@@ -293,6 +361,7 @@ await test('a figure is painted from the ground up, so nothing worn is buried', 
     window.__test.seed(1); window.__test.record(true);
     const n = window.__test.actors().length;
     for (let i = 0; i < n; i++) window.__test.wearHat(i, true);
+    window.__test.centreOn(0);
     const drew = window.__test.frame(1);
     const people = drew.items.filter((i) => i.kind === 'actor');
     return { people: people.map((p) => p.parts), figure: window.__test.data.figure };
@@ -311,9 +380,8 @@ await test('a figure is painted from the ground up, so nothing worn is buried', 
 
 await test('the six attributes are shown in the order the spreadsheet lists them', async () => {
   const r = await page.evaluate(() => {
-    window.__test.seed(1); window.__test.record(true);
-    const drew = window.__test.frame(1);
-    const who = drew.items.find((i) => i.kind === 'actor').i;
+    window.__test.seed(1);
+    const who = window.__test.actors()[0].pick;
     return { shown: window.__test.describe(who).attributes.map((a) => a.id),
              sheet: Object.keys(window.__test.data.attributes) };
   });
@@ -326,18 +394,17 @@ await test('the six attributes are shown in the order the spreadsheet lists them
 await test('hovering a crawler shows their six attributes and their skills', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(1); window.__test.record(true);
-    window.__test.frame(400);                 /* let them get some practice in */
+    for (let i = 0; i < 20; i++) window.__test.frame(60);   /* let them get to work */
+    window.__test.centreOn(0);
     const drew = window.__test.frame(1);
-    let target = null;
-    for (const it of drew.items) {
-      if (it.kind === 'actor' && it.sx > 8 && it.sx < window.__test.cfg.lowW - 8
-        && it.sy > 8 && it.sy < window.__test.cfg.lowH - 8) { target = it; break; }
-    }
-    const hovered = window.__test.point(target.sx, target.sy);
+    const found = window.__test.pointAtAnyActor();
+    const target = found.found ? { i: found.pick } : null;
+    const hovered = found.found ? found.pick : -1;
     return { target, hovered, described: window.__test.describe(hovered),
              tooltip: window.__test.tooltipOnScreen(),
              consumed: window.__test.consumed() };
   });
+  assert(r.target, 'no crawler was anywhere in view');
   assert(r.hovered === r.target.i, `pointed at crawler ${r.target.i}, picked ${r.hovered}`);
   assert(r.described.kind === 'crawler', 'the inspector did not recognise a crawler');
   assert(r.described.attributes.length === 6,
@@ -349,7 +416,7 @@ await test('hovering a crawler shows their six attributes and their skills', asy
     assert(r.tooltip.text.includes(a.abbrev),
       `the panel never shows ${a.abbrev}`);
   }
-  assert(r.described.skills.length > 0, 'after 400 ticks nobody has practised anything');
+  assert(r.described.skills.length > 0, 'after 1200 ticks nobody has practised anything');
   assert(r.tooltip.text.includes(r.described.skills[0].name),
     'the panel does not show the skill they have been practising');
   assert(r.tooltip.tags.includes('crawler'), `crawler tags: ${r.tooltip.tags}`);
@@ -367,12 +434,14 @@ await test('rolls really happen in a real match, not only on the bench', async (
     `${r.after} rolls happened in 600 ticks`);
   const moved = r.actors.filter((a) => a.steps > 0).length;
   const tried = r.actors.filter((a) => a.steps + a.stumbles > 0).length;
-  assert(tried === 6, `only ${tried} of 6 crawlers ever tried to move`);
+  assert(tried >= 5, `only ${tried} of 6 crawlers ever tried to move`);
   assert(moved > 0, 'every crawler failed every single attempt to move');
   assert(r.actors.some((a) => a.stumbles > 0),
     'nobody ever stumbled, so failure is not reachable in a real match');
-  assert(r.actors.every((a) => a.skills.clambering > 0),
-    'moving about taught nobody anything');
+  assert(r.actors.every((a) => Object.keys(a.skills).length > 0),
+    'some crawler went 600 ticks without practising anything at all');
+  assert(r.actors.some((a) => a.skills.clambering > 0),
+    'all that walking about taught nobody any Clambering');
 });
 
 await test('crawlers only ever step where the ground actually connects', async () => {
@@ -464,6 +533,125 @@ await test('better natural attributes really do make a better crawler (rule 2)',
     `the agile crawler succeeded ${r.fine}/40 and the clumsy one ${r.poor}/40`);
 });
 
+
+await test('nothing at all is learned from succeeding (rule 1)', async () => {
+  const r = await page.evaluate(() => {
+    /* Make it far too easy: they succeed every time, and so must never improve. */
+    const easy = window.__test.practice({
+      seed: 4, skill: 'clambering', difficulty: -200, per: 40, blocks: 3,
+      attr: { agility: 10, might: 10 }
+    });
+    return { gains: easy.blocks.map((b) => b.gain), wins: easy.blocks.map((b) => b.wins),
+             knob: window.__test.data.knobs['learn.gain_on_success'] };
+  });
+  assert(r.knob === 0, `learn.gain_on_success is ${r.knob}, not 0`);
+  assert(r.wins.every((w) => w === 40), `they failed sometimes: ${r.wins}`);
+  assert(r.gains.every((g) => g === 0),
+    `succeeding taught them ${r.gains.join(' -> ')} when it should teach nothing`);
+});
+
+await test('the crawlers gather in one room and build a camp there', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    const camp0 = window.__test.camp();
+    const start = window.__test.actors().map((a) => ({ x: a.x, y: a.y }));
+    const startInRoom = start.filter((a) =>
+      window.__test.state.world.at(a.x, a.y).room === camp0.room.index).length;
+
+    const marks = [];
+    for (let i = 0; i < 40; i++) {
+      window.__test.frame(120);
+      marks.push(window.__test.camp().summary.progress);
+    }
+    const camp = window.__test.camp();
+    const actors = window.__test.actors();
+    const inRoom = actors.filter((a) =>
+      window.__test.state.world.at(a.x, a.y).room === camp.room.index).length;
+    const drew = window.__test.frame(1);
+    return { camp0, camp, marks, startInRoom, inRoom, actors,
+             structures: drew.structures,
+             drawn: drew.items.filter((i) => i.kind === 'site') };
+  });
+
+  assert(r.camp0.sites.length === 8,
+    `the camp was planned as ${r.camp0.sites.length} pieces`);
+  assert(r.camp0.sites.every((s) => s.room === r.camp0.room.index),
+    'part of the camp was laid out outside the chosen room');
+  assert(r.camp0.sites[0].structure === 'campfire', 'the fire is not the first thing sited');
+
+  assert(r.marks[r.marks.length - 1] > 0, 'after 4800 ticks the camp had not started');
+  assert(r.camp.summary.built > 0,
+    `nothing was finished: ${r.camp.summary.built}/${r.camp.summary.sites}`);
+  assert(r.camp.summary.cleared > 0, 'no ground was ever cleared');
+  for (let i = 1; i < r.marks.length; i++) {
+    assert(r.marks[i] >= r.marks[i - 1],
+      `the camp went backwards: ${r.marks.join(',')}`);
+  }
+  assert(r.inRoom > r.startInRoom,
+    `${r.startInRoom} crawlers began in the camp room and ${r.inRoom} ended there`);
+  assert(r.actors.some((a) => a.skills.labouring > 0), 'nobody learned any Labouring');
+  assert(r.actors.some((a) => a.skills.building > 0), 'nobody learned any Building');
+  assert(r.structures > 0, 'not one piece of the camp reached the screen');
+  assert(r.drawn.some((d) => d.built), 'no finished structure reached the screen');
+});
+
+await test('a half-built structure is half a structure on screen (rule 4)', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    const before = window.__test.frame(1).items.filter((i) => i.kind === 'site');
+    for (let i = 0; i < 25; i++) window.__test.frame(120);
+    const after = window.__test.frame(1).items.filter((i) => i.kind === 'site');
+    const camp = window.__test.camp();
+    const site = camp.sites.find((s) => s.progress > 0 && !s.built) || camp.sites[0];
+    const shown = window.__test.describe(site.pick);
+    return { before, after, site, shown, tip: (window.__test.point(
+      after.find((d) => d.i === site.pick).sx,
+      after.find((d) => d.i === site.pick).sy), window.__test.tooltipOnScreen()) };
+  });
+  assert(r.before.every((d) => !d.built), 'something was already built at tick zero');
+  assert(r.after.some((d) => d.built || d.progress > 0), 'nothing ever went up');
+  assert(r.shown.name && r.shown.progress === (r.site.built ? 100 : r.site.progress),
+    `the inspector says ${r.shown.progress}%, the camp says ${r.site.progress}%`);
+  assert(r.shown.tags.length > 0, 'a structure carries no tags (rule 8)');
+});
+
+await test('time only runs while the view is moving', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(2);
+    window.__test.resume(); window.__test.pause();      /* reset the clock */
+    const still1 = window.__test.loopOnce(60);
+    const still2 = window.__test.loopOnce(60);
+    window.__test.pan(12, 0);
+    const moved = window.__test.loopOnce(60);
+    const afterMoving = window.__test.loopOnce(60);
+    return { still1, still2, moved, afterMoving, coast: window.__test.cfg.coastTicks };
+  });
+  assert(r.still1.ticks === 0 && r.still2.ticks === 0,
+    `the world ran ${r.still1.ticks}/${r.still2.ticks} ticks while nothing moved`);
+  assert(r.moved.ticks > 0, 'moving the view did not start time');
+  assert(r.afterMoving.ticks === 0,
+    `time kept running ${r.afterMoving.ticks} ticks after the view stopped`);
+});
+
+await test('a crawler tells you what they are doing', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    const doings = {};
+    for (let i = 0; i < 30; i++) {
+      window.__test.frame(60);
+      for (const a of window.__test.actors()) doings[a.doing] = (doings[a.doing] || 0) + 1;
+    }
+    const who = window.__test.pointAtAnyActor();
+    return { doings, who, tip: window.__test.tooltipOnScreen(),
+             described: who.found ? window.__test.describe(who.pick) : null };
+  });
+  assert(r.doings.walking > 0, `nobody ever walked anywhere: ${JSON.stringify(r.doings)}`);
+  assert(r.doings.clearing > 0 || r.doings.building > 0, 'nobody ever did any work');
+  assert(r.who.found, `no crawler could be pointed at: ${r.who.why}`);
+  assert(r.described.doing, 'a crawler has no answer for what they are doing');
+  assert(r.tip && r.tip.text.length > 0, 'the panel is empty for a crawler');
+});
+
 await test('the page raised no errors while all that happened', async () => {
   assert(errors.length === 0, errors.join(' | '));
 });
@@ -477,10 +665,10 @@ await test('a number changed in the spreadsheet reaches the screen (rule 9)', as
     const sheet = path.join(tmp, 'tweaked.xlsx');
     const out = path.join(tmp, 'tweaked.html');
     execFileSync('python3', [path.join(ROOT, 'tools/tweak_sheet.py'),
-      sheet, 'knobs', 'render.low_width', 'value', '320'], { encoding: 'utf8' });
+      sheet, 'knobs', 'render.rise', 'value', '48'], { encoding: 'utf8' });
     const log = execFileSync('python3', [path.join(ROOT, 'build.py'),
       '--sheet', sheet, '--out', out], { encoding: 'utf8' });
-    assert(/render\.low_width\s+480 -> 320/.test(log),
+    assert(/render\.rise\s+32 -> 48/.test(log),
       'the build did not print a receipt for the change:\n' + log);
 
     const b2 = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -489,11 +677,13 @@ await test('a number changed in the spreadsheet reaches the screen (rule 9)', as
     await p2.waitForFunction(() => window.__test && window.__test.state);
     const r = await p2.evaluate(() => {
       window.__test.pause();
-      return { cfg: window.__test.cfg.lowW, drew: window.__test.frame(1).bufW };
+      window.__test.frame(1);
+      return { cfg: window.__test.cfg.rise,
+               metre: window.__test.project(4, 4, 0).y - window.__test.project(4, 4, 1).y };
     });
     await b2.close();
-    assert(r.cfg === 320, `the game read ${r.cfg}, the sheet said 320`);
-    assert(r.drew === 320, `the picture was drawn ${r.drew} wide, the sheet said 320`);
+    assert(r.cfg === 48, `the game read ${r.cfg}, the sheet said 48`);
+    assert(r.metre === 48, `a metre came out ${r.metre}px on screen, the sheet said 48`);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

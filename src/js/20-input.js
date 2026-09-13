@@ -75,7 +75,7 @@ function bindInput(state, canvas, toBuffer) {
 
   canvas.addEventListener('wheel', (e) => {
     const b = toBuffer(e.clientX, e.clientY);
-    setZoom(state, state.cam.zoom + (e.deltaY < 0 ? 1 : -1), b.x, b.y);
+    setZoom(state, state.cam.zoom + (e.deltaY < 0 ? 1 : -1), b.screenX, b.screenY);
     e.preventDefault();
   }, { passive: false });
 

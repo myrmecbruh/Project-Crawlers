@@ -1,42 +1,50 @@
-/* The isometric view.
+/* The isometric view, drawn pixel for pixel.
  *
- * Everything is drawn into a small buffer (480x270 by default) and then blown
- * up with hard pixel edges, which is what gives 3D geometry the look of 2D
- * sprite work. Nothing here is sprites -- these are real blocks with real
- * elevation, projected.
+ * THE SCALE IS LOCKED: one metre of height is render.rise game pixels, always.
+ * Zooming does not make the world bigger -- it makes each game pixel cover more
+ * real screen pixels, by a whole number, and the picture is drawn smaller to
+ * match. So every edge lands on a whole pixel at every zoom, and a crawler is
+ * the same 52 pixels tall whether you are close in or far out.
  *
  * A builder with no consumer looks exactly like working code. So build() fills
  * `batch`, draw() paints it AND records `consumed` -- what actually reached the
  * buffer -- and every test asserts against `consumed`, never against `batch`.
  */
 const Render = {
-  buf: null, bctx: null,       /* the low-resolution picture              */
-  pick: null, pctx: null,      /* the same scene painted in id colours    */
+  w: 0, h: 0,                  /* the picture, in game pixels              */
+  buf: null, bctx: null,
+  pick: null, pctx: null,
   batch: [],
   consumed: null,
   recordItems: false,
 
-  ensure() {
-    if (this.buf) return;
-    this.buf = document.createElement('canvas');
-    this.buf.width = CFG.lowW; this.buf.height = CFG.lowH;
-    this.bctx = this.buf.getContext('2d', { alpha: false });
-    this.pick = document.createElement('canvas');
-    this.pick.width = CFG.lowW; this.pick.height = CFG.lowH;
-    this.pctx = this.pick.getContext('2d', { alpha: false, willReadFrequently: true });
+  resize(w, h) {
+    w = Math.max(64, Math.round(w));
+    h = Math.max(48, Math.round(h));
+    if (this.buf && this.w === w && this.h === h) return false;
+    this.w = w; this.h = h;
+    if (!this.buf) {
+      this.buf = document.createElement('canvas');
+      this.pick = document.createElement('canvas');
+      this.bctx = this.buf.getContext('2d', { alpha: false });
+      this.pctx = this.pick.getContext('2d', { alpha: false, willReadFrequently: true });
+    }
+    this.buf.width = w; this.buf.height = h;
+    this.pick.width = w; this.pick.height = h;
+    return true;
   },
 
-  /* Grid corner (gxx, gyy) at elevation h metres -> buffer pixels. */
+  ensure() { if (!this.buf) this.resize(CFG.maxBufW, CFG.maxBufH); },
+
+  /* Grid corner (gxx, gyy) at elevation h metres -> game pixels.
+     No zoom term anywhere: the world has exactly one size. */
   project(s, gxx, gyy, h) {
-    const z = s.cam.zoom;
     return {
-      x: (gxx - gyy) * (CFG.tileW / 2) * z - s.cam.x + CFG.lowW / 2,
-      y: (gxx + gyy) * (CFG.tileH / 2) * z - h * CFG.rise * z - s.cam.y + CFG.lowH / 2
+      x: (gxx - gyy) * (CFG.tileW / 2) - s.cam.x + this.w / 2,
+      y: (gxx + gyy) * (CFG.tileH / 2) - h * CFG.rise - s.cam.y + this.h / 2
     };
   },
 
-  /* An upright box measured in metres, centred on a point in the grid. Used for
-     everything that stands on the ground rather than being the ground. */
   box(s, gx, gy, half, z0, z1) {
     const o = [[-half, -half], [half, -half], [half, half], [-half, half]];
     const top = new Array(4), bot = new Array(4);
@@ -44,15 +52,13 @@ const Render = {
       top[c] = this.project(s, gx + o[c][0], gy + o[c][1], z1);
       bot[c] = this.project(s, gx + o[c][0], gy + o[c][1], z0);
     }
-    return {
-      top: top,
-      right: [top[1], top[2], bot[2], bot[1]],
-      left: [top[2], top[3], bot[3], bot[2]]
-    };
+    return { top: top,
+             right: [top[1], top[2], bot[2], bot[1]],
+             left: [top[2], top[3], bot[3], bot[2]] };
   },
 
-  /* Which parts of a figure are actually on this crawler right now. Rule 4: a
-     part that is worn is a part that is drawn, and there is no other path. */
+  /* Which parts of a figure are on this crawler right now. Rule 4: a part that
+     is worn is a part that is drawn, and there is no other path to the screen. */
   figureParts(actor) {
     const out = [];
     for (let i = 0; i < FIGURE_IDS.length; i++) {
@@ -65,20 +71,38 @@ const Render = {
     return out;
   },
 
+  bounds(pts, box) {
+    for (let c = 0; c < pts.length; c++) {
+      if (pts[c].x < box[0]) box[0] = pts[c].x;
+      if (pts[c].y < box[1]) box[1] = pts[c].y;
+      if (pts[c].x > box[2]) box[2] = pts[c].x;
+      if (pts[c].y > box[3]) box[3] = pts[c].y;
+    }
+    return box;
+  },
+
   /* Painter's order for a heightfield is simply back to front: x + y ascending.
      Two cells on the same diagonal never overlap, so their order is free.
-     A crawler is painted directly after the ground they are standing on, so
-     they are hidden by whatever is in front of that ground and nothing else. */
+     Crawlers and structures are painted directly after the ground they stand
+     on, so they are hidden by what is in front of that ground and nothing else. */
   build(s) {
     const w = s.world, n = w.n, b = this.batch;
+    this.ensure();
     b.length = 0;
 
-    const standing = {};
+    const standing = {}, sited = {};
     for (let i = 0; i < s.actors.length; i++) {
-      const a = s.actors[i];
-      const key = a.y * n + a.x;
+      const a = s.actors[i], key = a.y * n + a.x;
       (standing[key] || (standing[key] = [])).push(i);
     }
+    if (s.camp) {
+      for (let i = 0; i < s.camp.sites.length; i++) {
+        const st = s.camp.sites[i], key = st.y * n + st.x;
+        (sited[key] || (sited[key] = [])).push(i);
+      }
+    }
+
+    const scale = CFG.actorHeight / CFG.figureNominal;
 
     for (let d = 0; d <= 2 * (n - 1); d++) {
       const x0 = Math.max(0, d - n + 1), x1 = Math.min(n - 1, d);
@@ -88,62 +112,75 @@ const Render = {
         const cell = w.cells[i];
 
         const top = new Array(4);
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        const box = [Infinity, Infinity, -Infinity, -Infinity];
         for (let c = 0; c < 4; c++) {
-          const p = this.project(s, x + CORNERS[c][0], y + CORNERS[c][1],
-                                 cornerHeight(cell, c));
-          top[c] = p;
-          if (p.x < minX) minX = p.x;
-          if (p.x > maxX) maxX = p.x;
-          if (p.y < minY) minY = p.y;
-          if (p.y > maxY) maxY = p.y;
+          top[c] = this.project(s, x + CORNERS[c][0], y + CORNERS[c][1],
+                                cornerHeight(cell, c));
         }
-        /* The sides fall from the two lower edges of the diamond to the floor. */
+        this.bounds(top, box);
         const baseB = this.project(s, x + 1, y, 0);
         const baseC = this.project(s, x + 1, y + 1, 0);
         const baseD = this.project(s, x, y + 1, 0);
-        if (baseC.y > maxY) maxY = baseC.y;
+        if (baseC.y > box[3]) box[3] = baseC.y;
 
-        if (maxX < 0 || minX > CFG.lowW || maxY < 0 || minY > CFG.lowH) continue;
+        const onScreen = !(box[2] < 0 || box[0] > this.w || box[3] < 0 || box[1] > this.h);
+        if (onScreen) {
+          b.push({
+            kind: 'cell', i: i, cell: cell, top: top,
+            right: [top[1], top[2], baseC, baseB],
+            left: [top[2], top[3], baseD, baseC],
+            solid: cell.h > 0,
+            cutaway: cell.cutaway === true,
+            minX: box[0], minY: box[1], maxX: box[2], maxY: box[3],
+            cx: (top[0].x + top[2].x) / 2, cy: (top[0].y + top[2].y) / 2
+          });
+        }
 
-        b.push({
-          kind: 'cell',
-          i: i, cell: cell, top: top,
-          right: [top[1], top[2], baseC, baseB],
-          left: [top[2], top[3], baseD, baseC],
-          solid: cell.h > 0,
-          minX: minX, minY: minY, maxX: maxX, maxY: maxY,
-          cx: (top[0].x + top[2].x) / 2, cy: (top[0].y + top[2].y) / 2
-        });
-
-        const here = standing[i];
-        if (!here) continue;
         const ground = surfaceHeight(cell);
-        const scale = CFG.actorHeight / CFG.figureNominal;
-        for (let q = 0; q < here.length; q++) {
-          const actor = s.actors[here[q]];
+
+        const here = sited[i];
+        if (here) {
+          for (let q = 0; q < here.length; q++) {
+            const site = s.camp.sites[here[q]];
+            const def = STRUCT(site.structure);
+            /* An unfinished site is a marked-out plate; a finished one stands
+               its full height; one part-way up stands part-way up, so how far
+               the camp has got is something you can see rather than read. */
+            const frac = site.built ? 1 : site.progress / 100;
+            const zTop = ground + Math.max(0.05, def.height_m * frac);
+            const shape = this.box(s, x + 0.5, y + 0.5, def.half_width, ground, zTop);
+            const sbox = this.bounds(shape.top, [Infinity, Infinity, -Infinity, -Infinity]);
+            if (sbox[2] < 0 || sbox[0] > this.w || sbox[3] + CFG.rise < 0 || sbox[1] > this.h) continue;
+            b.push({
+              kind: 'site', i: w.cells.length + s.actors.length + here[q],
+              site: site, shape: shape, solid: true,
+              minX: sbox[0], minY: sbox[1], maxX: sbox[2], maxY: sbox[3] + CFG.rise,
+              cx: (shape.top[0].x + shape.top[2].x) / 2,
+              cy: (shape.top[0].y + shape.top[2].y) / 2
+            });
+          }
+        }
+
+        const people = standing[i];
+        if (!people) continue;
+        for (let q = 0; q < people.length; q++) {
+          const actor = s.actors[people[q]];
           const parts = this.figureParts(actor);
           const drawn = [];
-          let aMinX = Infinity, aMinY = Infinity, aMaxX = -Infinity, aMaxY = -Infinity;
+          const abox = [Infinity, Infinity, -Infinity, -Infinity];
           for (let r = 0; r < parts.length; r++) {
             const f = parts[r].part;
             const shape = this.box(s, x + 0.5, y + 0.5, f.half_width,
                                    ground + f.from_m * scale, ground + f.to_m * scale);
             drawn.push({ id: parts[r].id, colour: f.colour, shape: shape });
-            for (let c = 0; c < 4; c++) {
-              const t = shape.top[c];
-              if (t.x < aMinX) aMinX = t.x;
-              if (t.x > aMaxX) aMaxX = t.x;
-              if (t.y < aMinY) aMinY = t.y;
-              if (t.y > aMaxY) aMaxY = t.y;
-            }
+            this.bounds(shape.top, abox);
           }
+          if (abox[2] < 0 || abox[0] > this.w || abox[3] + CFG.rise < 0 || abox[1] > this.h) continue;
           const crown = drawn[drawn.length - 1].shape.top;
           b.push({
-            kind: 'actor',
-            i: w.cells.length + here[q],
+            kind: 'actor', i: w.cells.length + people[q],
             actor: actor, parts: drawn, top: crown, solid: true,
-            minX: aMinX, minY: aMinY, maxX: aMaxX, maxY: aMaxY + CFG.rise,
+            minX: abox[0], minY: abox[1], maxX: abox[2], maxY: abox[3] + CFG.rise,
             cx: (crown[0].x + crown[2].x) / 2, cy: (crown[0].y + crown[2].y) / 2
           });
         }
@@ -162,9 +199,16 @@ const Render = {
     ctx.fill();
   },
 
-  /* Is this block standing between the camera and the cell being inspected?
-     Anything drawn later than the focus cell that covers it is in the way --
-     that is the see-through fourth wall, and it is a knob, not a law. */
+  outline(ctx, pts, colour) {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let c = 1; c < pts.length; c++) ctx.lineTo(pts[c].x, pts[c].y);
+    ctx.closePath();
+    ctx.stroke();
+  },
+
   occludes(item, focus) {
     return item.i !== focus.i
       && item.minX < focus.maxX && item.maxX > focus.minX
@@ -175,11 +219,12 @@ const Render = {
     this.ensure();
     const ctx = this.bctx, b = this.batch;
     const kinds = {};
-    let drawn = 0, faded = 0;
+    let drawn = 0, faded = 0, people = 0, structures = 0, cutaway = 0;
+    const wornDrawn = [];
 
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#0a0d11';
-    ctx.fillRect(0, 0, CFG.lowW, CFG.lowH);
+    ctx.fillStyle = '#06080b';
+    ctx.fillRect(0, 0, this.w, this.h);
 
     const focusIdx = s.hover >= 0 ? s.hover : s.selected;
     let focus = null, focusPos = -1;
@@ -191,15 +236,16 @@ const Render = {
 
     const items = this.recordItems ? [] : null;
 
-    let people = 0;
-    const wornDrawn = [];
-
     for (let k = 0; k < b.length; k++) {
       const it = b[k];
 
       let alpha = 1;
+      /* The see-through fourth wall: rock standing between you and a floor
+         behind it goes translucent, so a room is never hidden by its own
+         near wall. */
+      if (it.kind === 'cell' && it.cutaway) { alpha = CFG.cutawayFade; cutaway++; }
       if (focus && k > focusPos && this.occludes(it, focus)) {
-        alpha = CFG.occluderFade;
+        alpha = Math.min(alpha, CFG.occluderFade);
         faded++;
       }
       ctx.globalAlpha = alpha;
@@ -209,15 +255,32 @@ const Render = {
           const pt = it.parts[r];
           this.poly(ctx, pt.shape.left, shade(pt.colour, CFG.shadeLeft));
           this.poly(ctx, pt.shape.right, shade(pt.colour, CFG.shadeRight));
-          this.poly(ctx, pt.shape.top, shade(pt.colour, 1));
+          this.poly(ctx, pt.shape.top, pt.colour);
           if (DATA.figure[pt.id].slot !== 'body') wornDrawn.push(pt.id);
         }
-        people++;
-        drawn++;
+        people++; drawn++;
         if (items) {
           items.push({ i: it.i, kind: 'actor', name: it.actor.name,
-                       x: it.actor.x, y: it.actor.y,
+                       x: it.actor.x, y: it.actor.y, doing: it.actor.doing,
                        parts: it.parts.map(function (q) { return q.id; }),
+                       alpha: alpha, sx: it.cx, sy: it.cy });
+        }
+        continue;
+      }
+
+      if (it.kind === 'site') {
+        const def = STRUCT(it.site.structure);
+        const done = it.site.built;
+        const col = done ? def.colour : shade(def.colour, 0.45);
+        this.poly(ctx, it.shape.left, shade(col, CFG.shadeLeft));
+        this.poly(ctx, it.shape.right, shade(col, CFG.shadeRight));
+        this.poly(ctx, it.shape.top, col);
+        if (!done) this.outline(ctx, it.shape.top, 'rgba(255,233,168,0.35)');
+        structures++; drawn++;
+        if (items) {
+          items.push({ i: it.i, kind: 'site', structure: it.site.structure,
+                       x: it.site.x, y: it.site.y, built: done,
+                       progress: it.site.progress, cleared: it.site.cleared,
                        alpha: alpha, sx: it.cx, sy: it.cy });
         }
         continue;
@@ -235,46 +298,40 @@ const Render = {
       drawn++;
       if (items) {
         items.push({ i: it.i, kind: 'cell', x: it.cell.x, y: it.cell.y, h: it.cell.h,
-                     tile: it.cell.tile, slope: it.cell.slope,
+                     tile: it.cell.tile, slope: it.cell.slope, cutaway: it.cutaway,
                      alpha: alpha, sx: it.cx, sy: it.cy });
       }
     }
 
-    /* The outline highlight. Rule 8: anything you can see, you can interrogate. */
     ctx.globalAlpha = 1;
     let outlined = false;
     if (focus) {
-      ctx.strokeStyle = '#ffe9a8';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(focus.top[0].x, focus.top[0].y);
-      for (let c = 1; c < 4; c++) ctx.lineTo(focus.top[c].x, focus.top[c].y);
-      ctx.closePath();
-      ctx.stroke();
+      this.outline(ctx, focus.kind === 'site' ? focus.shape.top : focus.top, '#ffe9a8');
       outlined = true;
     }
 
     this.consumed = {
       tick: s.tick, count: drawn, kinds: kinds,
-      people: people, worn: wornDrawn,
-      faded: faded, outlined: outlined,
+      people: people, structures: structures, worn: wornDrawn,
+      faded: faded, cutaway: cutaway, outlined: outlined,
       focus: focusIdx, zoom: s.cam.zoom,
-      bufW: this.buf.width, bufH: this.buf.height
+      bufW: this.w, bufH: this.h
     };
     if (items) this.consumed.items = items;
     s.viewDirty = false;
     return this.consumed;
   },
 
-  /* The same scene, painted flat in id colours. Reading one pixel of it tells
-     you exactly what the player is pointing at, elevation and ramps included --
-     which is the only way to be honest about "anything you can SEE". */
+  /* The same scene painted flat in identity colours. Reading one pixel of it
+     says exactly what the player is pointing at -- elevation, ramps, crawlers
+     and half-built structures included. The only honest answer to "anything you
+     can SEE" (rule 8). */
   drawPick(s) {
     this.ensure();
     const ctx = this.pctx, b = this.batch;
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, CFG.lowW, CFG.lowH);
+    ctx.fillRect(0, 0, this.w, this.h);
     for (let k = 0; k < b.length; k++) {
       const it = b[k];
       const id = it.i + 1;
@@ -287,24 +344,36 @@ const Render = {
         }
         continue;
       }
+      if (it.kind === 'site') {
+        this.poly(ctx, it.shape.left, col);
+        this.poly(ctx, it.shape.right, col);
+        this.poly(ctx, it.shape.top, col);
+        continue;
+      }
       if (it.solid) { this.poly(ctx, it.left, col); this.poly(ctx, it.right, col); }
       this.poly(ctx, it.top, col);
     }
     return b.length;
   },
 
-  /* Pick numbers run cells first, then crawlers, so one number identifies
-     anything on screen. */
-  isActorPick(s, p) { return p >= s.world.cells.length; },
-  actorFromPick(s, p) { return s.actors[p - s.world.cells.length]; },
+  /* Pick numbers run cells, then crawlers, then camp sites, so one number
+     identifies anything on screen. */
+  actorBase(s) { return s.world.cells.length; },
+  siteBase(s) { return s.world.cells.length + s.actors.length; },
+  isActorPick(s, p) { return p >= this.actorBase(s) && p < this.siteBase(s); },
+  isSitePick(s, p) { return p >= this.siteBase(s); },
+  actorFromPick(s, p) { return s.actors[p - this.actorBase(s)]; },
+  siteFromPick(s, p) { return s.camp ? s.camp.sites[p - this.siteBase(s)] : null; },
 
   pickAt(s, bx, by) {
     if (!this.pick) return -1;
     const x = Math.floor(bx), y = Math.floor(by);
-    if (x < 0 || y < 0 || x >= CFG.lowW || y >= CFG.lowH) return -1;
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return -1;
     const d = this.pctx.getImageData(x, y, 1, 1).data;
     const id = d[0] + d[1] * 256 + d[2] * 65536;
-    if (id < 1 || id > s.world.cells.length + s.actors.length) return -1;
+    const max = s.world.cells.length + s.actors.length
+              + (s.camp ? s.camp.sites.length : 0);
+    if (id < 1 || id > max) return -1;
     return id - 1;
   }
 };

@@ -44,13 +44,17 @@ function SKILL(id) {
 const ATTRIBUTE_IDS = Object.keys(DATA.attributes);
 const SKILL_IDS = Object.keys(DATA.skills);
 const FIGURE_IDS = Object.keys(DATA.figure);
+const STRUCTURE_IDS = Object.keys(DATA.structures);
+function STRUCT(id) {
+  const s = DATA.structures[id];
+  if (!s) throw new Error('unknown structure: ' + id);
+  return s;
+}
 
 /* Named locals for everything read every frame. A stride is a name, never a
    literal, and a knob fetched by string in a hot loop is a typo waiting to
    happen as well as being slow. */
 const CFG = {
-  lowW:        K('render.low_width'),
-  lowH:        K('render.low_height'),
   tileW:       K('render.tile_w'),
   tileH:       K('render.tile_h'),
   rise:        K('render.rise'),
@@ -58,15 +62,28 @@ const CFG = {
   shadeLeft:   K('render.side_shade_left'),
   shadeRight:  K('render.side_shade_right'),
   heightTint:  K('render.height_tint'),
-  zoomStart:   K('camera.zoom_start'),
-  zoomMin:     K('camera.zoom_min'),
-  zoomMax:     K('camera.zoom_max'),
+  zoomStart:   K('render.zoom_start'),
+  zoomMin:     K('render.zoom_min'),
+  zoomMax:     K('render.zoom_max'),
+  maxBufW:     K('render.max_buffer_w'),
+  maxBufH:     K('render.max_buffer_h'),
+  cutawayFade: K('render.cutaway_fade'),
+  cutawayDepth: K('render.cutaway_depth'),
+  coastTicks:  K('time.coast_ticks'),
   keyPan:      K('camera.key_pan_speed'),
   chunkTiles:  K('world.chunk_tiles'),
   maxElev:     K('world.max_elevation'),
-  terrainScale: K('world.terrain_scale'),
-  rampChance:  K('world.ramp_chance'),
-  dampLevel:   K('world.damp_level'),
+  rooms:       K('world.rooms'),
+  roomMin:     K('world.room_min'),
+  roomMax:     K('world.room_max'),
+  hallWidth:   K('world.hall_width'),
+  rockHeight:  K('world.rock_height'),
+  campBedrolls: K('camp.bedrolls'),
+  campStores:  K('camp.stores'),
+  campWindbreaks: K('camp.windbreaks'),
+  campSpread:  K('camp.site_spread'),
+  campProgress: K('camp.progress_per_success'),
+  campWorkTicks: K('camp.work_ticks'),
   attrWeight:  K('roll.attribute_weight'),
   skillWeight: K('roll.skill_weight'),
   noiseSpread: K('roll.noise_spread'),
