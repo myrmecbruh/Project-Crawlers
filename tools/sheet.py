@@ -33,6 +33,12 @@ SECTIONS = {
                          "glow", "note"], False),
     "structures": ("id", ["name", "tags", "colour", "half_width", "height_m",
                           "skill", "difficulty", "light", "note"], False),
+    # The room vocabulary. A room's name is built from these -- one function,
+    # an optional people, and up to two conditions -- and each word carries
+    # both what it MEANS (tags) and what it DOES to the room (shape, floor),
+    # on the same line, so the name and the place cannot drift apart.
+    "words":    ("id",  ["name", "slot", "weight", "tags", "shape",
+                         "floor", "speckle", "note"], False),
 }
 
 # Columns that are documentation. They may be edited freely and are never
@@ -56,6 +62,7 @@ def norm(col, v):
         return ""
     if col in ("value", "cross", "clear", "half_width", "from_m", "to_m",
                "height_m", "difficulty", "without", "multiplier", "light",
+               "weight",
                "x", "y", "z", "ox", "oy",
                "w_top", "w_bot", "d_top", "d_bot",
                "sides", "rings", "bulge", "cap_top", "cap_bot", "glow"):
@@ -64,6 +71,8 @@ def norm(col, v):
             return int(f) if f == int(f) else round(f, 10)
         except (TypeError, ValueError):
             return str(v).strip()
+    if col in ("shape", "floor", "speckle"):
+        return str(v).strip().lower()
     if col in ("footing", "slot", "item", "bone", "parent", "needs_tag"):
         return str(v).strip().lower()
     if col in ("derives", "attr", "bonus"):
@@ -169,6 +178,31 @@ def for_game(merged):
                              "note": str(r.get("note", ""))}
                          for k, r in merged["structures"].items()}
 
+    # A word's `shape` is a list of moves, "pit:1,pillars:2", parsed here so the
+    # game never has to read a spreadsheet string at run time.
+    out["words"] = {}
+    for k, r in merged["words"].items():
+        moves = []
+        for part in norm("shape", r.get("shape")).split(","):
+            part = part.strip()
+            if not part:
+                continue
+            op, _, amt = part.partition(":")
+            try:
+                n = int(float(amt)) if amt.strip() else 1
+            except ValueError:
+                n = 1
+            moves.append([op.strip(), n])
+        out["words"][k] = {
+            "name": str(r["name"]),
+            "slot": norm("slot", r["slot"]),
+            "weight": norm("weight", r["weight"]),
+            "tags": [t for t in norm("tags", r["tags"]).split(",") if t],
+            "shape": moves,
+            "floor": norm("floor", r.get("floor")),
+            "speckle": norm("speckle", r.get("speckle")),
+            "note": str(r.get("note", ""))}
+
     out["bones"] = {k: {"name": str(r["name"]), "parent": norm("parent", r["parent"]),
                         "x": norm("x", r["x"]), "y": norm("y", r["y"]),
                         "z": norm("z", r["z"]), "note": str(r.get("note", ""))}
@@ -238,6 +272,44 @@ def check_vocabulary(game):
         if not isinstance(t["cross"], (int, float)):
             errors.append("tiles: '%s' has a non-numeric crossing difficulty "
                           "'%s'" % (tid, t["cross"]))
+
+    # The room vocabulary. A word that claims an unknown tag, names a tile that
+    # does not exist, or asks for a shape move the generator has never heard of
+    # is a typo that would otherwise produce a silently blander labyrinth.
+    SHAPES = {"pit", "platform", "terrace", "pillars", "rubble", "water", "ring"}
+    SLOTS = {"function", "condition", "people"}
+    tiles = set(game["tiles"])
+    seen_slots = {}
+    for wid, w in game.get("words", {}).items():
+        seen_slots[w["slot"]] = seen_slots.get(w["slot"], 0) + 1
+        if w["slot"] not in SLOTS:
+            errors.append("words: '%s' is in slot '%s'; expected function, "
+                          "condition or people" % (wid, w["slot"]))
+        for tag in w["tags"]:
+            if tag not in known:
+                errors.append("words: '%s' claims the tag '%s', which is not in "
+                              "the tags sheet" % (wid, tag))
+        for op, amt in w["shape"]:
+            if op not in SHAPES:
+                errors.append("words: '%s' asks for the shape '%s', which the "
+                              "generator does not know (it knows %s)"
+                              % (wid, op, ", ".join(sorted(SHAPES))))
+            if amt < 1:
+                errors.append("words: '%s' asks for %s %d times" % (wid, op, amt))
+        for col in ("floor", "speckle"):
+            if w[col] and w[col] not in tiles:
+                errors.append("words: '%s' lays a %s of '%s', which is not a "
+                              "tile" % (wid, col, w[col]))
+        if w["weight"] is None or not isinstance(w["weight"], (int, float)) \
+           or w["weight"] <= 0:
+            errors.append("words: '%s' has weight '%s'; a word nothing can pick "
+                          "is a word that does not exist" % (wid, w["weight"]))
+    if game.get("words"):
+        # A room needs something to BE. Conditions and peoples are optional
+        # decoration; without a function there is no room to decorate.
+        if not seen_slots.get("function"):
+            errors.append("words: there is not one 'function' word, so no room "
+                          "could ever be named")
 
     # Rule 2: every skill comes from the natural attributes. A skill that names
     # an attribute nobody has is a second framework starting to grow.

@@ -179,6 +179,7 @@ src/js/*.js           the game, assembled in filename order
   08-knobs.js         the spreadsheet, inlined; K/G/N/TILE/TAG/ATTR/SKILL, CFG
   10-state.js         one match: world, crawlers, camp, camera, what is hovered
   12-world.js         rooms and halls from a seed; the walking and sight rules
+  13-rooms.js         the room vocabulary: naming a place and shaping its ground
   14-actors.js        the six attributes, skills, rolls, learning, crawlers
   16-camp.js          choosing a room, laying out a camp, and working at it
   18-figure.js        the skeleton, the poses, and one crawler's geometry
@@ -257,6 +258,46 @@ perfectly flat, which is the only way to prove no curve was smuggled in.
   to; the player is a head coach.
 - A structure grows to its real height as it is built, so how far the camp has
   got is something you can see rather than read.
+
+### Rooms are places, and places are built out of words (`13-rooms.js`)
+
+A room used to be one flat sheet of floor -- 90 of 90 dead flat, with 69% of all
+walkable ground inside a room and 1% of the floor a ramp. All the height was in
+the corridors. That is what they meant by "elevation disappeared when we switched
+to rooms and halls".
+
+- A room's name is composed, not chosen from a list: one `function` word (what it
+  was built to be), up to two `condition` words (what has happened since), and an
+  optional `people` word (whose it was). "Haunted Silent Miners' Bathhouse".
+  84 words in the `words` tab make about a quarter of a million names.
+- **A word carries both halves of itself on one row**: what it MEANS (its tags)
+  and what it DOES to the ground (its shape moves, the floor it lays). "Flooded"
+  is not a label applied after the water; putting water in the low ground IS the
+  word. Same principle as a gear row carrying its look and its effect together.
+- Seven shape moves exist -- `pit`, `platform`, `terrace`, `ring`, `pillars`,
+  `rubble`, `water` -- and **the build refuses a word asking for anything else**.
+- **A place is discovered, not given.** Rooms start unnamed; a crawler standing in
+  one stops and reads it, which is a Studying roll like any other, so failing
+  teaches them (rule 1). Three tries each, then they let it lie. Until it is read,
+  a square there is just floor.
+
+**Three things keep a shaped room walkable, and each was earned:**
+1. **The border ring is never touched.** That is where halls arrive, so nothing
+   about hall digging had to learn that rooms have shape now.
+2. **Heights step by one metre only.** `smoothRoom()` pulls down anything higher:
+   a pit inside a ring made a two-metre drop and stranded 21 squares of a flooded
+   orcish arena, because a ramp climbs exactly one metre.
+3. **Ramps are placed per PAIR of touching shelves**, found by flood-filling
+   equal-height regions. Grouping them by row put a ramp in every row and turned
+   every ledge into an open slope.
+Blocks are separate: **a pillar goes in only if the room is still whole with it
+there**, checked one block at a time.
+
+**NEVER put anything solid on a room's centre square.** The generator uses that
+square AS the room -- it is what a hall is aimed at, and what the final
+reachability sweep tests -- so a pillar standing there does not block one square,
+it deletes the whole room. Every room in the world vanished and 25 tests failed
+at once with `undefined`.
 
 **A crawler walks; they do not appear in the next square.** The roll still
 resolves in one instant -- that is the mechanic -- but the arrival is spread over
@@ -559,9 +600,9 @@ ruler is worse than no ruler.
 
 ### The master spreadsheet, which is the authority
 
-`docs/crawlers.xlsx` holds every number and every piece of wording, across thirteen
+`docs/crawlers.xlsx` holds every number and every piece of wording, across fourteen
 tabs: `knobs`, `geometry` (read only), `names`, `tags`, `tiles`, `attributes`,
-`skills`, `figure`, `structures`, `bones`, `slots`, `gear`, `speeds`. `src/defaults.json` carries the same values so a fresh
+`skills`, `figure`, `structures`, `bones`, `slots`, `gear`, `speeds`, `words`. `src/defaults.json` carries the same values so a fresh
 checkout still builds. The build reconciles the two and inlines the result.
 
 1. **Change a number in the sheet, not in the code.** If the code default must
@@ -637,6 +678,19 @@ checkout still builds. The build reconciles the two and inlines the result.
     everything that reads a position, everything that rewrites a container a user
     can press, and everything that was being recomputed "when the view changes" --
     because "when the view changes" has just become "always".
+
+12. **A test that passes by one lucky roll is measuring luck, and it will look
+    like a broken mechanic later.** "The crawlers gather in one room and build a
+    camp" asserted that somebody learned Labouring. On the baseline it passed
+    with a SINGLE failed clearing roll in the whole match -- 0.1 of a pip, twice
+    -- and one luckier roll would have failed it. When the room generator changed
+    the world, the same run rolled slightly better, the test went red, and it
+    looked exactly like learning had broken. It had not: rule 1 says succeeding
+    teaches nothing, and the crawler doing the clearing was good at it. Twenty
+    minutes went on a false regression. Generalised: before believing a red test,
+    check the margin it was passing by -- and when a claim needs luck to hold,
+    make it over several seeds or make it somewhere it can be made honestly.
+    (Rule 1 is proved on the bench, where the success rate is pinned at zero.)
 
 ---
 

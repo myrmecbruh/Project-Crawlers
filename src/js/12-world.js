@@ -110,6 +110,18 @@ function generateChunk(seed) {
     }
   }
 
+  /* ---- and then, for some of them, what the place WAS ------------------- */
+  /* The border ring is deliberately left alone by shapeRoom(), because that is
+     where halls arrive: a hall still meets a room at the room's own level and
+     nothing about digging one had to learn that rooms have shape now. */
+  for (const r of rooms) {
+    r.known = false;          /* until a crawler works out what it was */
+    r.studies = 0;
+    if (rand() >= CFG.roomNamedChance) { r.place = null; continue; }
+    r.place = nameRoom(rand);
+    if (r.place) r.place.shaped = shapeRoom(world, r, rand, r.place);
+  }
+
   /* ---- halls ------------------------------------------------------------ */
   function pathBetween(a, b) {
     const pts = [];

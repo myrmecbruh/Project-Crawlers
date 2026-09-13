@@ -62,6 +62,14 @@ function SLOT(id) {
   if (!s) throw new Error('unknown slot: ' + id);
   return s;
 }
+/* The room vocabulary (rule 9: the words are the sheet's, not the code's). */
+const WORD_IDS = Object.keys(DATA.words);
+function WORD(id) {
+  const w = DATA.words[id];
+  if (!w) throw new Error('unknown word: ' + id);
+  return w;
+}
+
 const STRUCTURE_IDS = Object.keys(DATA.structures);
 function STRUCT(id) {
   const s = DATA.structures[id];
@@ -93,6 +101,13 @@ const CFG = {
   keyPan:      K('camera.key_pan_speed'),
   chunkTiles:  K('world.chunk_tiles'),
   maxElev:     K('world.max_elevation'),
+  roomNamedChance:     K('world.room_named_chance'),
+  roomConditionChance: K('world.room_condition_chance'),
+  roomPeopleChance:    K('world.room_people_chance'),
+  roomShapeRamps:      K('world.room_shape_ramps'),
+  roomShapeMinSide:    K('world.room_shape_min_side'),
+  studyDifficulty:     K('room.study_difficulty'),
+  studyTicks:          K('room.study_ticks'),
   rooms:       K('world.rooms'),
   roomMin:     K('world.room_min'),
   roomMax:     K('world.room_max'),

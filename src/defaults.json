@@ -1,2124 +1,3106 @@
 {
-  "_": "Every number and name the game can be tuned with. docs/crawlers.xlsx is the AUTHORITY; this file is the default a fresh checkout builds from. build.py reconciles the two and refuses to build if a key exists in only one of them.",
-  "knobs": {
-    "render.tile_w": {
-      "value": 64,
-      "unit": "px",
-      "note": "Screen width of one square metre of ground. Twice tile_h makes the classic two-to-one isometric view."
-    },
-    "render.rise": {
-      "value": 32,
-      "unit": "px/m",
-      "note": "LOCKED SCALE: how many pixels tall one metre is. Everything in the game is drawn against this, so a 1.6 m crawler is 52 px tall. Changing it rescales the entire world."
-    },
-    "render.occluder_fade": {
-      "value": 0.28,
-      "unit": "alpha",
-      "note": "How solid a block stays when it is standing between you and the tile you are inspecting. 1 = never fades, 0 = disappears entirely."
-    },
-    "render.side_shade_left": {
-      "value": 0.78,
-      "unit": "x",
-      "note": "Brightness of the left-facing wall of a block. Below 1 makes it darker than the top."
-    },
-    "render.side_shade_right": {
-      "value": 0.56,
-      "unit": "x",
-      "note": "Brightness of the right-facing wall of a block."
-    },
-    "render.height_tint": {
-      "value": 0.035,
-      "unit": "x/m",
-      "note": "How much lighter a surface gets per metre of elevation. Gives depth without lighting."
-    },
-    "camera.key_pan_speed": {
-      "value": 4.0,
-      "unit": "px/tick",
-      "note": "How fast the arrow keys slide the view."
-    },
-    "world.chunk_tiles": {
-      "value": 56,
-      "unit": "tiles",
-      "note": "Width and depth of the piece of labyrinth generated. 56 tiles = 56 metres across."
-    },
-    "world.max_elevation": {
-      "value": 5,
-      "unit": "m",
-      "note": "How many different floor levels the rooms and halls are spread across."
-    },
-    "roll.attribute_weight": {
-      "value": 1,
-      "unit": "x",
-      "note": "How much a natural attribute is worth in a roll. At 1, an attribute of 4 is worth 4 -- the number on the sheet is the number in the roll."
-    },
-    "roll.skill_weight": {
-      "value": 1,
-      "unit": "x",
-      "note": "How much practice is worth in a roll. At 1, a skill of 3 is worth 3."
-    },
-    "skill.cap": {
-      "value": 6,
-      "unit": "pts",
-      "note": "The most practice any one skill can hold. Six, the same scale as an attribute."
-    },
-    "learn.gain_on_failure": {
-      "value": 0.1,
-      "unit": "pts",
-      "note": "Practice gained from a FAILED attempt. Rule 1: failing is how a crawler learns. Ten failures is a tenth of the way to mastery."
-    },
-    "learn.gain_on_success": {
-      "value": 0,
-      "unit": "pts",
-      "note": "Practice gained from a successful attempt. Zero: succeeding teaches nothing at all, so a crawler who has mastered something stops improving until the labyrinth gives them something harder."
-    },
-    "learn.near_miss_bonus": {
-      "value": 0.06,
-      "unit": "pts",
-      "note": "Extra practice for only just failing. Getting close teaches most of all."
-    },
-    "learn.near_miss_margin": {
-      "value": 2,
-      "unit": "pts",
-      "note": "How close a failure has to be to count as only just missing. Two, on a scale where a whole roll is about a dozen."
-    },
-    "actor.count": {
-      "value": 6,
-      "unit": "people",
-      "note": "How many crawlers turn up in the labyrinth."
-    },
-    "actor.attribute_min": {
-      "value": 1,
-      "unit": "pts",
-      "note": "Lowest a natural attribute can be. One to six, like a die: 3 and 4 are ordinary, 1 and 6 are remarkable."
-    },
-    "actor.attribute_max": {
-      "value": 6,
-      "unit": "pts",
-      "note": "Highest a natural attribute can be."
-    },
-    "actor.step_ticks": {
-      "value": 26,
-      "unit": "ticks",
-      "note": "How long a crawler pauses between attempts to move. 60 ticks is a second."
-    },
-    "actor.height_m": {
-      "value": 1.625,
-      "unit": "m",
-      "note": "How tall a grown crawler is. At the locked scale of 32 pixels per metre this makes them 52 pixels tall."
-    },
-    "render.zoom_start": {
-      "value": 2,
-      "unit": "x",
-      "note": "How many real screen pixels one game pixel takes up when the game opens. Zooming does NOT make the world bigger -- it makes the pixels bigger, so the picture stays perfectly sharp."
-    },
-    "render.zoom_min": {
-      "value": 1,
-      "unit": "x",
-      "note": "Furthest out. One game pixel to one screen pixel, showing the most ground."
-    },
-    "render.zoom_max": {
-      "value": 6,
-      "unit": "x",
-      "note": "Closest in. Whole numbers only, which is what keeps every edge hard."
-    },
-    "render.max_buffer_w": {
-      "value": 960,
-      "unit": "px",
-      "note": "Widest the game picture is ever drawn, before it is blown up. Caps the work on a very large screen."
-    },
-    "render.max_buffer_h": {
-      "value": 540,
-      "unit": "px",
-      "note": "Tallest the game picture is ever drawn, before it is blown up."
-    },
-    "world.rooms": {
-      "value": 9,
-      "unit": "rooms",
-      "note": "How many rooms to carve out of the rock. Halls are then dug between them."
-    },
-    "world.room_min": {
-      "value": 5,
-      "unit": "m",
-      "note": "Smallest a room can be, along one side."
-    },
-    "world.room_max": {
-      "value": 13,
-      "unit": "m",
-      "note": "Largest a room can be, along one side."
-    },
-    "world.hall_width": {
-      "value": 2,
-      "unit": "m",
-      "note": "How wide the halls between rooms are."
-    },
-    "world.rock_height": {
-      "value": 2,
-      "unit": "m",
-      "note": "How far the solid rock rises above the floor beside it. This is what makes a wall a wall. Tall rock hides more of what is behind it, so this and the cutaway settings work against each other."
-    },
-    "camp.bedrolls": {
-      "value": 4,
-      "unit": "beds",
-      "note": "How many bedrolls the crawlers lay out around the fire."
-    },
-    "camp.stores": {
-      "value": 1,
-      "unit": "stores",
-      "note": "How many stores the crawlers put up."
-    },
-    "camp.windbreaks": {
-      "value": 2,
-      "unit": "windbreaks",
-      "note": "How many windbreaks the crawlers put up."
-    },
-    "camp.site_spread": {
-      "value": 3,
-      "unit": "m",
-      "note": "How far from the fire the rest of the camp is laid out."
-    },
-    "camp.progress_per_success": {
-      "value": 25,
-      "unit": "pts",
-      "note": "How much of a structure one successful effort raises. 100 finishes it."
-    },
-    "camp.work_ticks": {
-      "value": 18,
-      "unit": "ticks",
-      "note": "How long a crawler takes between efforts. 60 ticks is a second."
-    },
-    "render.cutaway_fade": {
-      "value": 0.3,
-      "unit": "alpha",
-      "note": "How solid a wall of rock stays when it is standing between you and a floor behind it. This is the see-through fourth wall. 1 = never fades and rooms hide behind their own near walls; 0 = those walls vanish entirely."
-    },
-    "render.cutaway_depth": {
-      "value": 1,
-      "unit": "m",
-      "note": "How close a wall has to be to the floor it is hiding before it turns translucent. Small numbers fade only the near wall of a room, which is what you want; large numbers fade half the labyrinth into a haze."
-    },
-    "render.tile_h_low": {
-      "value": 32,
-      "unit": "px",
-      "note": "How tall a square metre of ground looks at the normal angle. Half of tile_w is the classic two-to-one isometric view."
-    },
-    "render.tile_h_high": {
-      "value": 54,
-      "unit": "px",
-      "note": "How tall a square metre of ground looks from the raised angle. Bigger means you are looking down more steeply and can see further into rooms. Walls stay the same height either way, so the locked 32 pixels to the metre holds at both angles."
-    },
-    "camera.swing_ms": {
-      "value": 320,
-      "unit": "ms",
-      "note": "How long the view takes to swing a quarter turn. This runs on real time, not game time, so the swing is smooth whether or not the world is running."
-    },
-    "camera.tilt_ms": {
-      "value": 260,
-      "unit": "ms",
-      "note": "How long the view takes to rise to the higher angle and back."
-    },
-    "anim.walk_ticks": {
-      "value": 34,
-      "unit": "ticks",
-      "note": "How long one full stride takes. 60 ticks is a second, so smaller is a faster walk."
-    },
-    "anim.walk_leg_swing": {
-      "value": 38,
-      "unit": "degrees",
-      "note": "How far the legs swing forward and back while walking."
-    },
-    "anim.walk_knee_bend": {
-      "value": 46,
-      "unit": "degrees",
-      "note": "How much the trailing knee folds as the leg comes through."
-    },
-    "anim.walk_arm_swing": {
-      "value": 26,
-      "unit": "degrees",
-      "note": "How far the arms swing, opposite to the legs."
-    },
-    "anim.walk_bob": {
-      "value": 0.035,
-      "unit": "m",
-      "note": "How far a crawler rises and falls with each step."
-    },
-    "anim.work_ticks": {
-      "value": 40,
-      "unit": "ticks",
-      "note": "How long one swing of a tool takes."
-    },
-    "anim.work_arm_lift": {
-      "value": 78,
-      "unit": "degrees",
-      "note": "How far the arms come up for a swing of work."
-    },
-    "anim.work_lean": {
-      "value": 14,
-      "unit": "degrees",
-      "note": "How far a crawler leans into their work."
-    },
-    "anim.idle_ticks": {
-      "value": 150,
-      "unit": "ticks",
-      "note": "How long one slow breath takes while standing about."
-    },
-    "anim.idle_sway": {
-      "value": 4.5,
-      "unit": "degrees",
-      "note": "How much a crawler sways while standing about."
-    },
-    "anim.turn_ticks": {
-      "value": 8,
-      "unit": "ticks",
-      "note": "How long a crawler takes to turn to face a new direction."
-    },
-    "render.light_ambient": {
-      "value": 0.55,
-      "unit": "x",
-      "note": "How lit the darkest FACE of something is, once the lamp has reached it. This is the shape of a thing, not how dark the room is -- that is light.ambient."
-    },
-    "render.light_diffuse": {
-      "value": 0.45,
-      "unit": "x",
-      "note": "How much brighter a face gets for facing the light."
-    },
-    "actor.gear_chance": {
-      "value": 0.55,
-      "unit": "0-1",
-      "note": "How likely a crawler is to turn up already wearing any given piece of gear."
-    },
-    "time.max_steps_per_frame": {
-      "value": 64,
-      "unit": "ticks",
-      "note": "The most the world is allowed to advance in a single drawn frame. Stops a slow machine, or a tab left in the background, from lurching forward all at once."
-    },
-    "render.outline_width": {
-      "value": 2,
-      "unit": "px",
-      "note": "How thick the highlight ring around a selected thing is drawn. It is drawn UNDER the thing and half of it is covered, so 2 here shows as a 1 pixel line around the silhouette."
-    },
-    "texture.floor_px": {
-      "value": 16,
-      "unit": "px",
-      "note": "How big one square of the ground's grain is. The grain repeats every this many pixels across the floor."
-    },
-    "texture.fine_px": {
-      "value": 8,
-      "unit": "px",
-      "note": "How big the grain is on crawlers and on anything built. Smaller than the floor's, because a face is only about eight pixels across."
-    },
-    "texture.strength": {
-      "value": 0.17,
-      "unit": "0-1",
-      "note": "How strongly the grain darkens and lightens what is underneath. 0 turns texture off entirely."
-    },
-    "texture.speck": {
-      "value": 0.055,
-      "unit": "0-1",
-      "note": "How much of the grain is hard specks of grit and rust rather than soft mottling."
-    },
-    "texture.seed": {
-      "value": 7,
-      "unit": "",
-      "note": "Which grain gets generated. Change it for a different pattern of grit."
-    },
-    "render.min_face_px": {
-      "value": 0.28,
-      "unit": "px",
-      "note": "Faces smaller than this many pixels are not drawn. At 32 pixels to the metre a crawler has a lot of surfaces that never cover a whole pixel, and skipping them costs nothing to look at and saves a great deal of work."
-    },
-    "roll.dice": {
-      "value": 2,
-      "unit": "dice",
-      "note": "How many dice are thrown for an attempt. Two gives a bell: middling results are common, extremes are rare."
-    },
-    "roll.die_faces": {
-      "value": 6,
-      "unit": "faces",
-      "note": "How many faces each die has."
-    },
-    "light.ambient": {
-      "value": 0.14,
-      "unit": "0-1",
-      "note": "How much you can see where nothing is lighting the way. Very low: the labyrinth is dark, and light is something you carry into it."
-    },
-    "light.warmth": {
-      "value": 0.45,
-      "unit": "0-1",
-      "note": "How much a lit thing goes orange rather than just brighter. 0 is cold light, 1 is firelight."
-    },
-    "light.steps": {
-      "value": 6,
-      "unit": "steps",
-      "note": "How many levels of brightness there are between dark and fully lit. Few levels look painted; many look smooth and cost more to draw."
-    },
-    "light.falloff": {
-      "value": 1.35,
-      "unit": "x",
-      "note": "How sharply light dies with distance. Above 1 keeps the bright part close to the source."
-    },
-    "anim.step_ticks": {
-      "value": 22,
-      "unit": "ticks",
-      "note": "How long a crawler takes to walk from one square to the next. Shorter than the pause between attempts, so they arrive and then think about the next step rather than gliding forever."
-    },
-    "camera.follow": {
-      "value": 1,
-      "unit": "0 or 1",
-      "note": "Whether clicking a crawler locks the view onto them. 1 follows; 0 leaves the view where you put it. Panning by hand always lets go."
-    }
+ "_": "Every number and name the game can be tuned with. docs/crawlers.xlsx is the AUTHORITY; this file is the default a fresh checkout builds from. build.py reconciles the two and refuses to build if a key exists in only one of them.",
+ "knobs": {
+  "render.tile_w": {
+   "value": 64,
+   "unit": "px",
+   "note": "Screen width of one square metre of ground. Twice tile_h makes the classic two-to-one isometric view."
   },
-  "geometry": {
-    "world.metres_per_tile": {
-      "value": 1,
-      "unit": "m",
-      "note": "READ ONLY. One tile is one square metre. Non-negotiable rule 7."
-    },
-    "render.iso_ratio": {
-      "value": 2,
-      "unit": "x",
-      "note": "READ ONLY. tile_w divided by tile_h. Changing this is changing the camera, not balancing the game."
-    },
-    "figure.nominal_height_m": {
-      "value": 1.625,
-      "unit": "m",
-      "note": "READ ONLY. The height the skeleton and the figure parts are measured against. A crawler of a different height is scaled by the ratio."
-    }
+  "render.rise": {
+   "value": 32,
+   "unit": "px/m",
+   "note": "LOCKED SCALE: how many pixels tall one metre is. Everything in the game is drawn against this, so a 1.6 m crawler is 52 px tall. Changing it rescales the entire world."
   },
-  "names": {
-    "ui.hint_desktop": {
-      "text": "drag to pan  ·  scroll to zoom  ·  Q/E turn, R raises  ·  space pauses, , and . change speed"
-    },
-    "ui.hint_touch": {
-      "text": "drag to pan  ·  pinch to zoom  ·  the buttons turn, raise, pause and change speed"
-    },
-    "ui.label_elevation": {
-      "text": "elevation"
-    },
-    "ui.label_tags": {
-      "text": "tags"
-    },
-    "ui.label_footing": {
-      "text": "footing"
-    },
-    "ui.footing_walk": {
-      "text": "can be walked on"
-    },
-    "ui.footing_block": {
-      "text": "solid — blocks movement"
-    },
-    "ui.footing_ramp": {
-      "text": "ramp — climbs one metre"
-    },
-    "ui.nothing_there": {
-      "text": "nothing there"
-    },
-    "ui.label_attributes": {
-      "text": "attributes"
-    },
-    "ui.label_skills": {
-      "text": "skills"
-    },
-    "ui.label_wearing": {
-      "text": "wearing"
-    },
-    "ui.label_bare": {
-      "text": "nothing"
-    },
-    "character.name_pool": {
-      "text": "Bran, Ysolde, Corwin, Maerl, Thessa, Odric, Vela, Garn, Ketta, Rhodry, Isme, Dunmar, Sable, Wren, Halgar, Nix, Orla, Tam, Brennis, Sorrel"
-    },
-    "ui.label_progress": {
-      "text": "progress"
-    },
-    "ui.label_state": {
-      "text": "state"
-    },
-    "ui.label_doing": {
-      "text": "doing"
-    },
-    "ui.label_ground": {
-      "text": "ground"
-    },
-    "ui.state_planned": {
-      "text": "marked out, not started"
-    },
-    "ui.state_clearing": {
-      "text": "ground still needs clearing"
-    },
-    "ui.state_building": {
-      "text": "going up"
-    },
-    "ui.state_built": {
-      "text": "finished"
-    },
-    "ui.doing_walking": {
-      "text": "walking to the camp"
-    },
-    "ui.doing_clearing": {
-      "text": "clearing ground"
-    },
-    "ui.doing_building": {
-      "text": "building"
-    },
-    "ui.doing_idle": {
-      "text": "looking about"
-    },
-    "ui.label_gear": {
-      "text": "wearing"
-    },
-    "ui.label_effect": {
-      "text": "effect"
-    },
-    "ui.label_empty": {
-      "text": "nothing"
-    },
-    "ui.label_paused": {
-      "text": "paused"
-    },
-    "ui.label_speed": {
-      "text": "speed"
-    },
-    "ui.button_pause": {
-      "text": "pause (space)"
-    },
-    "ui.button_slower": {
-      "text": "slower (,)"
-    },
-    "ui.button_faster": {
-      "text": "faster (.)"
-    },
-    "ui.colour_outline": {
-      "text": "#ffe9a8"
-    },
-    "ui.label_inspect": {
-      "text": "click to inspect"
-    },
-    "ui.label_close": {
-      "text": "close"
-    },
-    "ui.section_attributes": {
-      "text": "attributes"
-    },
-    "ui.section_skills": {
-      "text": "skills"
-    },
-    "ui.section_gear": {
-      "text": "gear"
-    },
-    "ui.label_lastroll": {
-      "text": "last roll"
-    },
-    "ui.label_following": {
-      "text": "following"
-    }
+  "render.occluder_fade": {
+   "value": 0.28,
+   "unit": "alpha",
+   "note": "How solid a block stays when it is standing between you and the tile you are inspecting. 1 = never fades, 0 = disappears entirely."
   },
-  "tags": {
-    "floor": {
-      "name": "floor",
-      "note": "A surface something can stand on."
-    },
-    "solid": {
-      "name": "solid",
-      "note": "Fills its metre. Nothing walks through it."
-    },
-    "ramp": {
-      "name": "ramp",
-      "note": "Climbs exactly one metre between levels."
-    },
-    "stone": {
-      "name": "stone",
-      "note": "Made of worked or natural rock."
-    },
-    "earth": {
-      "name": "earth",
-      "note": "Soil, clay or packed dirt."
-    },
-    "water": {
-      "name": "water",
-      "note": "Standing water. Shallow enough to wade."
-    },
-    "organic": {
-      "name": "organic",
-      "note": "Grown, or once alive."
-    },
-    "damp": {
-      "name": "damp",
-      "note": "Wet underfoot. Things rot and grow here."
-    },
-    "dry": {
-      "name": "dry",
-      "note": "Dry underfoot."
-    },
-    "unstable": {
-      "name": "unstable",
-      "note": "Loose. Shifts when weight is put on it."
-    },
-    "grim": {
-      "name": "grim",
-      "note": "A reminder of what happened here."
-    },
-    "blocks-sight": {
-      "name": "blocks sight",
-      "note": "Cannot be seen through."
-    },
-    "person": {
-      "name": "person",
-      "note": "A thinking creature with the six attributes and skills of its own."
-    },
-    "crawler": {
-      "name": "crawler",
-      "note": "One of yours: came into the labyrinth, may yet leave it."
-    },
-    "structure": {
-      "name": "structure",
-      "note": "Something raised by hand that was not there before."
-    },
-    "fire": {
-      "name": "fire",
-      "note": "Gives light and warmth, and will go out if nobody feeds it."
-    },
-    "rest": {
-      "name": "rest",
-      "note": "Somewhere to sleep or recover."
-    },
-    "shelter": {
-      "name": "shelter",
-      "note": "Keeps the weather and the dark off."
-    },
-    "store": {
-      "name": "store",
-      "note": "Holds things so they are not carried."
-    },
-    "wood": {
-      "name": "wood",
-      "note": "Made of timber: burns, rots, can be repaired."
-    },
-    "cloth": {
-      "name": "cloth",
-      "note": "Made of fabric: light, tears, soaks."
-    },
-    "unbuilt": {
-      "name": "unbuilt",
-      "note": "Planned and marked out, but not finished."
-    },
-    "warm": {
-      "name": "warm",
-      "note": "Holds off the cold. Crawlers will come to it."
-    },
-    "leather": {
-      "name": "leather",
-      "note": "Cured hide. Tough, and it creaks."
-    },
-    "iron": {
-      "name": "iron",
-      "note": "Cold, heavy, and it rusts."
-    },
-    "rope": {
-      "name": "rope",
-      "note": "Twisted fibre."
-    },
-    "glass": {
-      "name": "glass",
-      "note": "Sees through, and breaks."
-    },
-    "tool": {
-      "name": "tool",
-      "note": "Made for work, not for fighting."
-    },
-    "light": {
-      "name": "light",
-      "note": "Gives light in the dark."
-    },
-    "charm": {
-      "name": "charm",
-      "note": "Carried for luck, or for something worse."
-    }
+  "render.side_shade_left": {
+   "value": 0.78,
+   "unit": "x",
+   "note": "Brightness of the left-facing wall of a block. Below 1 makes it darker than the top."
   },
-  "tiles": {
-    "stone_floor": {
-      "name": "Stone Floor",
-      "tags": "floor,stone,dry",
-      "top": "#6e7278",
-      "side": "#585c61",
-      "footing": "walk",
-      "cross": 7,
-      "clear": 11,
-      "note": "Worked flagstone. The default footing of the labyrinth."
-    },
-    "packed_earth": {
-      "name": "Packed Earth",
-      "tags": "floor,earth,dry",
-      "top": "#7d6c54",
-      "side": "#63553f",
-      "footing": "walk",
-      "cross": 8,
-      "clear": 12,
-      "note": "Trodden soil."
-    },
-    "moss_stone": {
-      "name": "Mossy Stone",
-      "tags": "floor,stone,damp,organic",
-      "top": "#5f7557",
-      "side": "#4a5c45",
-      "footing": "walk",
-      "cross": 10,
-      "clear": 14,
-      "note": "Stone gone green where the water sits."
-    },
-    "shallow_water": {
-      "name": "Shallow Water",
-      "tags": "floor,water,damp",
-      "top": "#3f6b7d",
-      "side": "#335667",
-      "footing": "walk",
-      "cross": 13,
-      "clear": 18,
-      "note": "Ankle deep. Slows a walker, ruins what it soaks."
-    },
-    "rubble": {
-      "name": "Rubble",
-      "tags": "floor,stone,unstable,dry",
-      "top": "#6d6860",
-      "side": "#57534c",
-      "footing": "walk",
-      "cross": 14,
-      "clear": 17,
-      "note": "Collapsed masonry, not yet cleared."
-    },
-    "bone_litter": {
-      "name": "Bone Litter",
-      "tags": "floor,organic,grim,dry",
-      "top": "#8d8672",
-      "side": "#6f6959",
-      "footing": "walk",
-      "cross": 9,
-      "clear": 13,
-      "note": "Somebody else got this far."
-    },
-    "stone_ramp": {
-      "name": "Stone Ramp",
-      "tags": "ramp,stone,dry",
-      "top": "#73777d",
-      "side": "#5b5f64",
-      "footing": "ramp",
-      "cross": 11,
-      "clear": 15,
-      "note": "A climbable one-metre slope."
-    },
-    "stone_block": {
-      "name": "Stone Block",
-      "tags": "solid,stone,blocks-sight",
-      "top": "#5a5d62",
-      "side": "#46494d",
-      "footing": "block",
-      "cross": 99,
-      "clear": 99,
-      "note": "A full cubic metre of rock."
-    }
+  "render.side_shade_right": {
+   "value": 0.56,
+   "unit": "x",
+   "note": "Brightness of the right-facing wall of a block."
   },
-  "attributes": {
-    "might": {
-      "name": "Might",
-      "abbrev": "MGT",
-      "note": "Raw physical force. Lifting, hauling, forcing, and the heavy end of any tool."
-    },
-    "agility": {
-      "name": "Agility",
-      "abbrev": "AGI",
-      "note": "Speed and fine control. Keeping your feet, quick hands, delicate work."
-    },
-    "endurance": {
-      "name": "Endurance",
-      "abbrev": "END",
-      "note": "Staying power. Long marches, cold nights, illness, a whole day of work."
-    },
-    "presence": {
-      "name": "Presence",
-      "abbrev": "PRE",
-      "note": "Effect on other people. Singing, teaching, calming a panic, bargaining."
-    },
-    "intellect": {
-      "name": "Intellect",
-      "abbrev": "INT",
-      "note": "What can be learned and worked out. Recipes, repairs, maps, lore."
-    },
-    "willpower": {
-      "name": "Willpower",
-      "abbrev": "WIL",
-      "note": "What can be made to happen anyway. Fear, pain, boredom, sticking at a hated task."
-    }
+  "render.height_tint": {
+   "value": 0.035,
+   "unit": "x/m",
+   "note": "How much lighter a surface gets per metre of elevation. Gives depth without lighting."
   },
-  "skills": {
-    "clambering": {
-      "name": "Clambering",
-      "derives": "might:1,agility:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "Climbing, scrambling, and keeping your feet on ground that does not want you to. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "labouring": {
-      "name": "Labouring",
-      "derives": "might:1,endurance:1",
-      "needs_tag": "tool",
-      "without": -4,
-      "note": "Hauling, digging, clearing ground, and still doing it an hour later. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Bare hands cost 4."
-    },
-    "wrangling": {
-      "name": "Wrangling",
-      "derives": "might:1,presence:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "Handling animals, and dragging people out of trouble whether they like it or not. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "building": {
-      "name": "Building",
-      "derives": "might:1,intellect:1",
-      "needs_tag": "tool",
-      "without": -6,
-      "note": "Raising structures that stay up. Knowing where the weight goes, and being able to put it there. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Needs a tool in hand: without one the job is 6 points harder, which on a scale of about a dozen is close to impossible."
-    },
-    "fighting": {
-      "name": "Fighting",
-      "derives": "might:1,willpower:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "The one fifth of the game that is violence. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "ranging": {
-      "name": "Ranging",
-      "derives": "agility:1,endurance:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "Covering ground: travelling far, moving quietly, getting back again. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "performing": {
-      "name": "Performing",
-      "derives": "agility:1,presence:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "Singing, playing, dancing, and holding a room while you do it. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "crafting": {
-      "name": "Crafting",
-      "derives": "agility:1,intellect:1",
-      "needs_tag": "tool",
-      "without": -5,
-      "note": "Making and mending: tools, clothes, meals, anything that takes hands and a recipe. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "tinkering": {
-      "name": "Tinkering",
-      "derives": "agility:1,willpower:1",
-      "needs_tag": "tool",
-      "without": -5,
-      "note": "Locks, traps, and anything fiddly that punishes a shaking hand. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "tending": {
-      "name": "Tending",
-      "derives": "endurance:1,presence:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "Nursing, feeding, and keeping people upright who would rather lie down. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "foraging": {
-      "name": "Foraging",
-      "derives": "endurance:1,intellect:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "Hunting, fishing, gathering, and knowing which of it is safe to eat. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "enduring": {
-      "name": "Enduring",
-      "derives": "endurance:1,willpower:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "Cold, hunger, pain, boredom and the dark. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "bargaining": {
-      "name": "Bargaining",
-      "derives": "presence:1,intellect:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "Trading, persuading, and working out what somebody actually wants. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "leading": {
-      "name": "Leading",
-      "derives": "presence:1,willpower:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "Rallying, calming a panic, and holding a group together when it wants to scatter. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    },
-    "studying": {
-      "name": "Studying",
-      "derives": "intellect:1,willpower:1",
-      "needs_tag": "",
-      "without": 0,
-      "note": "Lore, mapmaking, deciphering, and sitting with a problem until it gives. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
-    }
+  "camera.key_pan_speed": {
+   "value": 4.0,
+   "unit": "px/tick",
+   "note": "How fast the arrow keys slide the view."
   },
-  "figure": {
-    "head": {
-      "name": "Head",
-      "slot": "body",
-      "item": "",
-      "bone": "head",
-      "colour": "#a08a70",
-      "ox": 0,
-      "oy": 0,
-      "from_m": 0.0,
-      "to_m": 0.23,
-      "w_top": 0.08,
-      "w_bot": 0.078,
-      "d_top": 0.082,
-      "d_bot": 0.08,
-      "sides": 8,
-      "rings": 4,
-      "bulge": 0.04,
-      "cap_top": 0.42,
-      "cap_bot": 0.2,
-      "glow": 0,
-      "note": "Always drawn. Eight sides and a domed top: at 52 pixels tall the silhouette is most of what you read."
-    },
-    "neck": {
-      "name": "Neck",
-      "slot": "body",
-      "item": "",
-      "bone": "neck",
-      "colour": "#a08a70",
-      "ox": 0,
-      "oy": 0,
-      "from_m": 0.0,
-      "to_m": 0.07,
-      "w_top": 0.05,
-      "w_bot": 0.048,
-      "d_top": 0.05,
-      "d_bot": 0.048,
-      "sides": 6,
-      "rings": 2,
-      "bulge": 0,
-      "cap_top": 0,
-      "cap_bot": 0,
-      "glow": 0,
-      "note": ""
-    },
-    "torso": {
-      "name": "Torso",
-      "slot": "body",
-      "item": "",
-      "bone": "chest",
-      "colour": "#5c5145",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.26,
-      "to_m": 0.2,
-      "w_top": 0.155,
-      "w_bot": 0.12,
-      "d_top": 0.1,
-      "d_bot": 0.082,
-      "sides": 8,
-      "rings": 4,
-      "bulge": 0.1,
-      "cap_top": 0.16,
-      "cap_bot": 0.12,
-      "glow": 0,
-      "note": "Always drawn. Wider at the shoulders, pinched at the waist, and swelling slightly in between -- that is what makes a figure read as a body."
-    },
-    "pelvis": {
-      "name": "Pelvis",
-      "slot": "body",
-      "item": "",
-      "bone": "hips",
-      "colour": "#33302c",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.08,
-      "to_m": 0.06,
-      "w_top": 0.128,
-      "w_bot": 0.12,
-      "d_top": 0.09,
-      "d_bot": 0.086,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.06,
-      "cap_top": 0.1,
-      "cap_bot": 0.1,
-      "glow": 0,
-      "note": ""
-    },
-    "upperarm_l": {
-      "name": "Upper Arm",
-      "slot": "body",
-      "item": "",
-      "bone": "shoulder_l",
-      "colour": "#5c5145",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.26,
-      "to_m": 0.03,
-      "w_top": 0.052,
-      "w_bot": 0.044,
-      "d_top": 0.052,
-      "d_bot": 0.044,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.07,
-      "cap_top": 0.1,
-      "cap_bot": 0.18,
-      "glow": 0,
-      "note": ""
-    },
-    "forearm_l": {
-      "name": "Forearm",
-      "slot": "body",
-      "item": "",
-      "bone": "elbow_l",
-      "colour": "#a08a70",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.24,
-      "to_m": 0.01,
-      "w_top": 0.044,
-      "w_bot": 0.038,
-      "d_top": 0.044,
-      "d_bot": 0.038,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.05,
-      "cap_top": 0.08,
-      "cap_bot": 0.2,
-      "glow": 0,
-      "note": ""
-    },
-    "hand_l": {
-      "name": "Hand",
-      "slot": "body",
-      "item": "",
-      "bone": "hand_l",
-      "colour": "#a08a70",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.08,
-      "to_m": 0.01,
-      "w_top": 0.042,
-      "w_bot": 0.036,
-      "d_top": 0.034,
-      "d_bot": 0.03,
-      "sides": 5,
-      "rings": 3,
-      "bulge": 0.05,
-      "cap_top": 0.35,
-      "cap_bot": 0.3,
-      "glow": 0,
-      "note": ""
-    },
-    "thigh_l": {
-      "name": "Thigh",
-      "slot": "body",
-      "item": "",
-      "bone": "thigh_l",
-      "colour": "#33302c",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.42,
-      "to_m": 0.04,
-      "w_top": 0.072,
-      "w_bot": 0.058,
-      "d_top": 0.078,
-      "d_bot": 0.062,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.11,
-      "cap_top": 0.14,
-      "cap_bot": 0.1,
-      "glow": 0,
-      "note": ""
-    },
-    "shin_l": {
-      "name": "Shin",
-      "slot": "body",
-      "item": "",
-      "bone": "knee_l",
-      "colour": "#33302c",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.38,
-      "to_m": 0.02,
-      "w_top": 0.056,
-      "w_bot": 0.046,
-      "d_top": 0.06,
-      "d_bot": 0.05,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.09,
-      "cap_top": 0.1,
-      "cap_bot": 0.18,
-      "glow": 0,
-      "note": ""
-    },
-    "foot_l": {
-      "name": "Foot",
-      "slot": "body",
-      "item": "",
-      "bone": "foot_l",
-      "colour": "#2b2825",
-      "ox": 0,
-      "oy": 0.025,
-      "from_m": -0.03,
-      "to_m": 0.06,
-      "w_top": 0.054,
-      "w_bot": 0.05,
-      "d_top": 0.105,
-      "d_bot": 0.095,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.04,
-      "cap_top": 0.22,
-      "cap_bot": 0.1,
-      "glow": 0,
-      "note": ""
-    },
-    "upperarm_r": {
-      "name": "Upper Arm",
-      "slot": "body",
-      "item": "",
-      "bone": "shoulder_r",
-      "colour": "#5c5145",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.26,
-      "to_m": 0.03,
-      "w_top": 0.052,
-      "w_bot": 0.044,
-      "d_top": 0.052,
-      "d_bot": 0.044,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.07,
-      "cap_top": 0.1,
-      "cap_bot": 0.18,
-      "glow": 0,
-      "note": ""
-    },
-    "forearm_r": {
-      "name": "Forearm",
-      "slot": "body",
-      "item": "",
-      "bone": "elbow_r",
-      "colour": "#a08a70",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.24,
-      "to_m": 0.01,
-      "w_top": 0.044,
-      "w_bot": 0.038,
-      "d_top": 0.044,
-      "d_bot": 0.038,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.05,
-      "cap_top": 0.08,
-      "cap_bot": 0.2,
-      "glow": 0,
-      "note": ""
-    },
-    "hand_r": {
-      "name": "Hand",
-      "slot": "body",
-      "item": "",
-      "bone": "hand_r",
-      "colour": "#a08a70",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.08,
-      "to_m": 0.01,
-      "w_top": 0.042,
-      "w_bot": 0.036,
-      "d_top": 0.034,
-      "d_bot": 0.03,
-      "sides": 5,
-      "rings": 3,
-      "bulge": 0.05,
-      "cap_top": 0.35,
-      "cap_bot": 0.3,
-      "glow": 0,
-      "note": ""
-    },
-    "thigh_r": {
-      "name": "Thigh",
-      "slot": "body",
-      "item": "",
-      "bone": "thigh_r",
-      "colour": "#33302c",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.42,
-      "to_m": 0.04,
-      "w_top": 0.072,
-      "w_bot": 0.058,
-      "d_top": 0.078,
-      "d_bot": 0.062,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.11,
-      "cap_top": 0.14,
-      "cap_bot": 0.1,
-      "glow": 0,
-      "note": ""
-    },
-    "shin_r": {
-      "name": "Shin",
-      "slot": "body",
-      "item": "",
-      "bone": "knee_r",
-      "colour": "#33302c",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.38,
-      "to_m": 0.02,
-      "w_top": 0.056,
-      "w_bot": 0.046,
-      "d_top": 0.06,
-      "d_bot": 0.05,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.09,
-      "cap_top": 0.1,
-      "cap_bot": 0.18,
-      "glow": 0,
-      "note": ""
-    },
-    "foot_r": {
-      "name": "Foot",
-      "slot": "body",
-      "item": "",
-      "bone": "foot_r",
-      "colour": "#2b2825",
-      "ox": 0,
-      "oy": 0.025,
-      "from_m": -0.03,
-      "to_m": 0.06,
-      "w_top": 0.054,
-      "w_bot": 0.05,
-      "d_top": 0.105,
-      "d_bot": 0.095,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.04,
-      "cap_top": 0.22,
-      "cap_bot": 0.1,
-      "glow": 0,
-      "note": ""
-    },
-    "hood_v": {
-      "name": "Hood",
-      "slot": "head",
-      "item": "hood",
-      "bone": "head",
-      "colour": "#3a352f",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.02,
-      "to_m": 0.26,
-      "w_top": 0.086,
-      "w_bot": 0.096,
-      "d_top": 0.09,
-      "d_bot": 0.098,
-      "sides": 8,
-      "rings": 3,
-      "bulge": 0.06,
-      "cap_top": 0.38,
-      "cap_bot": 0.1,
-      "glow": 0,
-      "note": ""
-    },
-    "collar_v": {
-      "name": "Collar",
-      "slot": "neck",
-      "item": "collar",
-      "bone": "neck",
-      "colour": "#4a4038",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.03,
-      "to_m": 0.04,
-      "w_top": 0.076,
-      "w_bot": 0.074,
-      "d_top": 0.076,
-      "d_bot": 0.074,
-      "sides": 8,
-      "rings": 3,
-      "bulge": 0.1,
-      "cap_top": 0.05,
-      "cap_bot": 0.05,
-      "glow": 0,
-      "note": ""
-    },
-    "pack_v": {
-      "name": "Pack",
-      "slot": "back",
-      "item": "pack",
-      "bone": "chest",
-      "colour": "#5a4a34",
-      "ox": 0,
-      "oy": -0.135,
-      "from_m": -0.18,
-      "to_m": 0.14,
-      "w_top": 0.12,
-      "w_bot": 0.105,
-      "d_top": 0.07,
-      "d_bot": 0.062,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.08,
-      "cap_top": 0.14,
-      "cap_bot": 0.14,
-      "glow": 0,
-      "note": "Sits behind the chest, which is what the oy offset is for."
-    },
-    "jerkin_v": {
-      "name": "Jerkin",
-      "slot": "torso",
-      "item": "jerkin",
-      "bone": "chest",
-      "colour": "#6b5335",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.27,
-      "to_m": 0.21,
-      "w_top": 0.166,
-      "w_bot": 0.13,
-      "d_top": 0.111,
-      "d_bot": 0.093,
-      "sides": 8,
-      "rings": 4,
-      "bulge": 0.11,
-      "cap_top": 0.14,
-      "cap_bot": 0.1,
-      "glow": 0,
-      "note": ""
-    },
-    "glove_fore_l": {
-      "name": "Glove",
-      "slot": "gloves",
-      "item": "gloves",
-      "bone": "elbow_l",
-      "colour": "#4b3b28",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.25,
-      "to_m": 0.02,
-      "w_top": 0.052,
-      "w_bot": 0.046,
-      "d_top": 0.052,
-      "d_bot": 0.046,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.06,
-      "cap_top": 0.08,
-      "cap_bot": 0.18,
-      "glow": 0,
-      "note": ""
-    },
-    "glove_hand_l": {
-      "name": "Glove",
-      "slot": "gloves",
-      "item": "gloves",
-      "bone": "hand_l",
-      "colour": "#4b3b28",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.09,
-      "to_m": 0.02,
-      "w_top": 0.05,
-      "w_bot": 0.044,
-      "d_top": 0.042,
-      "d_bot": 0.038,
-      "sides": 5,
-      "rings": 3,
-      "bulge": 0.05,
-      "cap_top": 0.32,
-      "cap_bot": 0.28,
-      "glow": 0,
-      "note": ""
-    },
-    "breech_l": {
-      "name": "Breeches",
-      "slot": "legs",
-      "item": "breeches",
-      "bone": "thigh_l",
-      "colour": "#4a4136",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.43,
-      "to_m": 0.06,
-      "w_top": 0.08,
-      "w_bot": 0.066,
-      "d_top": 0.086,
-      "d_bot": 0.07,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.12,
-      "cap_top": 0.12,
-      "cap_bot": 0.08,
-      "glow": 0,
-      "note": ""
-    },
-    "boot_shin_l": {
-      "name": "Boot",
-      "slot": "feet",
-      "item": "boots",
-      "bone": "knee_l",
-      "colour": "#3b2f22",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.39,
-      "to_m": 0.03,
-      "w_top": 0.064,
-      "w_bot": 0.054,
-      "d_top": 0.068,
-      "d_bot": 0.058,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.1,
-      "cap_top": 0.08,
-      "cap_bot": 0.14,
-      "glow": 0,
-      "note": ""
-    },
-    "boot_foot_l": {
-      "name": "Boot",
-      "slot": "feet",
-      "item": "boots",
-      "bone": "foot_l",
-      "colour": "#3b2f22",
-      "ox": 0,
-      "oy": 0.025,
-      "from_m": -0.04,
-      "to_m": 0.07,
-      "w_top": 0.062,
-      "w_bot": 0.058,
-      "d_top": 0.115,
-      "d_bot": 0.105,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.05,
-      "cap_top": 0.2,
-      "cap_bot": 0.08,
-      "glow": 0,
-      "note": ""
-    },
-    "glove_fore_r": {
-      "name": "Glove",
-      "slot": "gloves",
-      "item": "gloves",
-      "bone": "elbow_r",
-      "colour": "#4b3b28",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.25,
-      "to_m": 0.02,
-      "w_top": 0.052,
-      "w_bot": 0.046,
-      "d_top": 0.052,
-      "d_bot": 0.046,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.06,
-      "cap_top": 0.08,
-      "cap_bot": 0.18,
-      "glow": 0,
-      "note": ""
-    },
-    "glove_hand_r": {
-      "name": "Glove",
-      "slot": "gloves",
-      "item": "gloves",
-      "bone": "hand_r",
-      "colour": "#4b3b28",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.09,
-      "to_m": 0.02,
-      "w_top": 0.05,
-      "w_bot": 0.044,
-      "d_top": 0.042,
-      "d_bot": 0.038,
-      "sides": 5,
-      "rings": 3,
-      "bulge": 0.05,
-      "cap_top": 0.32,
-      "cap_bot": 0.28,
-      "glow": 0,
-      "note": ""
-    },
-    "breech_r": {
-      "name": "Breeches",
-      "slot": "legs",
-      "item": "breeches",
-      "bone": "thigh_r",
-      "colour": "#4a4136",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.43,
-      "to_m": 0.06,
-      "w_top": 0.08,
-      "w_bot": 0.066,
-      "d_top": 0.086,
-      "d_bot": 0.07,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.12,
-      "cap_top": 0.12,
-      "cap_bot": 0.08,
-      "glow": 0,
-      "note": ""
-    },
-    "boot_shin_r": {
-      "name": "Boot",
-      "slot": "feet",
-      "item": "boots",
-      "bone": "knee_r",
-      "colour": "#3b2f22",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.39,
-      "to_m": 0.03,
-      "w_top": 0.064,
-      "w_bot": 0.054,
-      "d_top": 0.068,
-      "d_bot": 0.058,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.1,
-      "cap_top": 0.08,
-      "cap_bot": 0.14,
-      "glow": 0,
-      "note": ""
-    },
-    "boot_foot_r": {
-      "name": "Boot",
-      "slot": "feet",
-      "item": "boots",
-      "bone": "foot_r",
-      "colour": "#3b2f22",
-      "ox": 0,
-      "oy": 0.025,
-      "from_m": -0.04,
-      "to_m": 0.07,
-      "w_top": 0.062,
-      "w_bot": 0.058,
-      "d_top": 0.115,
-      "d_bot": 0.105,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.05,
-      "cap_top": 0.2,
-      "cap_bot": 0.08,
-      "glow": 0,
-      "note": ""
-    },
-    "belt_v": {
-      "name": "Tool Belt",
-      "slot": "belt",
-      "item": "toolbelt",
-      "bone": "hips",
-      "colour": "#4b3b28",
-      "ox": 0,
-      "oy": 0,
-      "from_m": -0.01,
-      "to_m": 0.07,
-      "w_top": 0.136,
-      "w_bot": 0.132,
-      "d_top": 0.098,
-      "d_bot": 0.094,
-      "sides": 8,
-      "rings": 2,
-      "bulge": 0.04,
-      "cap_top": 0,
-      "cap_bot": 0,
-      "glow": 0,
-      "note": ""
-    },
-    "spade_haft": {
-      "name": "Spade Haft",
-      "slot": "mainhand",
-      "item": "spade",
-      "bone": "hand_r",
-      "colour": "#6b5334",
-      "ox": 0,
-      "oy": 0.04,
-      "from_m": -0.22,
-      "to_m": 0.46,
-      "w_top": 0.03,
-      "w_bot": 0.03,
-      "d_top": 0.03,
-      "d_bot": 0.03,
-      "sides": 4,
-      "rings": 2,
-      "bulge": 0,
-      "cap_top": 0,
-      "cap_bot": 0,
-      "glow": 0,
-      "note": ""
-    },
-    "spade_blade": {
-      "name": "Spade Blade",
-      "slot": "mainhand",
-      "item": "spade",
-      "bone": "hand_r",
-      "colour": "#7d8189",
-      "ox": 0,
-      "oy": 0.04,
-      "from_m": -0.34,
-      "to_m": -0.2,
-      "w_top": 0.07,
-      "w_bot": 0.06,
-      "d_top": 0.024,
-      "d_bot": 0.024,
-      "sides": 4,
-      "rings": 2,
-      "bulge": 0,
-      "cap_top": 0,
-      "cap_bot": 0,
-      "glow": 0,
-      "note": ""
-    },
-    "lantern_v": {
-      "name": "Lantern",
-      "slot": "offhand",
-      "item": "lantern",
-      "bone": "hand_l",
-      "colour": "#c98a2e",
-      "ox": 0,
-      "oy": 0.04,
-      "from_m": -0.2,
-      "to_m": -0.06,
-      "w_top": 0.078,
-      "w_bot": 0.0702,
-      "d_top": 0.078,
-      "d_bot": 0.0702,
-      "sides": 5,
-      "rings": 3,
-      "bulge": 0.1,
-      "cap_top": 0.12,
-      "cap_bot": 0.12,
-      "glow": 0,
-      "note": ""
-    },
-    "coil_v": {
-      "name": "Rope Coil",
-      "slot": "trinket1",
-      "item": "coil",
-      "bone": "hips",
-      "colour": "#8a7a5a",
-      "ox": 0.155,
-      "oy": -0.02,
-      "from_m": -0.06,
-      "to_m": 0.04,
-      "w_top": 0.09,
-      "w_bot": 0.081,
-      "d_top": 0.09,
-      "d_bot": 0.081,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.18,
-      "cap_top": 0.18,
-      "cap_bot": 0.18,
-      "glow": 0,
-      "note": "Drawn larger than life so the coil reads at 32 pixels to the metre."
-    },
-    "charm_v": {
-      "name": "Bone Charm",
-      "slot": "trinket2",
-      "item": "charm",
-      "bone": "hips",
-      "colour": "#b3ab92",
-      "ox": -0.155,
-      "oy": -0.02,
-      "from_m": -0.07,
-      "to_m": 0.02,
-      "w_top": 0.062,
-      "w_bot": 0.0558,
-      "d_top": 0.062,
-      "d_bot": 0.0558,
-      "sides": 4,
-      "rings": 3,
-      "bulge": 0.1,
-      "cap_top": 0.3,
-      "cap_bot": 0.3,
-      "glow": 0,
-      "note": "Drawn larger than life: a true-scale knuckle bone would be under a pixel wide, and rule 4 says it has to be visible."
-    },
-    "torch_haft": {
-      "name": "Torch",
-      "slot": "offhand",
-      "item": "torch",
-      "bone": "hand_l",
-      "colour": "#4a3826",
-      "ox": 0,
-      "oy": 0.04,
-      "from_m": -0.16,
-      "to_m": 0.34,
-      "w_top": 0.026,
-      "w_bot": 0.03,
-      "d_top": 0.026,
-      "d_bot": 0.03,
-      "sides": 5,
-      "rings": 3,
-      "bulge": 0.05,
-      "cap_top": 0.05,
-      "cap_bot": 0.05,
-      "glow": 0,
-      "note": ""
-    },
-    "torch_flame": {
-      "name": "Torch Flame",
-      "slot": "offhand",
-      "item": "torch",
-      "bone": "hand_l",
-      "colour": "#e8923a",
-      "ox": 0,
-      "oy": 0.04,
-      "from_m": 0.3,
-      "to_m": 0.5,
-      "w_top": 0.03,
-      "w_bot": 0.06,
-      "d_top": 0.03,
-      "d_bot": 0.06,
-      "sides": 6,
-      "rings": 3,
-      "bulge": 0.15,
-      "cap_top": 0.6,
-      "cap_bot": 0.1,
-      "glow": 1,
-      "note": "The lit end. glow 1 means it is never darkened by the room, because it IS the light."
-    },
-    "candle_v": {
-      "name": "Candle",
-      "slot": "offhand",
-      "item": "candle",
-      "bone": "hand_l",
-      "colour": "#d8cfae",
-      "ox": 0,
-      "oy": 0.04,
-      "from_m": -0.1,
-      "to_m": 0.14,
-      "w_top": 0.024,
-      "w_bot": 0.026,
-      "d_top": 0.024,
-      "d_bot": 0.026,
-      "sides": 5,
-      "rings": 3,
-      "bulge": 0.04,
-      "cap_top": 0.3,
-      "cap_bot": 0.1,
-      "glow": 0,
-      "note": ""
-    },
-    "candle_flame": {
-      "name": "Candle Flame",
-      "slot": "offhand",
-      "item": "candle",
-      "bone": "hand_l",
-      "colour": "#f0b055",
-      "ox": 0,
-      "oy": 0.04,
-      "from_m": 0.12,
-      "to_m": 0.2,
-      "w_top": 0.012,
-      "w_bot": 0.026,
-      "d_top": 0.012,
-      "d_bot": 0.026,
-      "sides": 5,
-      "rings": 3,
-      "bulge": 0.1,
-      "cap_top": 0.6,
-      "cap_bot": 0.1,
-      "glow": 1,
-      "note": ""
-    }
+  "world.chunk_tiles": {
+   "value": 56,
+   "unit": "tiles",
+   "note": "Width and depth of the piece of labyrinth generated. 56 tiles = 56 metres across."
   },
-  "structures": {
-    "campfire": {
-      "name": "Campfire",
-      "tags": "structure,fire,warm",
-      "colour": "#b4541f",
-      "half_width": 0.38,
-      "height_m": 0.55,
-      "skill": "building",
-      "difficulty": 15,
-      "light": 9,
-      "note": "The heart of a camp, and the only thing that lights a room. Everything else is laid out around it."
-    },
-    "bedroll": {
-      "name": "Bedroll",
-      "tags": "structure,rest,cloth",
-      "colour": "#6b5a44",
-      "half_width": 0.4,
-      "height_m": 0.22,
-      "skill": "building",
-      "difficulty": 11,
-      "light": 0,
-      "note": "Somewhere to sleep. The easiest thing in a camp to put up."
-    },
-    "store": {
-      "name": "Store",
-      "tags": "structure,store,wood",
-      "colour": "#5d4a30",
-      "half_width": 0.36,
-      "height_m": 0.85,
-      "skill": "building",
-      "difficulty": 13,
-      "light": 0,
-      "note": "Keeps supplies off the wet floor."
-    },
-    "windbreak": {
-      "name": "Windbreak",
-      "tags": "structure,shelter,wood",
-      "colour": "#4f4436",
-      "half_width": 0.46,
-      "height_m": 1.45,
-      "skill": "building",
-      "difficulty": 17,
-      "light": 0,
-      "note": "The hardest thing in a starting camp, and the one that makes it feel like one."
-    }
+  "world.max_elevation": {
+   "value": 5,
+   "unit": "m",
+   "note": "How many different floor levels the rooms and halls are spread across."
   },
-  "bones": {
-    "root": {
-      "name": "Root",
-      "parent": "",
-      "x": 0,
-      "y": 0,
-      "z": 0,
-      "note": "Between the feet, on the ground. Everything hangs off this, and it is what turns when a crawler changes direction."
-    },
-    "hips": {
-      "name": "Hips",
-      "parent": "root",
-      "x": 0,
-      "y": 0,
-      "z": 0.82,
-      "note": ""
-    },
-    "chest": {
-      "name": "Chest",
-      "parent": "hips",
-      "x": 0,
-      "y": 0,
-      "z": 0.26,
-      "note": ""
-    },
-    "neck": {
-      "name": "Neck",
-      "parent": "chest",
-      "x": 0,
-      "y": 0,
-      "z": 0.24,
-      "note": ""
-    },
-    "head": {
-      "name": "Head",
-      "parent": "neck",
-      "x": 0,
-      "y": 0,
-      "z": 0.07,
-      "note": ""
-    },
-    "shoulder_l": {
-      "name": "Left Shoulder",
-      "parent": "chest",
-      "x": 0.155,
-      "y": 0,
-      "z": 0.17,
-      "note": ""
-    },
-    "shoulder_r": {
-      "name": "Right Shoulder",
-      "parent": "chest",
-      "x": -0.155,
-      "y": 0,
-      "z": 0.17,
-      "note": ""
-    },
-    "elbow_l": {
-      "name": "Left Elbow",
-      "parent": "shoulder_l",
-      "x": 0,
-      "y": 0,
-      "z": -0.26,
-      "note": ""
-    },
-    "elbow_r": {
-      "name": "Right Elbow",
-      "parent": "shoulder_r",
-      "x": 0,
-      "y": 0,
-      "z": -0.26,
-      "note": ""
-    },
-    "hand_l": {
-      "name": "Left Hand",
-      "parent": "elbow_l",
-      "x": 0,
-      "y": 0,
-      "z": -0.24,
-      "note": "Where the offhand item is held."
-    },
-    "hand_r": {
-      "name": "Right Hand",
-      "parent": "elbow_r",
-      "x": 0,
-      "y": 0,
-      "z": -0.24,
-      "note": "Where the mainhand item is held."
-    },
-    "thigh_l": {
-      "name": "Left Thigh",
-      "parent": "hips",
-      "x": 0.085,
-      "y": 0,
-      "z": 0,
-      "note": ""
-    },
-    "thigh_r": {
-      "name": "Right Thigh",
-      "parent": "hips",
-      "x": -0.085,
-      "y": 0,
-      "z": 0,
-      "note": ""
-    },
-    "knee_l": {
-      "name": "Left Knee",
-      "parent": "thigh_l",
-      "x": 0,
-      "y": 0,
-      "z": -0.42,
-      "note": ""
-    },
-    "knee_r": {
-      "name": "Right Knee",
-      "parent": "thigh_r",
-      "x": 0,
-      "y": 0,
-      "z": -0.42,
-      "note": ""
-    },
-    "foot_l": {
-      "name": "Left Foot",
-      "parent": "knee_l",
-      "x": 0,
-      "y": 0,
-      "z": -0.38,
-      "note": ""
-    },
-    "foot_r": {
-      "name": "Right Foot",
-      "parent": "knee_r",
-      "x": 0,
-      "y": 0,
-      "z": -0.38,
-      "note": ""
-    }
+  "roll.attribute_weight": {
+   "value": 1,
+   "unit": "x",
+   "note": "How much a natural attribute is worth in a roll. At 1, an attribute of 4 is worth 4 -- the number on the sheet is the number in the roll."
   },
-  "slots": {
-    "head": {
-      "name": "Head",
-      "note": "Helms, hats, hoods."
-    },
-    "neck": {
-      "name": "Neck",
-      "note": "Collars, amulets, scarves."
-    },
-    "back": {
-      "name": "Back",
-      "note": "Packs, capes, bedrolls, anything carried on the back."
-    },
-    "torso": {
-      "name": "Torso",
-      "note": "Armour, coats, shirts."
-    },
-    "gloves": {
-      "name": "Gloves",
-      "note": "Elbow down: forearms and hands together."
-    },
-    "mainhand": {
-      "name": "Mainhand",
-      "note": "The tool or weapon in the right hand."
-    },
-    "offhand": {
-      "name": "Offhand",
-      "note": "Shield, lantern, or a second tool, in the left hand."
-    },
-    "belt": {
-      "name": "Belt",
-      "note": "Belts, sashes, tool loops."
-    },
-    "legs": {
-      "name": "Legs",
-      "note": "Hips to knees."
-    },
-    "feet": {
-      "name": "Feet",
-      "note": "Knees down: shins and feet together."
-    },
-    "trinket1": {
-      "name": "Trinket 1",
-      "note": "A small carried thing. Hangs at the left hip."
-    },
-    "trinket2": {
-      "name": "Trinket 2",
-      "note": "A small carried thing. Hangs at the right hip."
-    }
+  "roll.skill_weight": {
+   "value": 1,
+   "unit": "x",
+   "note": "How much practice is worth in a roll. At 1, a skill of 3 is worth 3."
   },
-  "gear": {
-    "hood": {
-      "name": "Hood",
-      "slot": "head",
-      "tags": "cloth,leather",
-      "attr": "willpower:1",
-      "bonus": "",
-      "light": 0,
-      "note": "Keeps the drip off."
-    },
-    "collar": {
-      "name": "Collar",
-      "slot": "neck",
-      "tags": "leather",
-      "attr": "presence:1",
-      "bonus": "",
-      "light": 0,
-      "note": "A worn strap, buckled at the throat."
-    },
-    "pack": {
-      "name": "Pack",
-      "slot": "back",
-      "tags": "leather,store",
-      "attr": "might:1,agility:-1",
-      "bonus": "labouring:1",
-      "light": 0,
-      "note": "Everything they own, on their back. Carries more and slows you down: the trade-off is the point."
-    },
-    "jerkin": {
-      "name": "Jerkin",
-      "slot": "torso",
-      "tags": "leather",
-      "attr": "endurance:1,agility:-1",
-      "bonus": "",
-      "light": 0,
-      "note": "Boiled hide. Better than nothing."
-    },
-    "gloves": {
-      "name": "Work Gloves",
-      "slot": "gloves",
-      "tags": "leather",
-      "attr": "",
-      "bonus": "labouring:2,tinkering:1",
-      "light": 0,
-      "note": "Elbow to fingertip."
-    },
-    "spade": {
-      "name": "Spade",
-      "slot": "mainhand",
-      "tags": "iron,wood,tool",
-      "attr": "",
-      "bonus": "labouring:3,building:3",
-      "light": 0,
-      "note": "For digging, clearing and, at a push, arguing. Counts as a tool, so it is what makes Building and Labouring possible at all."
-    },
-    "lantern": {
-      "name": "Lantern",
-      "slot": "offhand",
-      "tags": "iron,glass,light",
-      "attr": "",
-      "bonus": "studying:2,foraging:1",
-      "light": 6,
-      "note": "Burns something. Nobody asks what."
-    },
-    "toolbelt": {
-      "name": "Tool Belt",
-      "slot": "belt",
-      "tags": "leather,tool",
-      "attr": "",
-      "bonus": "crafting:2,building:1",
-      "light": 0,
-      "note": "Loops and a buckle. Also counts as a tool."
-    },
-    "breeches": {
-      "name": "Breeches",
-      "slot": "legs",
-      "tags": "cloth",
-      "attr": "endurance:1",
-      "bonus": "",
-      "light": 0,
-      "note": "Hip to knee."
-    },
-    "boots": {
-      "name": "Boots",
-      "slot": "feet",
-      "tags": "leather",
-      "attr": "",
-      "bonus": "clambering:2,ranging:2",
-      "light": 0,
-      "note": "Knee down. The first thing a crawler buys."
-    },
-    "coil": {
-      "name": "Rope Coil",
-      "slot": "trinket1",
-      "tags": "rope",
-      "attr": "",
-      "bonus": "clambering:1",
-      "light": 0,
-      "note": "Twenty metres, if you believe the seller."
-    },
-    "charm": {
-      "name": "Bone Charm",
-      "slot": "trinket2",
-      "tags": "organic,charm,grim",
-      "attr": "willpower:1,presence:-1",
-      "bonus": "",
-      "light": 0,
-      "note": "Somebody's knuckle, on a thong."
-    },
-    "torch": {
-      "name": "Torch",
-      "slot": "offhand",
-      "tags": "wood,fire,light",
-      "attr": "",
-      "bonus": "",
-      "light": 8,
-      "note": "Burns bright and burns out. The most light anybody carries."
-    },
-    "candle": {
-      "name": "Candle",
-      "slot": "offhand",
-      "tags": "fire,light",
-      "attr": "",
-      "bonus": "studying:1",
-      "light": 3,
-      "note": "Barely enough to read by, and it does not free a hand."
-    }
+  "skill.cap": {
+   "value": 6,
+   "unit": "pts",
+   "note": "The most practice any one skill can hold. Six, the same scale as an attribute."
   },
-  "speeds": {
-    "normal": {
-      "name": "1×",
-      "multiplier": 1,
-      "note": "Real time. One tick is a sixtieth of a second. The first row is always normal speed."
-    },
-    "fast": {
-      "name": "2×",
-      "multiplier": 2,
-      "note": "Twice as fast."
-    },
-    "faster": {
-      "name": "4×",
-      "multiplier": 4,
-      "note": "Four times. About right for watching a camp go up."
-    },
-    "fastest": {
-      "name": "8×",
-      "multiplier": 8,
-      "note": "Eight times. Add a row here for a faster one, or delete one you never use."
-    }
+  "learn.gain_on_failure": {
+   "value": 0.1,
+   "unit": "pts",
+   "note": "Practice gained from a FAILED attempt. Rule 1: failing is how a crawler learns. Ten failures is a tenth of the way to mastery."
+  },
+  "learn.gain_on_success": {
+   "value": 0,
+   "unit": "pts",
+   "note": "Practice gained from a successful attempt. Zero: succeeding teaches nothing at all, so a crawler who has mastered something stops improving until the labyrinth gives them something harder."
+  },
+  "learn.near_miss_bonus": {
+   "value": 0.06,
+   "unit": "pts",
+   "note": "Extra practice for only just failing. Getting close teaches most of all."
+  },
+  "learn.near_miss_margin": {
+   "value": 2,
+   "unit": "pts",
+   "note": "How close a failure has to be to count as only just missing. Two, on a scale where a whole roll is about a dozen."
+  },
+  "actor.count": {
+   "value": 6,
+   "unit": "people",
+   "note": "How many crawlers turn up in the labyrinth."
+  },
+  "actor.attribute_min": {
+   "value": 1,
+   "unit": "pts",
+   "note": "Lowest a natural attribute can be. One to six, like a die: 3 and 4 are ordinary, 1 and 6 are remarkable."
+  },
+  "actor.attribute_max": {
+   "value": 6,
+   "unit": "pts",
+   "note": "Highest a natural attribute can be."
+  },
+  "actor.step_ticks": {
+   "value": 26,
+   "unit": "ticks",
+   "note": "How long a crawler pauses between attempts to move. 60 ticks is a second."
+  },
+  "actor.height_m": {
+   "value": 1.625,
+   "unit": "m",
+   "note": "How tall a grown crawler is. At the locked scale of 32 pixels per metre this makes them 52 pixels tall."
+  },
+  "render.zoom_start": {
+   "value": 2,
+   "unit": "x",
+   "note": "How many real screen pixels one game pixel takes up when the game opens. Zooming does NOT make the world bigger -- it makes the pixels bigger, so the picture stays perfectly sharp."
+  },
+  "render.zoom_min": {
+   "value": 1,
+   "unit": "x",
+   "note": "Furthest out. One game pixel to one screen pixel, showing the most ground."
+  },
+  "render.zoom_max": {
+   "value": 6,
+   "unit": "x",
+   "note": "Closest in. Whole numbers only, which is what keeps every edge hard."
+  },
+  "render.max_buffer_w": {
+   "value": 960,
+   "unit": "px",
+   "note": "Widest the game picture is ever drawn, before it is blown up. Caps the work on a very large screen."
+  },
+  "render.max_buffer_h": {
+   "value": 540,
+   "unit": "px",
+   "note": "Tallest the game picture is ever drawn, before it is blown up."
+  },
+  "world.rooms": {
+   "value": 9,
+   "unit": "rooms",
+   "note": "How many rooms to carve out of the rock. Halls are then dug between them."
+  },
+  "world.room_min": {
+   "value": 5,
+   "unit": "m",
+   "note": "Smallest a room can be, along one side."
+  },
+  "world.room_max": {
+   "value": 13,
+   "unit": "m",
+   "note": "Largest a room can be, along one side."
+  },
+  "world.hall_width": {
+   "value": 2,
+   "unit": "m",
+   "note": "How wide the halls between rooms are."
+  },
+  "world.rock_height": {
+   "value": 2,
+   "unit": "m",
+   "note": "How far the solid rock rises above the floor beside it. This is what makes a wall a wall. Tall rock hides more of what is behind it, so this and the cutaway settings work against each other."
+  },
+  "camp.bedrolls": {
+   "value": 4,
+   "unit": "beds",
+   "note": "How many bedrolls the crawlers lay out around the fire."
+  },
+  "camp.stores": {
+   "value": 1,
+   "unit": "stores",
+   "note": "How many stores the crawlers put up."
+  },
+  "camp.windbreaks": {
+   "value": 2,
+   "unit": "windbreaks",
+   "note": "How many windbreaks the crawlers put up."
+  },
+  "camp.site_spread": {
+   "value": 3,
+   "unit": "m",
+   "note": "How far from the fire the rest of the camp is laid out."
+  },
+  "camp.progress_per_success": {
+   "value": 25,
+   "unit": "pts",
+   "note": "How much of a structure one successful effort raises. 100 finishes it."
+  },
+  "camp.work_ticks": {
+   "value": 18,
+   "unit": "ticks",
+   "note": "How long a crawler takes between efforts. 60 ticks is a second."
+  },
+  "render.cutaway_fade": {
+   "value": 0.3,
+   "unit": "alpha",
+   "note": "How solid a wall of rock stays when it is standing between you and a floor behind it. This is the see-through fourth wall. 1 = never fades and rooms hide behind their own near walls; 0 = those walls vanish entirely."
+  },
+  "render.cutaway_depth": {
+   "value": 1,
+   "unit": "m",
+   "note": "How close a wall has to be to the floor it is hiding before it turns translucent. Small numbers fade only the near wall of a room, which is what you want; large numbers fade half the labyrinth into a haze."
+  },
+  "render.tile_h_low": {
+   "value": 32,
+   "unit": "px",
+   "note": "How tall a square metre of ground looks at the normal angle. Half of tile_w is the classic two-to-one isometric view."
+  },
+  "render.tile_h_high": {
+   "value": 54,
+   "unit": "px",
+   "note": "How tall a square metre of ground looks from the raised angle. Bigger means you are looking down more steeply and can see further into rooms. Walls stay the same height either way, so the locked 32 pixels to the metre holds at both angles."
+  },
+  "camera.swing_ms": {
+   "value": 320,
+   "unit": "ms",
+   "note": "How long the view takes to swing a quarter turn. This runs on real time, not game time, so the swing is smooth whether or not the world is running."
+  },
+  "camera.tilt_ms": {
+   "value": 260,
+   "unit": "ms",
+   "note": "How long the view takes to rise to the higher angle and back."
+  },
+  "anim.walk_ticks": {
+   "value": 34,
+   "unit": "ticks",
+   "note": "How long one full stride takes. 60 ticks is a second, so smaller is a faster walk."
+  },
+  "anim.walk_leg_swing": {
+   "value": 38,
+   "unit": "degrees",
+   "note": "How far the legs swing forward and back while walking."
+  },
+  "anim.walk_knee_bend": {
+   "value": 46,
+   "unit": "degrees",
+   "note": "How much the trailing knee folds as the leg comes through."
+  },
+  "anim.walk_arm_swing": {
+   "value": 26,
+   "unit": "degrees",
+   "note": "How far the arms swing, opposite to the legs."
+  },
+  "anim.walk_bob": {
+   "value": 0.035,
+   "unit": "m",
+   "note": "How far a crawler rises and falls with each step."
+  },
+  "anim.work_ticks": {
+   "value": 40,
+   "unit": "ticks",
+   "note": "How long one swing of a tool takes."
+  },
+  "anim.work_arm_lift": {
+   "value": 78,
+   "unit": "degrees",
+   "note": "How far the arms come up for a swing of work."
+  },
+  "anim.work_lean": {
+   "value": 14,
+   "unit": "degrees",
+   "note": "How far a crawler leans into their work."
+  },
+  "anim.idle_ticks": {
+   "value": 150,
+   "unit": "ticks",
+   "note": "How long one slow breath takes while standing about."
+  },
+  "anim.idle_sway": {
+   "value": 4.5,
+   "unit": "degrees",
+   "note": "How much a crawler sways while standing about."
+  },
+  "anim.turn_ticks": {
+   "value": 8,
+   "unit": "ticks",
+   "note": "How long a crawler takes to turn to face a new direction."
+  },
+  "render.light_ambient": {
+   "value": 0.55,
+   "unit": "x",
+   "note": "How lit the darkest FACE of something is, once the lamp has reached it. This is the shape of a thing, not how dark the room is -- that is light.ambient."
+  },
+  "render.light_diffuse": {
+   "value": 0.45,
+   "unit": "x",
+   "note": "How much brighter a face gets for facing the light."
+  },
+  "actor.gear_chance": {
+   "value": 0.55,
+   "unit": "0-1",
+   "note": "How likely a crawler is to turn up already wearing any given piece of gear."
+  },
+  "time.max_steps_per_frame": {
+   "value": 64,
+   "unit": "ticks",
+   "note": "The most the world is allowed to advance in a single drawn frame. Stops a slow machine, or a tab left in the background, from lurching forward all at once."
+  },
+  "render.outline_width": {
+   "value": 2,
+   "unit": "px",
+   "note": "How thick the highlight ring around a selected thing is drawn. It is drawn UNDER the thing and half of it is covered, so 2 here shows as a 1 pixel line around the silhouette."
+  },
+  "texture.floor_px": {
+   "value": 16,
+   "unit": "px",
+   "note": "How big one square of the ground's grain is. The grain repeats every this many pixels across the floor."
+  },
+  "texture.fine_px": {
+   "value": 8,
+   "unit": "px",
+   "note": "How big the grain is on crawlers and on anything built. Smaller than the floor's, because a face is only about eight pixels across."
+  },
+  "texture.strength": {
+   "value": 0.17,
+   "unit": "0-1",
+   "note": "How strongly the grain darkens and lightens what is underneath. 0 turns texture off entirely."
+  },
+  "texture.speck": {
+   "value": 0.055,
+   "unit": "0-1",
+   "note": "How much of the grain is hard specks of grit and rust rather than soft mottling."
+  },
+  "texture.seed": {
+   "value": 7,
+   "unit": "",
+   "note": "Which grain gets generated. Change it for a different pattern of grit."
+  },
+  "render.min_face_px": {
+   "value": 0.28,
+   "unit": "px",
+   "note": "Faces smaller than this many pixels are not drawn. At 32 pixels to the metre a crawler has a lot of surfaces that never cover a whole pixel, and skipping them costs nothing to look at and saves a great deal of work."
+  },
+  "roll.dice": {
+   "value": 2,
+   "unit": "dice",
+   "note": "How many dice are thrown for an attempt. Two gives a bell: middling results are common, extremes are rare."
+  },
+  "roll.die_faces": {
+   "value": 6,
+   "unit": "faces",
+   "note": "How many faces each die has."
+  },
+  "light.ambient": {
+   "value": 0.14,
+   "unit": "0-1",
+   "note": "How much you can see where nothing is lighting the way. Very low: the labyrinth is dark, and light is something you carry into it."
+  },
+  "light.warmth": {
+   "value": 0.45,
+   "unit": "0-1",
+   "note": "How much a lit thing goes orange rather than just brighter. 0 is cold light, 1 is firelight."
+  },
+  "light.steps": {
+   "value": 6,
+   "unit": "steps",
+   "note": "How many levels of brightness there are between dark and fully lit. Few levels look painted; many look smooth and cost more to draw."
+  },
+  "light.falloff": {
+   "value": 1.35,
+   "unit": "x",
+   "note": "How sharply light dies with distance. Above 1 keeps the bright part close to the source."
+  },
+  "anim.step_ticks": {
+   "value": 22,
+   "unit": "ticks",
+   "note": "How long a crawler takes to walk from one square to the next. Shorter than the pause between attempts, so they arrive and then think about the next step rather than gliding forever."
+  },
+  "camera.follow": {
+   "value": 1,
+   "unit": "0 or 1",
+   "note": "Whether clicking a crawler locks the view onto them. 1 follows; 0 leaves the view where you put it. Panning by hand always lets go."
+  },
+  "world.room_named_chance": {
+   "value": 0.5,
+   "unit": "0 to 1",
+   "note": "How many rooms are a PLACE -- a cistern, an arena -- rather than a plain hall. At 0.5 about half of them are something. The rest are bare rock, which is what makes the named ones land."
+  },
+  "world.room_condition_chance": {
+   "value": 0.55,
+   "unit": "0 to 1",
+   "note": "Chance a named room picks up a condition on top of what it was: flooded, burnt, haunted. Rolled twice, so two conditions can stack -- a haunted abandoned goblin slave market."
+  },
+  "world.room_people_chance": {
+   "value": 0.45,
+   "unit": "0 to 1",
+   "note": "Chance a named room says whose it was. Goblin, dwarven, monks'."
+  },
+  "world.room_shape_ramps": {
+   "value": 2,
+   "unit": "ways up",
+   "note": "How many ways there are up from one level of a room to the next. 1 makes a ledge you must walk round to climb; 4 makes it an open slope."
+  },
+  "world.room_shape_min_side": {
+   "value": 3,
+   "unit": "metres",
+   "note": "A room whose inside is narrower than this stays flat. There is no room to put a pit in a corridor."
+  },
+  "room.study_difficulty": {
+   "value": 13,
+   "unit": "target",
+   "note": "What a crawler must beat, Studying, to work out what a place was. They roll their Intellect and Willpower plus 2d6 against it."
+  },
+  "room.study_ticks": {
+   "value": 45,
+   "unit": "ticks",
+   "note": "How long a crawler spends looking at a room between attempts to read it."
   }
+ },
+ "geometry": {
+  "world.metres_per_tile": {
+   "value": 1,
+   "unit": "m",
+   "note": "READ ONLY. One tile is one square metre. Non-negotiable rule 7."
+  },
+  "render.iso_ratio": {
+   "value": 2,
+   "unit": "x",
+   "note": "READ ONLY. tile_w divided by tile_h. Changing this is changing the camera, not balancing the game."
+  },
+  "figure.nominal_height_m": {
+   "value": 1.625,
+   "unit": "m",
+   "note": "READ ONLY. The height the skeleton and the figure parts are measured against. A crawler of a different height is scaled by the ratio."
+  }
+ },
+ "names": {
+  "ui.hint_desktop": {
+   "text": "drag to pan  \u00b7  scroll to zoom  \u00b7  Q/E turn, R raises  \u00b7  space pauses, , and . change speed"
+  },
+  "ui.hint_touch": {
+   "text": "drag to pan  \u00b7  pinch to zoom  \u00b7  the buttons turn, raise, pause and change speed"
+  },
+  "ui.label_elevation": {
+   "text": "elevation"
+  },
+  "ui.label_tags": {
+   "text": "tags"
+  },
+  "ui.label_footing": {
+   "text": "footing"
+  },
+  "ui.footing_walk": {
+   "text": "can be walked on"
+  },
+  "ui.footing_block": {
+   "text": "solid \u2014 blocks movement"
+  },
+  "ui.footing_ramp": {
+   "text": "ramp \u2014 climbs one metre"
+  },
+  "ui.nothing_there": {
+   "text": "nothing there"
+  },
+  "ui.label_attributes": {
+   "text": "attributes"
+  },
+  "ui.label_skills": {
+   "text": "skills"
+  },
+  "ui.label_wearing": {
+   "text": "wearing"
+  },
+  "ui.label_bare": {
+   "text": "nothing"
+  },
+  "character.name_pool": {
+   "text": "Bran, Ysolde, Corwin, Maerl, Thessa, Odric, Vela, Garn, Ketta, Rhodry, Isme, Dunmar, Sable, Wren, Halgar, Nix, Orla, Tam, Brennis, Sorrel"
+  },
+  "ui.label_progress": {
+   "text": "progress"
+  },
+  "ui.label_state": {
+   "text": "state"
+  },
+  "ui.label_doing": {
+   "text": "doing"
+  },
+  "ui.label_ground": {
+   "text": "ground"
+  },
+  "ui.state_planned": {
+   "text": "marked out, not started"
+  },
+  "ui.state_clearing": {
+   "text": "ground still needs clearing"
+  },
+  "ui.state_building": {
+   "text": "going up"
+  },
+  "ui.state_built": {
+   "text": "finished"
+  },
+  "ui.doing_walking": {
+   "text": "walking to the camp"
+  },
+  "ui.doing_clearing": {
+   "text": "clearing ground"
+  },
+  "ui.doing_building": {
+   "text": "building"
+  },
+  "ui.doing_idle": {
+   "text": "looking about"
+  },
+  "ui.label_gear": {
+   "text": "wearing"
+  },
+  "ui.label_effect": {
+   "text": "effect"
+  },
+  "ui.label_empty": {
+   "text": "nothing"
+  },
+  "ui.label_paused": {
+   "text": "paused"
+  },
+  "ui.label_speed": {
+   "text": "speed"
+  },
+  "ui.button_pause": {
+   "text": "pause (space)"
+  },
+  "ui.button_slower": {
+   "text": "slower (,)"
+  },
+  "ui.button_faster": {
+   "text": "faster (.)"
+  },
+  "ui.colour_outline": {
+   "text": "#ffe9a8"
+  },
+  "ui.label_inspect": {
+   "text": "click to inspect"
+  },
+  "ui.label_close": {
+   "text": "close"
+  },
+  "ui.section_attributes": {
+   "text": "attributes"
+  },
+  "ui.section_skills": {
+   "text": "skills"
+  },
+  "ui.section_gear": {
+   "text": "gear"
+  },
+  "ui.label_lastroll": {
+   "text": "last roll"
+  },
+  "ui.label_following": {
+   "text": "following"
+  },
+  "ui.doing_studying": {
+   "text": "reading the room"
+  },
+  "ui.label_place": {
+   "text": "place"
+  },
+  "ui.place_unknown": {
+   "text": "nobody has read this place yet"
+  }
+ },
+ "tags": {
+  "floor": {
+   "name": "floor",
+   "note": "A surface something can stand on."
+  },
+  "solid": {
+   "name": "solid",
+   "note": "Fills its metre. Nothing walks through it."
+  },
+  "ramp": {
+   "name": "ramp",
+   "note": "Climbs exactly one metre between levels."
+  },
+  "stone": {
+   "name": "stone",
+   "note": "Made of worked or natural rock."
+  },
+  "earth": {
+   "name": "earth",
+   "note": "Soil, clay or packed dirt."
+  },
+  "water": {
+   "name": "water",
+   "note": "Standing water. Shallow enough to wade."
+  },
+  "organic": {
+   "name": "organic",
+   "note": "Grown, or once alive."
+  },
+  "damp": {
+   "name": "damp",
+   "note": "Wet underfoot. Things rot and grow here."
+  },
+  "dry": {
+   "name": "dry",
+   "note": "Dry underfoot."
+  },
+  "unstable": {
+   "name": "unstable",
+   "note": "Loose. Shifts when weight is put on it."
+  },
+  "grim": {
+   "name": "grim",
+   "note": "A reminder of what happened here."
+  },
+  "blocks-sight": {
+   "name": "blocks sight",
+   "note": "Cannot be seen through."
+  },
+  "person": {
+   "name": "person",
+   "note": "A thinking creature with the six attributes and skills of its own."
+  },
+  "crawler": {
+   "name": "crawler",
+   "note": "One of yours: came into the labyrinth, may yet leave it."
+  },
+  "structure": {
+   "name": "structure",
+   "note": "Something raised by hand that was not there before."
+  },
+  "fire": {
+   "name": "fire",
+   "note": "Gives light and warmth, and will go out if nobody feeds it."
+  },
+  "rest": {
+   "name": "rest",
+   "note": "Somewhere to sleep or recover."
+  },
+  "shelter": {
+   "name": "shelter",
+   "note": "Keeps the weather and the dark off."
+  },
+  "store": {
+   "name": "store",
+   "note": "Holds things so they are not carried."
+  },
+  "wood": {
+   "name": "wood",
+   "note": "Made of timber: burns, rots, can be repaired."
+  },
+  "cloth": {
+   "name": "cloth",
+   "note": "Made of fabric: light, tears, soaks."
+  },
+  "unbuilt": {
+   "name": "unbuilt",
+   "note": "Planned and marked out, but not finished."
+  },
+  "warm": {
+   "name": "warm",
+   "note": "Holds off the cold. Crawlers will come to it."
+  },
+  "leather": {
+   "name": "leather",
+   "note": "Cured hide. Tough, and it creaks."
+  },
+  "iron": {
+   "name": "iron",
+   "note": "Cold, heavy, and it rusts."
+  },
+  "rope": {
+   "name": "rope",
+   "note": "Twisted fibre."
+  },
+  "glass": {
+   "name": "glass",
+   "note": "Sees through, and breaks."
+  },
+  "tool": {
+   "name": "tool",
+   "note": "Made for work, not for fighting."
+  },
+  "light": {
+   "name": "light",
+   "note": "Gives light in the dark."
+  },
+  "charm": {
+   "name": "charm",
+   "note": "Carried for luck, or for something worse."
+  },
+  "flooded": {
+   "name": "flooded",
+   "note": "Standing water has taken the lower ground here."
+  },
+  "frozen": {
+   "name": "frozen",
+   "note": "Cold enough that the water has not moved in a long time."
+  },
+  "burnt": {
+   "name": "burnt",
+   "note": "Fire went through here and left it black."
+  },
+  "collapsed": {
+   "name": "collapsed",
+   "note": "The ceiling or the walls came down."
+  },
+  "abandoned": {
+   "name": "abandoned",
+   "note": "Left in a hurry, or left to rot. Nobody has kept it."
+  },
+  "haunted": {
+   "name": "haunted",
+   "note": "Something of what happened here has not finished happening."
+  },
+  "cursed": {
+   "name": "cursed",
+   "note": "Deliberately spoiled, by somebody who knew how."
+  },
+  "overgrown": {
+   "name": "overgrown",
+   "note": "Growing things have taken it back."
+  },
+  "infested": {
+   "name": "infested",
+   "note": "Something lives here now, and it is not people."
+  },
+  "sacred": {
+   "name": "sacred",
+   "note": "Built to be knelt in."
+  },
+  "profane": {
+   "name": "profane",
+   "note": "Built for something people do not admit to."
+  },
+  "worked": {
+   "name": "worked",
+   "note": "Shaped by hand: cut, dressed, laid out on purpose."
+  },
+  "buried": {
+   "name": "buried",
+   "note": "Half filled in by what fell on it."
+  },
+  "pillared": {
+   "name": "pillared",
+   "note": "Columns hold the roof up, and break the sightlines."
+  },
+  "tiered": {
+   "name": "tiered",
+   "note": "The floor is on more than one level."
+  },
+  "gilded": {
+   "name": "gilded",
+   "note": "Somebody spent money here once."
+  },
+  "silent": {
+   "name": "silent",
+   "note": "Too quiet. Sound does not carry the way it should."
+  },
+  "industry": {
+   "name": "industry",
+   "note": "Work was done here, at scale, with tools and heat."
+  },
+  "dwelling": {
+   "name": "dwelling",
+   "note": "People slept here."
+  },
+  "storage": {
+   "name": "storage",
+   "note": "Things were kept here."
+  },
+  "learning": {
+   "name": "learning",
+   "note": "Knowledge was kept or made here."
+  },
+  "captivity": {
+   "name": "captivity",
+   "note": "People were held here against their will."
+  },
+  "martial": {
+   "name": "martial",
+   "note": "Soldiers used it."
+  },
+  "room": {
+   "name": "room",
+   "note": "A place in the labyrinth large enough to have been something."
+  }
+ },
+ "tiles": {
+  "stone_floor": {
+   "name": "Stone Floor",
+   "tags": "floor,stone,dry",
+   "top": "#6e7278",
+   "side": "#585c61",
+   "footing": "walk",
+   "cross": 7,
+   "clear": 11,
+   "note": "Worked flagstone. The default footing of the labyrinth."
+  },
+  "packed_earth": {
+   "name": "Packed Earth",
+   "tags": "floor,earth,dry",
+   "top": "#7d6c54",
+   "side": "#63553f",
+   "footing": "walk",
+   "cross": 8,
+   "clear": 12,
+   "note": "Trodden soil."
+  },
+  "moss_stone": {
+   "name": "Mossy Stone",
+   "tags": "floor,stone,damp,organic",
+   "top": "#5f7557",
+   "side": "#4a5c45",
+   "footing": "walk",
+   "cross": 10,
+   "clear": 14,
+   "note": "Stone gone green where the water sits."
+  },
+  "shallow_water": {
+   "name": "Shallow Water",
+   "tags": "floor,water,damp",
+   "top": "#3f6b7d",
+   "side": "#335667",
+   "footing": "walk",
+   "cross": 13,
+   "clear": 18,
+   "note": "Ankle deep. Slows a walker, ruins what it soaks."
+  },
+  "rubble": {
+   "name": "Rubble",
+   "tags": "floor,stone,unstable,dry",
+   "top": "#6d6860",
+   "side": "#57534c",
+   "footing": "walk",
+   "cross": 14,
+   "clear": 17,
+   "note": "Collapsed masonry, not yet cleared."
+  },
+  "bone_litter": {
+   "name": "Bone Litter",
+   "tags": "floor,organic,grim,dry",
+   "top": "#8d8672",
+   "side": "#6f6959",
+   "footing": "walk",
+   "cross": 9,
+   "clear": 13,
+   "note": "Somebody else got this far."
+  },
+  "stone_ramp": {
+   "name": "Stone Ramp",
+   "tags": "ramp,stone,dry",
+   "top": "#73777d",
+   "side": "#5b5f64",
+   "footing": "ramp",
+   "cross": 11,
+   "clear": 15,
+   "note": "A climbable one-metre slope."
+  },
+  "stone_block": {
+   "name": "Stone Block",
+   "tags": "solid,stone,blocks-sight",
+   "top": "#5a5d62",
+   "side": "#46494d",
+   "footing": "block",
+   "cross": 99,
+   "clear": 99,
+   "note": "A full cubic metre of rock."
+  }
+ },
+ "attributes": {
+  "might": {
+   "name": "Might",
+   "abbrev": "MGT",
+   "note": "Raw physical force. Lifting, hauling, forcing, and the heavy end of any tool."
+  },
+  "agility": {
+   "name": "Agility",
+   "abbrev": "AGI",
+   "note": "Speed and fine control. Keeping your feet, quick hands, delicate work."
+  },
+  "endurance": {
+   "name": "Endurance",
+   "abbrev": "END",
+   "note": "Staying power. Long marches, cold nights, illness, a whole day of work."
+  },
+  "presence": {
+   "name": "Presence",
+   "abbrev": "PRE",
+   "note": "Effect on other people. Singing, teaching, calming a panic, bargaining."
+  },
+  "intellect": {
+   "name": "Intellect",
+   "abbrev": "INT",
+   "note": "What can be learned and worked out. Recipes, repairs, maps, lore."
+  },
+  "willpower": {
+   "name": "Willpower",
+   "abbrev": "WIL",
+   "note": "What can be made to happen anyway. Fear, pain, boredom, sticking at a hated task."
+  }
+ },
+ "skills": {
+  "clambering": {
+   "name": "Clambering",
+   "derives": "might:1,agility:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "Climbing, scrambling, and keeping your feet on ground that does not want you to. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "labouring": {
+   "name": "Labouring",
+   "derives": "might:1,endurance:1",
+   "needs_tag": "tool",
+   "without": -4,
+   "note": "Hauling, digging, clearing ground, and still doing it an hour later. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Bare hands cost 4."
+  },
+  "wrangling": {
+   "name": "Wrangling",
+   "derives": "might:1,presence:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "Handling animals, and dragging people out of trouble whether they like it or not. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "building": {
+   "name": "Building",
+   "derives": "might:1,intellect:1",
+   "needs_tag": "tool",
+   "without": -6,
+   "note": "Raising structures that stay up. Knowing where the weight goes, and being able to put it there. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Needs a tool in hand: without one the job is 6 points harder, which on a scale of about a dozen is close to impossible."
+  },
+  "fighting": {
+   "name": "Fighting",
+   "derives": "might:1,willpower:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "The one fifth of the game that is violence. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "ranging": {
+   "name": "Ranging",
+   "derives": "agility:1,endurance:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "Covering ground: travelling far, moving quietly, getting back again. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "performing": {
+   "name": "Performing",
+   "derives": "agility:1,presence:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "Singing, playing, dancing, and holding a room while you do it. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "crafting": {
+   "name": "Crafting",
+   "derives": "agility:1,intellect:1",
+   "needs_tag": "tool",
+   "without": -5,
+   "note": "Making and mending: tools, clothes, meals, anything that takes hands and a recipe. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "tinkering": {
+   "name": "Tinkering",
+   "derives": "agility:1,willpower:1",
+   "needs_tag": "tool",
+   "without": -5,
+   "note": "Locks, traps, and anything fiddly that punishes a shaking hand. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "tending": {
+   "name": "Tending",
+   "derives": "endurance:1,presence:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "Nursing, feeding, and keeping people upright who would rather lie down. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "foraging": {
+   "name": "Foraging",
+   "derives": "endurance:1,intellect:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "Hunting, fishing, gathering, and knowing which of it is safe to eat. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "enduring": {
+   "name": "Enduring",
+   "derives": "endurance:1,willpower:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "Cold, hunger, pain, boredom and the dark. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "bargaining": {
+   "name": "Bargaining",
+   "derives": "presence:1,intellect:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "Trading, persuading, and working out what somebody actually wants. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "leading": {
+   "name": "Leading",
+   "derives": "presence:1,willpower:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "Rallying, calming a panic, and holding a group together when it wants to scatter. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  },
+  "studying": {
+   "name": "Studying",
+   "derives": "intellect:1,willpower:1",
+   "needs_tag": "",
+   "without": 0,
+   "note": "Lore, mapmaking, deciphering, and sitting with a problem until it gives. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+  }
+ },
+ "figure": {
+  "head": {
+   "name": "Head",
+   "slot": "body",
+   "item": "",
+   "bone": "head",
+   "colour": "#a08a70",
+   "ox": 0,
+   "oy": 0,
+   "from_m": 0.0,
+   "to_m": 0.23,
+   "w_top": 0.08,
+   "w_bot": 0.078,
+   "d_top": 0.082,
+   "d_bot": 0.08,
+   "sides": 8,
+   "rings": 4,
+   "bulge": 0.04,
+   "cap_top": 0.42,
+   "cap_bot": 0.2,
+   "glow": 0,
+   "note": "Always drawn. Eight sides and a domed top: at 52 pixels tall the silhouette is most of what you read."
+  },
+  "neck": {
+   "name": "Neck",
+   "slot": "body",
+   "item": "",
+   "bone": "neck",
+   "colour": "#a08a70",
+   "ox": 0,
+   "oy": 0,
+   "from_m": 0.0,
+   "to_m": 0.07,
+   "w_top": 0.05,
+   "w_bot": 0.048,
+   "d_top": 0.05,
+   "d_bot": 0.048,
+   "sides": 6,
+   "rings": 2,
+   "bulge": 0,
+   "cap_top": 0,
+   "cap_bot": 0,
+   "glow": 0,
+   "note": ""
+  },
+  "torso": {
+   "name": "Torso",
+   "slot": "body",
+   "item": "",
+   "bone": "chest",
+   "colour": "#5c5145",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.26,
+   "to_m": 0.2,
+   "w_top": 0.155,
+   "w_bot": 0.12,
+   "d_top": 0.1,
+   "d_bot": 0.082,
+   "sides": 8,
+   "rings": 4,
+   "bulge": 0.1,
+   "cap_top": 0.16,
+   "cap_bot": 0.12,
+   "glow": 0,
+   "note": "Always drawn. Wider at the shoulders, pinched at the waist, and swelling slightly in between -- that is what makes a figure read as a body."
+  },
+  "pelvis": {
+   "name": "Pelvis",
+   "slot": "body",
+   "item": "",
+   "bone": "hips",
+   "colour": "#33302c",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.08,
+   "to_m": 0.06,
+   "w_top": 0.128,
+   "w_bot": 0.12,
+   "d_top": 0.09,
+   "d_bot": 0.086,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.06,
+   "cap_top": 0.1,
+   "cap_bot": 0.1,
+   "glow": 0,
+   "note": ""
+  },
+  "upperarm_l": {
+   "name": "Upper Arm",
+   "slot": "body",
+   "item": "",
+   "bone": "shoulder_l",
+   "colour": "#5c5145",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.26,
+   "to_m": 0.03,
+   "w_top": 0.052,
+   "w_bot": 0.044,
+   "d_top": 0.052,
+   "d_bot": 0.044,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.07,
+   "cap_top": 0.1,
+   "cap_bot": 0.18,
+   "glow": 0,
+   "note": ""
+  },
+  "forearm_l": {
+   "name": "Forearm",
+   "slot": "body",
+   "item": "",
+   "bone": "elbow_l",
+   "colour": "#a08a70",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.24,
+   "to_m": 0.01,
+   "w_top": 0.044,
+   "w_bot": 0.038,
+   "d_top": 0.044,
+   "d_bot": 0.038,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.05,
+   "cap_top": 0.08,
+   "cap_bot": 0.2,
+   "glow": 0,
+   "note": ""
+  },
+  "hand_l": {
+   "name": "Hand",
+   "slot": "body",
+   "item": "",
+   "bone": "hand_l",
+   "colour": "#a08a70",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.08,
+   "to_m": 0.01,
+   "w_top": 0.042,
+   "w_bot": 0.036,
+   "d_top": 0.034,
+   "d_bot": 0.03,
+   "sides": 5,
+   "rings": 3,
+   "bulge": 0.05,
+   "cap_top": 0.35,
+   "cap_bot": 0.3,
+   "glow": 0,
+   "note": ""
+  },
+  "thigh_l": {
+   "name": "Thigh",
+   "slot": "body",
+   "item": "",
+   "bone": "thigh_l",
+   "colour": "#33302c",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.42,
+   "to_m": 0.04,
+   "w_top": 0.072,
+   "w_bot": 0.058,
+   "d_top": 0.078,
+   "d_bot": 0.062,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.11,
+   "cap_top": 0.14,
+   "cap_bot": 0.1,
+   "glow": 0,
+   "note": ""
+  },
+  "shin_l": {
+   "name": "Shin",
+   "slot": "body",
+   "item": "",
+   "bone": "knee_l",
+   "colour": "#33302c",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.38,
+   "to_m": 0.02,
+   "w_top": 0.056,
+   "w_bot": 0.046,
+   "d_top": 0.06,
+   "d_bot": 0.05,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.09,
+   "cap_top": 0.1,
+   "cap_bot": 0.18,
+   "glow": 0,
+   "note": ""
+  },
+  "foot_l": {
+   "name": "Foot",
+   "slot": "body",
+   "item": "",
+   "bone": "foot_l",
+   "colour": "#2b2825",
+   "ox": 0,
+   "oy": 0.025,
+   "from_m": -0.03,
+   "to_m": 0.06,
+   "w_top": 0.054,
+   "w_bot": 0.05,
+   "d_top": 0.105,
+   "d_bot": 0.095,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.04,
+   "cap_top": 0.22,
+   "cap_bot": 0.1,
+   "glow": 0,
+   "note": ""
+  },
+  "upperarm_r": {
+   "name": "Upper Arm",
+   "slot": "body",
+   "item": "",
+   "bone": "shoulder_r",
+   "colour": "#5c5145",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.26,
+   "to_m": 0.03,
+   "w_top": 0.052,
+   "w_bot": 0.044,
+   "d_top": 0.052,
+   "d_bot": 0.044,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.07,
+   "cap_top": 0.1,
+   "cap_bot": 0.18,
+   "glow": 0,
+   "note": ""
+  },
+  "forearm_r": {
+   "name": "Forearm",
+   "slot": "body",
+   "item": "",
+   "bone": "elbow_r",
+   "colour": "#a08a70",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.24,
+   "to_m": 0.01,
+   "w_top": 0.044,
+   "w_bot": 0.038,
+   "d_top": 0.044,
+   "d_bot": 0.038,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.05,
+   "cap_top": 0.08,
+   "cap_bot": 0.2,
+   "glow": 0,
+   "note": ""
+  },
+  "hand_r": {
+   "name": "Hand",
+   "slot": "body",
+   "item": "",
+   "bone": "hand_r",
+   "colour": "#a08a70",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.08,
+   "to_m": 0.01,
+   "w_top": 0.042,
+   "w_bot": 0.036,
+   "d_top": 0.034,
+   "d_bot": 0.03,
+   "sides": 5,
+   "rings": 3,
+   "bulge": 0.05,
+   "cap_top": 0.35,
+   "cap_bot": 0.3,
+   "glow": 0,
+   "note": ""
+  },
+  "thigh_r": {
+   "name": "Thigh",
+   "slot": "body",
+   "item": "",
+   "bone": "thigh_r",
+   "colour": "#33302c",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.42,
+   "to_m": 0.04,
+   "w_top": 0.072,
+   "w_bot": 0.058,
+   "d_top": 0.078,
+   "d_bot": 0.062,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.11,
+   "cap_top": 0.14,
+   "cap_bot": 0.1,
+   "glow": 0,
+   "note": ""
+  },
+  "shin_r": {
+   "name": "Shin",
+   "slot": "body",
+   "item": "",
+   "bone": "knee_r",
+   "colour": "#33302c",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.38,
+   "to_m": 0.02,
+   "w_top": 0.056,
+   "w_bot": 0.046,
+   "d_top": 0.06,
+   "d_bot": 0.05,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.09,
+   "cap_top": 0.1,
+   "cap_bot": 0.18,
+   "glow": 0,
+   "note": ""
+  },
+  "foot_r": {
+   "name": "Foot",
+   "slot": "body",
+   "item": "",
+   "bone": "foot_r",
+   "colour": "#2b2825",
+   "ox": 0,
+   "oy": 0.025,
+   "from_m": -0.03,
+   "to_m": 0.06,
+   "w_top": 0.054,
+   "w_bot": 0.05,
+   "d_top": 0.105,
+   "d_bot": 0.095,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.04,
+   "cap_top": 0.22,
+   "cap_bot": 0.1,
+   "glow": 0,
+   "note": ""
+  },
+  "hood_v": {
+   "name": "Hood",
+   "slot": "head",
+   "item": "hood",
+   "bone": "head",
+   "colour": "#3a352f",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.02,
+   "to_m": 0.26,
+   "w_top": 0.086,
+   "w_bot": 0.096,
+   "d_top": 0.09,
+   "d_bot": 0.098,
+   "sides": 8,
+   "rings": 3,
+   "bulge": 0.06,
+   "cap_top": 0.38,
+   "cap_bot": 0.1,
+   "glow": 0,
+   "note": ""
+  },
+  "collar_v": {
+   "name": "Collar",
+   "slot": "neck",
+   "item": "collar",
+   "bone": "neck",
+   "colour": "#4a4038",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.03,
+   "to_m": 0.04,
+   "w_top": 0.076,
+   "w_bot": 0.074,
+   "d_top": 0.076,
+   "d_bot": 0.074,
+   "sides": 8,
+   "rings": 3,
+   "bulge": 0.1,
+   "cap_top": 0.05,
+   "cap_bot": 0.05,
+   "glow": 0,
+   "note": ""
+  },
+  "pack_v": {
+   "name": "Pack",
+   "slot": "back",
+   "item": "pack",
+   "bone": "chest",
+   "colour": "#5a4a34",
+   "ox": 0,
+   "oy": -0.135,
+   "from_m": -0.18,
+   "to_m": 0.14,
+   "w_top": 0.12,
+   "w_bot": 0.105,
+   "d_top": 0.07,
+   "d_bot": 0.062,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.08,
+   "cap_top": 0.14,
+   "cap_bot": 0.14,
+   "glow": 0,
+   "note": "Sits behind the chest, which is what the oy offset is for."
+  },
+  "jerkin_v": {
+   "name": "Jerkin",
+   "slot": "torso",
+   "item": "jerkin",
+   "bone": "chest",
+   "colour": "#6b5335",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.27,
+   "to_m": 0.21,
+   "w_top": 0.166,
+   "w_bot": 0.13,
+   "d_top": 0.111,
+   "d_bot": 0.093,
+   "sides": 8,
+   "rings": 4,
+   "bulge": 0.11,
+   "cap_top": 0.14,
+   "cap_bot": 0.1,
+   "glow": 0,
+   "note": ""
+  },
+  "glove_fore_l": {
+   "name": "Glove",
+   "slot": "gloves",
+   "item": "gloves",
+   "bone": "elbow_l",
+   "colour": "#4b3b28",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.25,
+   "to_m": 0.02,
+   "w_top": 0.052,
+   "w_bot": 0.046,
+   "d_top": 0.052,
+   "d_bot": 0.046,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.06,
+   "cap_top": 0.08,
+   "cap_bot": 0.18,
+   "glow": 0,
+   "note": ""
+  },
+  "glove_hand_l": {
+   "name": "Glove",
+   "slot": "gloves",
+   "item": "gloves",
+   "bone": "hand_l",
+   "colour": "#4b3b28",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.09,
+   "to_m": 0.02,
+   "w_top": 0.05,
+   "w_bot": 0.044,
+   "d_top": 0.042,
+   "d_bot": 0.038,
+   "sides": 5,
+   "rings": 3,
+   "bulge": 0.05,
+   "cap_top": 0.32,
+   "cap_bot": 0.28,
+   "glow": 0,
+   "note": ""
+  },
+  "breech_l": {
+   "name": "Breeches",
+   "slot": "legs",
+   "item": "breeches",
+   "bone": "thigh_l",
+   "colour": "#4a4136",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.43,
+   "to_m": 0.06,
+   "w_top": 0.08,
+   "w_bot": 0.066,
+   "d_top": 0.086,
+   "d_bot": 0.07,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.12,
+   "cap_top": 0.12,
+   "cap_bot": 0.08,
+   "glow": 0,
+   "note": ""
+  },
+  "boot_shin_l": {
+   "name": "Boot",
+   "slot": "feet",
+   "item": "boots",
+   "bone": "knee_l",
+   "colour": "#3b2f22",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.39,
+   "to_m": 0.03,
+   "w_top": 0.064,
+   "w_bot": 0.054,
+   "d_top": 0.068,
+   "d_bot": 0.058,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.1,
+   "cap_top": 0.08,
+   "cap_bot": 0.14,
+   "glow": 0,
+   "note": ""
+  },
+  "boot_foot_l": {
+   "name": "Boot",
+   "slot": "feet",
+   "item": "boots",
+   "bone": "foot_l",
+   "colour": "#3b2f22",
+   "ox": 0,
+   "oy": 0.025,
+   "from_m": -0.04,
+   "to_m": 0.07,
+   "w_top": 0.062,
+   "w_bot": 0.058,
+   "d_top": 0.115,
+   "d_bot": 0.105,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.05,
+   "cap_top": 0.2,
+   "cap_bot": 0.08,
+   "glow": 0,
+   "note": ""
+  },
+  "glove_fore_r": {
+   "name": "Glove",
+   "slot": "gloves",
+   "item": "gloves",
+   "bone": "elbow_r",
+   "colour": "#4b3b28",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.25,
+   "to_m": 0.02,
+   "w_top": 0.052,
+   "w_bot": 0.046,
+   "d_top": 0.052,
+   "d_bot": 0.046,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.06,
+   "cap_top": 0.08,
+   "cap_bot": 0.18,
+   "glow": 0,
+   "note": ""
+  },
+  "glove_hand_r": {
+   "name": "Glove",
+   "slot": "gloves",
+   "item": "gloves",
+   "bone": "hand_r",
+   "colour": "#4b3b28",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.09,
+   "to_m": 0.02,
+   "w_top": 0.05,
+   "w_bot": 0.044,
+   "d_top": 0.042,
+   "d_bot": 0.038,
+   "sides": 5,
+   "rings": 3,
+   "bulge": 0.05,
+   "cap_top": 0.32,
+   "cap_bot": 0.28,
+   "glow": 0,
+   "note": ""
+  },
+  "breech_r": {
+   "name": "Breeches",
+   "slot": "legs",
+   "item": "breeches",
+   "bone": "thigh_r",
+   "colour": "#4a4136",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.43,
+   "to_m": 0.06,
+   "w_top": 0.08,
+   "w_bot": 0.066,
+   "d_top": 0.086,
+   "d_bot": 0.07,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.12,
+   "cap_top": 0.12,
+   "cap_bot": 0.08,
+   "glow": 0,
+   "note": ""
+  },
+  "boot_shin_r": {
+   "name": "Boot",
+   "slot": "feet",
+   "item": "boots",
+   "bone": "knee_r",
+   "colour": "#3b2f22",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.39,
+   "to_m": 0.03,
+   "w_top": 0.064,
+   "w_bot": 0.054,
+   "d_top": 0.068,
+   "d_bot": 0.058,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.1,
+   "cap_top": 0.08,
+   "cap_bot": 0.14,
+   "glow": 0,
+   "note": ""
+  },
+  "boot_foot_r": {
+   "name": "Boot",
+   "slot": "feet",
+   "item": "boots",
+   "bone": "foot_r",
+   "colour": "#3b2f22",
+   "ox": 0,
+   "oy": 0.025,
+   "from_m": -0.04,
+   "to_m": 0.07,
+   "w_top": 0.062,
+   "w_bot": 0.058,
+   "d_top": 0.115,
+   "d_bot": 0.105,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.05,
+   "cap_top": 0.2,
+   "cap_bot": 0.08,
+   "glow": 0,
+   "note": ""
+  },
+  "belt_v": {
+   "name": "Tool Belt",
+   "slot": "belt",
+   "item": "toolbelt",
+   "bone": "hips",
+   "colour": "#4b3b28",
+   "ox": 0,
+   "oy": 0,
+   "from_m": -0.01,
+   "to_m": 0.07,
+   "w_top": 0.136,
+   "w_bot": 0.132,
+   "d_top": 0.098,
+   "d_bot": 0.094,
+   "sides": 8,
+   "rings": 2,
+   "bulge": 0.04,
+   "cap_top": 0,
+   "cap_bot": 0,
+   "glow": 0,
+   "note": ""
+  },
+  "spade_haft": {
+   "name": "Spade Haft",
+   "slot": "mainhand",
+   "item": "spade",
+   "bone": "hand_r",
+   "colour": "#6b5334",
+   "ox": 0,
+   "oy": 0.04,
+   "from_m": -0.22,
+   "to_m": 0.46,
+   "w_top": 0.03,
+   "w_bot": 0.03,
+   "d_top": 0.03,
+   "d_bot": 0.03,
+   "sides": 4,
+   "rings": 2,
+   "bulge": 0,
+   "cap_top": 0,
+   "cap_bot": 0,
+   "glow": 0,
+   "note": ""
+  },
+  "spade_blade": {
+   "name": "Spade Blade",
+   "slot": "mainhand",
+   "item": "spade",
+   "bone": "hand_r",
+   "colour": "#7d8189",
+   "ox": 0,
+   "oy": 0.04,
+   "from_m": -0.34,
+   "to_m": -0.2,
+   "w_top": 0.07,
+   "w_bot": 0.06,
+   "d_top": 0.024,
+   "d_bot": 0.024,
+   "sides": 4,
+   "rings": 2,
+   "bulge": 0,
+   "cap_top": 0,
+   "cap_bot": 0,
+   "glow": 0,
+   "note": ""
+  },
+  "lantern_v": {
+   "name": "Lantern",
+   "slot": "offhand",
+   "item": "lantern",
+   "bone": "hand_l",
+   "colour": "#c98a2e",
+   "ox": 0,
+   "oy": 0.04,
+   "from_m": -0.2,
+   "to_m": -0.06,
+   "w_top": 0.078,
+   "w_bot": 0.0702,
+   "d_top": 0.078,
+   "d_bot": 0.0702,
+   "sides": 5,
+   "rings": 3,
+   "bulge": 0.1,
+   "cap_top": 0.12,
+   "cap_bot": 0.12,
+   "glow": 0,
+   "note": ""
+  },
+  "coil_v": {
+   "name": "Rope Coil",
+   "slot": "trinket1",
+   "item": "coil",
+   "bone": "hips",
+   "colour": "#8a7a5a",
+   "ox": 0.155,
+   "oy": -0.02,
+   "from_m": -0.06,
+   "to_m": 0.04,
+   "w_top": 0.09,
+   "w_bot": 0.081,
+   "d_top": 0.09,
+   "d_bot": 0.081,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.18,
+   "cap_top": 0.18,
+   "cap_bot": 0.18,
+   "glow": 0,
+   "note": "Drawn larger than life so the coil reads at 32 pixels to the metre."
+  },
+  "charm_v": {
+   "name": "Bone Charm",
+   "slot": "trinket2",
+   "item": "charm",
+   "bone": "hips",
+   "colour": "#b3ab92",
+   "ox": -0.155,
+   "oy": -0.02,
+   "from_m": -0.07,
+   "to_m": 0.02,
+   "w_top": 0.062,
+   "w_bot": 0.0558,
+   "d_top": 0.062,
+   "d_bot": 0.0558,
+   "sides": 4,
+   "rings": 3,
+   "bulge": 0.1,
+   "cap_top": 0.3,
+   "cap_bot": 0.3,
+   "glow": 0,
+   "note": "Drawn larger than life: a true-scale knuckle bone would be under a pixel wide, and rule 4 says it has to be visible."
+  },
+  "torch_haft": {
+   "name": "Torch",
+   "slot": "offhand",
+   "item": "torch",
+   "bone": "hand_l",
+   "colour": "#4a3826",
+   "ox": 0,
+   "oy": 0.04,
+   "from_m": -0.16,
+   "to_m": 0.34,
+   "w_top": 0.026,
+   "w_bot": 0.03,
+   "d_top": 0.026,
+   "d_bot": 0.03,
+   "sides": 5,
+   "rings": 3,
+   "bulge": 0.05,
+   "cap_top": 0.05,
+   "cap_bot": 0.05,
+   "glow": 0,
+   "note": ""
+  },
+  "torch_flame": {
+   "name": "Torch Flame",
+   "slot": "offhand",
+   "item": "torch",
+   "bone": "hand_l",
+   "colour": "#e8923a",
+   "ox": 0,
+   "oy": 0.04,
+   "from_m": 0.3,
+   "to_m": 0.5,
+   "w_top": 0.03,
+   "w_bot": 0.06,
+   "d_top": 0.03,
+   "d_bot": 0.06,
+   "sides": 6,
+   "rings": 3,
+   "bulge": 0.15,
+   "cap_top": 0.6,
+   "cap_bot": 0.1,
+   "glow": 1,
+   "note": "The lit end. glow 1 means it is never darkened by the room, because it IS the light."
+  },
+  "candle_v": {
+   "name": "Candle",
+   "slot": "offhand",
+   "item": "candle",
+   "bone": "hand_l",
+   "colour": "#d8cfae",
+   "ox": 0,
+   "oy": 0.04,
+   "from_m": -0.1,
+   "to_m": 0.14,
+   "w_top": 0.024,
+   "w_bot": 0.026,
+   "d_top": 0.024,
+   "d_bot": 0.026,
+   "sides": 5,
+   "rings": 3,
+   "bulge": 0.04,
+   "cap_top": 0.3,
+   "cap_bot": 0.1,
+   "glow": 0,
+   "note": ""
+  },
+  "candle_flame": {
+   "name": "Candle Flame",
+   "slot": "offhand",
+   "item": "candle",
+   "bone": "hand_l",
+   "colour": "#f0b055",
+   "ox": 0,
+   "oy": 0.04,
+   "from_m": 0.12,
+   "to_m": 0.2,
+   "w_top": 0.012,
+   "w_bot": 0.026,
+   "d_top": 0.012,
+   "d_bot": 0.026,
+   "sides": 5,
+   "rings": 3,
+   "bulge": 0.1,
+   "cap_top": 0.6,
+   "cap_bot": 0.1,
+   "glow": 1,
+   "note": ""
+  }
+ },
+ "structures": {
+  "campfire": {
+   "name": "Campfire",
+   "tags": "structure,fire,warm",
+   "colour": "#b4541f",
+   "half_width": 0.38,
+   "height_m": 0.55,
+   "skill": "building",
+   "difficulty": 15,
+   "light": 9,
+   "note": "The heart of a camp, and the only thing that lights a room. Everything else is laid out around it."
+  },
+  "bedroll": {
+   "name": "Bedroll",
+   "tags": "structure,rest,cloth",
+   "colour": "#6b5a44",
+   "half_width": 0.4,
+   "height_m": 0.22,
+   "skill": "building",
+   "difficulty": 11,
+   "light": 0,
+   "note": "Somewhere to sleep. The easiest thing in a camp to put up."
+  },
+  "store": {
+   "name": "Store",
+   "tags": "structure,store,wood",
+   "colour": "#5d4a30",
+   "half_width": 0.36,
+   "height_m": 0.85,
+   "skill": "building",
+   "difficulty": 13,
+   "light": 0,
+   "note": "Keeps supplies off the wet floor."
+  },
+  "windbreak": {
+   "name": "Windbreak",
+   "tags": "structure,shelter,wood",
+   "colour": "#4f4436",
+   "half_width": 0.46,
+   "height_m": 1.45,
+   "skill": "building",
+   "difficulty": 17,
+   "light": 0,
+   "note": "The hardest thing in a starting camp, and the one that makes it feel like one."
+  }
+ },
+ "bones": {
+  "root": {
+   "name": "Root",
+   "parent": "",
+   "x": 0,
+   "y": 0,
+   "z": 0,
+   "note": "Between the feet, on the ground. Everything hangs off this, and it is what turns when a crawler changes direction."
+  },
+  "hips": {
+   "name": "Hips",
+   "parent": "root",
+   "x": 0,
+   "y": 0,
+   "z": 0.82,
+   "note": ""
+  },
+  "chest": {
+   "name": "Chest",
+   "parent": "hips",
+   "x": 0,
+   "y": 0,
+   "z": 0.26,
+   "note": ""
+  },
+  "neck": {
+   "name": "Neck",
+   "parent": "chest",
+   "x": 0,
+   "y": 0,
+   "z": 0.24,
+   "note": ""
+  },
+  "head": {
+   "name": "Head",
+   "parent": "neck",
+   "x": 0,
+   "y": 0,
+   "z": 0.07,
+   "note": ""
+  },
+  "shoulder_l": {
+   "name": "Left Shoulder",
+   "parent": "chest",
+   "x": 0.155,
+   "y": 0,
+   "z": 0.17,
+   "note": ""
+  },
+  "shoulder_r": {
+   "name": "Right Shoulder",
+   "parent": "chest",
+   "x": -0.155,
+   "y": 0,
+   "z": 0.17,
+   "note": ""
+  },
+  "elbow_l": {
+   "name": "Left Elbow",
+   "parent": "shoulder_l",
+   "x": 0,
+   "y": 0,
+   "z": -0.26,
+   "note": ""
+  },
+  "elbow_r": {
+   "name": "Right Elbow",
+   "parent": "shoulder_r",
+   "x": 0,
+   "y": 0,
+   "z": -0.26,
+   "note": ""
+  },
+  "hand_l": {
+   "name": "Left Hand",
+   "parent": "elbow_l",
+   "x": 0,
+   "y": 0,
+   "z": -0.24,
+   "note": "Where the offhand item is held."
+  },
+  "hand_r": {
+   "name": "Right Hand",
+   "parent": "elbow_r",
+   "x": 0,
+   "y": 0,
+   "z": -0.24,
+   "note": "Where the mainhand item is held."
+  },
+  "thigh_l": {
+   "name": "Left Thigh",
+   "parent": "hips",
+   "x": 0.085,
+   "y": 0,
+   "z": 0,
+   "note": ""
+  },
+  "thigh_r": {
+   "name": "Right Thigh",
+   "parent": "hips",
+   "x": -0.085,
+   "y": 0,
+   "z": 0,
+   "note": ""
+  },
+  "knee_l": {
+   "name": "Left Knee",
+   "parent": "thigh_l",
+   "x": 0,
+   "y": 0,
+   "z": -0.42,
+   "note": ""
+  },
+  "knee_r": {
+   "name": "Right Knee",
+   "parent": "thigh_r",
+   "x": 0,
+   "y": 0,
+   "z": -0.42,
+   "note": ""
+  },
+  "foot_l": {
+   "name": "Left Foot",
+   "parent": "knee_l",
+   "x": 0,
+   "y": 0,
+   "z": -0.38,
+   "note": ""
+  },
+  "foot_r": {
+   "name": "Right Foot",
+   "parent": "knee_r",
+   "x": 0,
+   "y": 0,
+   "z": -0.38,
+   "note": ""
+  }
+ },
+ "slots": {
+  "head": {
+   "name": "Head",
+   "note": "Helms, hats, hoods."
+  },
+  "neck": {
+   "name": "Neck",
+   "note": "Collars, amulets, scarves."
+  },
+  "back": {
+   "name": "Back",
+   "note": "Packs, capes, bedrolls, anything carried on the back."
+  },
+  "torso": {
+   "name": "Torso",
+   "note": "Armour, coats, shirts."
+  },
+  "gloves": {
+   "name": "Gloves",
+   "note": "Elbow down: forearms and hands together."
+  },
+  "mainhand": {
+   "name": "Mainhand",
+   "note": "The tool or weapon in the right hand."
+  },
+  "offhand": {
+   "name": "Offhand",
+   "note": "Shield, lantern, or a second tool, in the left hand."
+  },
+  "belt": {
+   "name": "Belt",
+   "note": "Belts, sashes, tool loops."
+  },
+  "legs": {
+   "name": "Legs",
+   "note": "Hips to knees."
+  },
+  "feet": {
+   "name": "Feet",
+   "note": "Knees down: shins and feet together."
+  },
+  "trinket1": {
+   "name": "Trinket 1",
+   "note": "A small carried thing. Hangs at the left hip."
+  },
+  "trinket2": {
+   "name": "Trinket 2",
+   "note": "A small carried thing. Hangs at the right hip."
+  }
+ },
+ "gear": {
+  "hood": {
+   "name": "Hood",
+   "slot": "head",
+   "tags": "cloth,leather",
+   "attr": "willpower:1",
+   "bonus": "",
+   "light": 0,
+   "note": "Keeps the drip off."
+  },
+  "collar": {
+   "name": "Collar",
+   "slot": "neck",
+   "tags": "leather",
+   "attr": "presence:1",
+   "bonus": "",
+   "light": 0,
+   "note": "A worn strap, buckled at the throat."
+  },
+  "pack": {
+   "name": "Pack",
+   "slot": "back",
+   "tags": "leather,store",
+   "attr": "might:1,agility:-1",
+   "bonus": "labouring:1",
+   "light": 0,
+   "note": "Everything they own, on their back. Carries more and slows you down: the trade-off is the point."
+  },
+  "jerkin": {
+   "name": "Jerkin",
+   "slot": "torso",
+   "tags": "leather",
+   "attr": "endurance:1,agility:-1",
+   "bonus": "",
+   "light": 0,
+   "note": "Boiled hide. Better than nothing."
+  },
+  "gloves": {
+   "name": "Work Gloves",
+   "slot": "gloves",
+   "tags": "leather",
+   "attr": "",
+   "bonus": "labouring:2,tinkering:1",
+   "light": 0,
+   "note": "Elbow to fingertip."
+  },
+  "spade": {
+   "name": "Spade",
+   "slot": "mainhand",
+   "tags": "iron,wood,tool",
+   "attr": "",
+   "bonus": "labouring:3,building:3",
+   "light": 0,
+   "note": "For digging, clearing and, at a push, arguing. Counts as a tool, so it is what makes Building and Labouring possible at all."
+  },
+  "lantern": {
+   "name": "Lantern",
+   "slot": "offhand",
+   "tags": "iron,glass,light",
+   "attr": "",
+   "bonus": "studying:2,foraging:1",
+   "light": 6,
+   "note": "Burns something. Nobody asks what."
+  },
+  "toolbelt": {
+   "name": "Tool Belt",
+   "slot": "belt",
+   "tags": "leather,tool",
+   "attr": "",
+   "bonus": "crafting:2,building:1",
+   "light": 0,
+   "note": "Loops and a buckle. Also counts as a tool."
+  },
+  "breeches": {
+   "name": "Breeches",
+   "slot": "legs",
+   "tags": "cloth",
+   "attr": "endurance:1",
+   "bonus": "",
+   "light": 0,
+   "note": "Hip to knee."
+  },
+  "boots": {
+   "name": "Boots",
+   "slot": "feet",
+   "tags": "leather",
+   "attr": "",
+   "bonus": "clambering:2,ranging:2",
+   "light": 0,
+   "note": "Knee down. The first thing a crawler buys."
+  },
+  "coil": {
+   "name": "Rope Coil",
+   "slot": "trinket1",
+   "tags": "rope",
+   "attr": "",
+   "bonus": "clambering:1",
+   "light": 0,
+   "note": "Twenty metres, if you believe the seller."
+  },
+  "charm": {
+   "name": "Bone Charm",
+   "slot": "trinket2",
+   "tags": "organic,charm,grim",
+   "attr": "willpower:1,presence:-1",
+   "bonus": "",
+   "light": 0,
+   "note": "Somebody's knuckle, on a thong."
+  },
+  "torch": {
+   "name": "Torch",
+   "slot": "offhand",
+   "tags": "wood,fire,light",
+   "attr": "",
+   "bonus": "",
+   "light": 8,
+   "note": "Burns bright and burns out. The most light anybody carries."
+  },
+  "candle": {
+   "name": "Candle",
+   "slot": "offhand",
+   "tags": "fire,light",
+   "attr": "",
+   "bonus": "studying:1",
+   "light": 3,
+   "note": "Barely enough to read by, and it does not free a hand."
+  }
+ },
+ "speeds": {
+  "normal": {
+   "name": "1\u00d7",
+   "multiplier": 1,
+   "note": "Real time. One tick is a sixtieth of a second. The first row is always normal speed."
+  },
+  "fast": {
+   "name": "2\u00d7",
+   "multiplier": 2,
+   "note": "Twice as fast."
+  },
+  "faster": {
+   "name": "4\u00d7",
+   "multiplier": 4,
+   "note": "Four times. About right for watching a camp go up."
+  },
+  "fastest": {
+   "name": "8\u00d7",
+   "multiplier": 8,
+   "note": "Eight times. Add a row here for a faster one, or delete one you never use."
+  }
+ },
+ "words": {
+  "chapel": {
+   "name": "Chapel",
+   "slot": "function",
+   "weight": 10,
+   "tags": "worked,sacred",
+   "shape": "platform:1,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": "A raised altar end and a short colonnade."
+  },
+  "cathedral": {
+   "name": "Cathedral",
+   "slot": "function",
+   "weight": 4,
+   "tags": "worked,sacred,pillared",
+   "shape": "pit:1,pillars:3,platform:1",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": "A sunken nave, columns down both sides, a raised apse. Wants a big room."
+  },
+  "shrine": {
+   "name": "Shrine",
+   "slot": "function",
+   "weight": 10,
+   "tags": "worked,sacred",
+   "shape": "platform:1",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": "One raised step with something on it."
+  },
+  "ossuary": {
+   "name": "Ossuary",
+   "slot": "function",
+   "weight": 8,
+   "tags": "worked,grim",
+   "shape": "terrace:2",
+   "floor": "bone_litter",
+   "speckle": "stone_floor",
+   "note": "Shelves of bone cut into the levels."
+  },
+  "mausoleum": {
+   "name": "Mausoleum",
+   "slot": "function",
+   "weight": 7,
+   "tags": "worked,sacred,grim",
+   "shape": "platform:1,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "bone_litter",
+   "note": ""
+  },
+  "crypt": {
+   "name": "Crypt",
+   "slot": "function",
+   "weight": 9,
+   "tags": "worked,grim",
+   "shape": "pit:1,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "bone_litter",
+   "note": "Sunk below the floor it was built under."
+  },
+  "cistern": {
+   "name": "Cistern",
+   "slot": "function",
+   "weight": 9,
+   "tags": "worked,storage",
+   "shape": "pit:2,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": "A deep tank. Usually wet."
+  },
+  "bathhouse": {
+   "name": "Bathhouse",
+   "slot": "function",
+   "weight": 6,
+   "tags": "worked",
+   "shape": "pit:1,terrace:2",
+   "floor": "stone_floor",
+   "speckle": "moss_stone",
+   "note": ""
+  },
+  "well": {
+   "name": "Well",
+   "slot": "function",
+   "weight": 7,
+   "tags": "worked",
+   "shape": "pit:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "barracks": {
+   "name": "Barracks",
+   "slot": "function",
+   "weight": 9,
+   "tags": "worked,dwelling,martial",
+   "shape": "terrace:2",
+   "floor": "packed_earth",
+   "speckle": "stone_floor",
+   "note": ""
+  },
+  "armoury": {
+   "name": "Armoury",
+   "slot": "function",
+   "weight": 7,
+   "tags": "worked,storage,martial",
+   "shape": "platform:1",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "guardroom": {
+   "name": "Guardroom",
+   "slot": "function",
+   "weight": 9,
+   "tags": "worked,martial",
+   "shape": "platform:1",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "gaol": {
+   "name": "Gaol",
+   "slot": "function",
+   "weight": 8,
+   "tags": "worked,captivity",
+   "shape": "pit:1,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "oubliette": {
+   "name": "Oubliette",
+   "slot": "function",
+   "weight": 5,
+   "tags": "worked,captivity,grim",
+   "shape": "pit:2",
+   "floor": "stone_floor",
+   "speckle": "bone_litter",
+   "note": "A hole they dropped people into."
+  },
+  "forge": {
+   "name": "Forge",
+   "slot": "function",
+   "weight": 9,
+   "tags": "worked,industry",
+   "shape": "platform:1,rubble:1",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "foundry": {
+   "name": "Foundry",
+   "slot": "function",
+   "weight": 6,
+   "tags": "worked,industry",
+   "shape": "pit:1,platform:1",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "workshop": {
+   "name": "Workshop",
+   "slot": "function",
+   "weight": 10,
+   "tags": "worked,industry",
+   "shape": "terrace:2",
+   "floor": "packed_earth",
+   "speckle": "stone_floor",
+   "note": ""
+  },
+  "kiln": {
+   "name": "Kiln",
+   "slot": "function",
+   "weight": 6,
+   "tags": "worked,industry",
+   "shape": "platform:1,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "granary": {
+   "name": "Granary",
+   "slot": "function",
+   "weight": 8,
+   "tags": "worked,storage",
+   "shape": "pit:1,pillars:2",
+   "floor": "packed_earth",
+   "speckle": "",
+   "note": ""
+  },
+  "larder": {
+   "name": "Larder",
+   "slot": "function",
+   "weight": 8,
+   "tags": "worked,storage",
+   "shape": "terrace:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "kitchen": {
+   "name": "Kitchen",
+   "slot": "function",
+   "weight": 8,
+   "tags": "worked,industry",
+   "shape": "platform:1",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "brewery": {
+   "name": "Brewery",
+   "slot": "function",
+   "weight": 6,
+   "tags": "worked,industry",
+   "shape": "pit:1,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "moss_stone",
+   "note": ""
+  },
+  "market": {
+   "name": "Market",
+   "slot": "function",
+   "weight": 9,
+   "tags": "worked",
+   "shape": "ring:1,pillars:2",
+   "floor": "packed_earth",
+   "speckle": "stone_floor",
+   "note": ""
+  },
+  "slave_market": {
+   "name": "Slave Market",
+   "slot": "function",
+   "weight": 5,
+   "tags": "worked,captivity,profane",
+   "shape": "ring:1,pillars:2,platform:1",
+   "floor": "packed_earth",
+   "speckle": "bone_litter",
+   "note": ""
+  },
+  "counting_house": {
+   "name": "Counting House",
+   "slot": "function",
+   "weight": 6,
+   "tags": "worked,storage",
+   "shape": "terrace:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "warehouse": {
+   "name": "Warehouse",
+   "slot": "function",
+   "weight": 9,
+   "tags": "worked,storage",
+   "shape": "pillars:3",
+   "floor": "packed_earth",
+   "speckle": "",
+   "note": ""
+  },
+  "library": {
+   "name": "Library",
+   "slot": "function",
+   "weight": 7,
+   "tags": "worked,learning",
+   "shape": "terrace:3,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "scriptorium": {
+   "name": "Scriptorium",
+   "slot": "function",
+   "weight": 5,
+   "tags": "worked,learning",
+   "shape": "platform:1,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "observatory": {
+   "name": "Observatory",
+   "slot": "function",
+   "weight": 4,
+   "tags": "worked,learning",
+   "shape": "platform:2,ring:1",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "arena": {
+   "name": "Arena",
+   "slot": "function",
+   "weight": 6,
+   "tags": "worked,martial",
+   "shape": "pit:2,ring:1",
+   "floor": "packed_earth",
+   "speckle": "rubble",
+   "note": ""
+  },
+  "menagerie": {
+   "name": "Menagerie",
+   "slot": "function",
+   "weight": 5,
+   "tags": "worked,captivity",
+   "shape": "pit:1,pillars:2",
+   "floor": "packed_earth",
+   "speckle": "moss_stone",
+   "note": ""
+  },
+  "kennels": {
+   "name": "Kennels",
+   "slot": "function",
+   "weight": 6,
+   "tags": "worked,captivity",
+   "shape": "terrace:2",
+   "floor": "packed_earth",
+   "speckle": "bone_litter",
+   "note": ""
+  },
+  "dormitory": {
+   "name": "Dormitory",
+   "slot": "function",
+   "weight": 9,
+   "tags": "worked,dwelling",
+   "shape": "terrace:2",
+   "floor": "packed_earth",
+   "speckle": "",
+   "note": ""
+  },
+  "refectory": {
+   "name": "Refectory",
+   "slot": "function",
+   "weight": 7,
+   "tags": "worked,dwelling",
+   "shape": "pillars:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "infirmary": {
+   "name": "Infirmary",
+   "slot": "function",
+   "weight": 6,
+   "tags": "worked,dwelling",
+   "shape": "terrace:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "mine": {
+   "name": "Mine",
+   "slot": "function",
+   "weight": 9,
+   "tags": "industry",
+   "shape": "rubble:2,terrace:2",
+   "floor": "rubble",
+   "speckle": "packed_earth",
+   "note": ""
+  },
+  "quarry": {
+   "name": "Quarry",
+   "slot": "function",
+   "weight": 7,
+   "tags": "industry",
+   "shape": "terrace:3",
+   "floor": "rubble",
+   "speckle": "stone_floor",
+   "note": ""
+  },
+  "gallery": {
+   "name": "Gallery",
+   "slot": "function",
+   "weight": 8,
+   "tags": "worked",
+   "shape": "terrace:2,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "garden": {
+   "name": "Garden",
+   "slot": "function",
+   "weight": 5,
+   "tags": "organic",
+   "shape": "terrace:2",
+   "floor": "moss_stone",
+   "speckle": "packed_earth",
+   "note": ""
+  },
+  "hatchery": {
+   "name": "Hatchery",
+   "slot": "function",
+   "weight": 4,
+   "tags": "organic,infested",
+   "shape": "pit:1,platform:1",
+   "floor": "moss_stone",
+   "speckle": "",
+   "note": ""
+  },
+  "throne_room": {
+   "name": "Throne Room",
+   "slot": "function",
+   "weight": 3,
+   "tags": "worked,gilded",
+   "shape": "platform:2,pillars:3",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": "Wants a big room. Everything points at one raised seat."
+  },
+  "gatehouse": {
+   "name": "Gatehouse",
+   "slot": "function",
+   "weight": 7,
+   "tags": "worked,martial",
+   "shape": "platform:1,pillars:2",
+   "floor": "stone_floor",
+   "speckle": "",
+   "note": ""
+  },
+  "flooded": {
+   "name": "Flooded",
+   "slot": "condition",
+   "weight": 14,
+   "tags": "flooded,damp",
+   "shape": "water:1",
+   "floor": "",
+   "speckle": "",
+   "note": "Fills the lowest ground with standing water."
+  },
+  "drowned": {
+   "name": "Drowned",
+   "slot": "condition",
+   "weight": 6,
+   "tags": "flooded,damp,grim",
+   "shape": "water:2",
+   "floor": "",
+   "speckle": "bone_litter",
+   "note": ""
+  },
+  "frozen": {
+   "name": "Frozen",
+   "slot": "condition",
+   "weight": 5,
+   "tags": "frozen,dry",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "burnt": {
+   "name": "Burnt",
+   "slot": "condition",
+   "weight": 9,
+   "tags": "burnt,dry",
+   "shape": "rubble:1",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "scorched": {
+   "name": "Scorched",
+   "slot": "condition",
+   "weight": 7,
+   "tags": "burnt,dry",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "collapsed": {
+   "name": "Collapsed",
+   "slot": "condition",
+   "weight": 12,
+   "tags": "collapsed,unstable",
+   "shape": "rubble:3",
+   "floor": "rubble",
+   "speckle": "",
+   "note": ""
+  },
+  "ruined": {
+   "name": "Ruined",
+   "slot": "condition",
+   "weight": 12,
+   "tags": "collapsed,abandoned",
+   "shape": "rubble:2",
+   "floor": "",
+   "speckle": "rubble",
+   "note": ""
+  },
+  "shattered": {
+   "name": "Shattered",
+   "slot": "condition",
+   "weight": 7,
+   "tags": "collapsed,unstable",
+   "shape": "rubble:2,terrace:2",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "buried": {
+   "name": "Buried",
+   "slot": "condition",
+   "weight": 6,
+   "tags": "buried,collapsed",
+   "shape": "rubble:2,platform:1",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "abandoned": {
+   "name": "Abandoned",
+   "slot": "condition",
+   "weight": 16,
+   "tags": "abandoned",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "forgotten": {
+   "name": "Forgotten",
+   "slot": "condition",
+   "weight": 12,
+   "tags": "abandoned,silent",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "forsaken": {
+   "name": "Forsaken",
+   "slot": "condition",
+   "weight": 8,
+   "tags": "abandoned,grim",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "haunted": {
+   "name": "Haunted",
+   "slot": "condition",
+   "weight": 9,
+   "tags": "haunted,grim",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "weeping": {
+   "name": "Weeping",
+   "slot": "condition",
+   "weight": 5,
+   "tags": "haunted,damp",
+   "shape": "water:1",
+   "floor": "",
+   "speckle": "moss_stone",
+   "note": ""
+  },
+  "silent": {
+   "name": "Silent",
+   "slot": "condition",
+   "weight": 7,
+   "tags": "silent",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "cursed": {
+   "name": "Cursed",
+   "slot": "condition",
+   "weight": 6,
+   "tags": "cursed,grim",
+   "shape": "",
+   "floor": "",
+   "speckle": "bone_litter",
+   "note": ""
+  },
+  "desecrated": {
+   "name": "Desecrated",
+   "slot": "condition",
+   "weight": 6,
+   "tags": "profane,grim",
+   "shape": "rubble:1",
+   "floor": "",
+   "speckle": "bone_litter",
+   "note": ""
+  },
+  "overgrown": {
+   "name": "Overgrown",
+   "slot": "condition",
+   "weight": 10,
+   "tags": "overgrown,organic,damp",
+   "shape": "",
+   "floor": "moss_stone",
+   "speckle": "",
+   "note": ""
+  },
+  "mossy": {
+   "name": "Mossy",
+   "slot": "condition",
+   "weight": 12,
+   "tags": "overgrown,damp",
+   "shape": "",
+   "floor": "moss_stone",
+   "speckle": "",
+   "note": ""
+  },
+  "fungal": {
+   "name": "Fungal",
+   "slot": "condition",
+   "weight": 7,
+   "tags": "overgrown,organic,damp",
+   "shape": "",
+   "floor": "moss_stone",
+   "speckle": "shallow_water",
+   "note": ""
+  },
+  "infested": {
+   "name": "Infested",
+   "slot": "condition",
+   "weight": 9,
+   "tags": "infested",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "plundered": {
+   "name": "Plundered",
+   "slot": "condition",
+   "weight": 10,
+   "tags": "abandoned",
+   "shape": "rubble:1",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "sealed": {
+   "name": "Sealed",
+   "slot": "condition",
+   "weight": 4,
+   "tags": "silent,worked",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "sunken": {
+   "name": "Sunken",
+   "slot": "condition",
+   "weight": 8,
+   "tags": "tiered",
+   "shape": "pit:1",
+   "floor": "",
+   "speckle": "",
+   "note": "Drops the middle another metre."
+  },
+  "gilded": {
+   "name": "Gilded",
+   "slot": "condition",
+   "weight": 4,
+   "tags": "gilded",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "bone_strewn": {
+   "name": "Bone-Strewn",
+   "slot": "condition",
+   "weight": 8,
+   "tags": "grim",
+   "shape": "",
+   "floor": "",
+   "speckle": "bone_litter",
+   "note": ""
+  },
+  "blood_stained": {
+   "name": "Blood-Stained",
+   "slot": "condition",
+   "weight": 6,
+   "tags": "grim",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "goblin": {
+   "name": "Goblin",
+   "slot": "people",
+   "weight": 12,
+   "tags": "",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "kobold": {
+   "name": "Kobold",
+   "slot": "people",
+   "weight": 10,
+   "tags": "",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "dwarf": {
+   "name": "Dwarven",
+   "slot": "people",
+   "weight": 10,
+   "tags": "worked",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "orc": {
+   "name": "Orcish",
+   "slot": "people",
+   "weight": 9,
+   "tags": "martial",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "hobgoblin": {
+   "name": "Hobgoblin",
+   "slot": "people",
+   "weight": 7,
+   "tags": "martial",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "ratkin": {
+   "name": "Ratkin",
+   "slot": "people",
+   "weight": 8,
+   "tags": "infested",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "troll": {
+   "name": "Troll",
+   "slot": "people",
+   "weight": 5,
+   "tags": "",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "human": {
+   "name": "Human",
+   "slot": "people",
+   "weight": 10,
+   "tags": "",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "pilgrim": {
+   "name": "Pilgrims'",
+   "slot": "people",
+   "weight": 7,
+   "tags": "sacred",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "monk": {
+   "name": "Monks'",
+   "slot": "people",
+   "weight": 7,
+   "tags": "sacred",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "miner": {
+   "name": "Miners'",
+   "slot": "people",
+   "weight": 9,
+   "tags": "industry",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "smuggler": {
+   "name": "Smugglers'",
+   "slot": "people",
+   "weight": 7,
+   "tags": "storage",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "cultist": {
+   "name": "Cultists'",
+   "slot": "people",
+   "weight": 6,
+   "tags": "profane",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "bandit": {
+   "name": "Bandits'",
+   "slot": "people",
+   "weight": 8,
+   "tags": "martial",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  },
+  "nameless": {
+   "name": "Nameless",
+   "slot": "people",
+   "weight": 4,
+   "tags": "silent",
+   "shape": "",
+   "floor": "",
+   "speckle": "",
+   "note": ""
+  }
+ }
 }

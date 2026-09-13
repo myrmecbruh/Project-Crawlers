@@ -40,6 +40,7 @@ const Inspector = {
     if (doing === 'walking') return N('ui.doing_walking');
     if (doing === 'clearing') return N('ui.doing_clearing');
     if (doing === 'building') return N('ui.doing_building');
+    if (doing === 'studying') return N('ui.doing_studying');
     return N('ui.doing_idle');
   },
 
@@ -73,13 +74,30 @@ const Inspector = {
     if (idx >= s.world.cells.length) return null;
     const cell = s.world.cells[idx];
     const def = TILE(cell.tile);
+    /* A square in a room that somebody has read carries the room's name and the
+       room's tags as well as its own. Until then it is just floor -- which is
+       the whole point of having to read it. */
+    const room = cell.room >= 0 ? s.world.rooms[cell.room] : null;
+    const place = room && room.place ? room : null;
+    const known = !!(place && place.known);
+    let tags = def.tags.map(function (t) { return TAG(t).name; });
+    if (known) {
+      const extra = place.place.tags.map(function (t) { return TAG(t).name; });
+      for (let i = 0; i < extra.length; i++) {
+        if (tags.indexOf(extra[i]) < 0) tags.push(extra[i]);
+      }
+    }
     return {
-      kind: 'ground', index: idx, name: def.name,
+      kind: 'ground', index: idx,
+      name: known ? place.place.title : def.name,
+      floorName: def.name,
+      place: known ? place.place.title : (place ? N('ui.place_unknown') : null),
+      placeKnown: known,
       at: cell.x + ', ' + cell.y,
       elevation: cell.h, elevationText: cell.h + ' m',
       footing: def.footing, footingText: this.footingText(def.footing),
       slope: cell.slope,
-      tags: def.tags.map(function (t) { return TAG(t).name; }),
+      tags: tags,
       note: def.note
     };
   },
@@ -230,7 +248,10 @@ const Inspector = {
          + this.row(N('ui.label_ground'), d.ground)
          + this.tagsRow(d.tags);
     } else {
-      h += this.row(N('ui.label_elevation'), d.elevationText)
+      h += (d.place ? this.row(N('ui.label_place'),
+              d.placeKnown ? d.place : '<span class="tt-dim">' + d.place + '</span>') : '')
+         + (d.placeKnown ? this.row(N('ui.label_ground'), d.floorName) : '')
+         + this.row(N('ui.label_elevation'), d.elevationText)
          + this.row(N('ui.label_footing'), d.footingText)
          + this.tagsRow(d.tags);
     }

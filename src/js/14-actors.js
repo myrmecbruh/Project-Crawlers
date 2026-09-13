@@ -352,12 +352,48 @@ function actorStep(state, actor) {
     return workSite(state, actor, site);
   }
 
+  /* On the way, a crawler will stop and try to read a room they do not know.
+     Nobody tells them to -- the player is a head coach. It is a Studying roll
+     like any other, so failing at it teaches them (rule 1) and a place that
+     will not give up its name is a place they get better at reading. */
+  const study = studyHere(state, actor);
+  if (study) return study;
+
   actor.cooldown = CFG.stepTicks;
   actor.doing = 'walking';
   const here = state.world.at(actor.x, actor.y);
   const move = stepToward(state.world, here, site.field);
   if (!move) return wander(state, actor);
   return tryStep(state, actor, move.cell, move.dx, move.dy);
+}
+
+/* Is this crawler standing somewhere worth working out? A room only gives up
+   what it was once somebody has read it -- the walls, the bones, what is left
+   of the fittings. Three tries each and they let it lie, so a crawler with no
+   head for it does not stand in a doorway forever. */
+const STUDY_TRIES = 3;
+
+function studyHere(state, actor) {
+  const cell = state.world.at(actor.x, actor.y);
+  if (!cell || cell.room < 0) return null;
+  const room = state.world.rooms[cell.room];
+  if (!room || !room.place || room.known) return null;
+  if (!actor.studied) actor.studied = {};
+  const tries = actor.studied[cell.room] || 0;
+  if (tries >= STUDY_TRIES) return null;
+
+  actor.studied[cell.room] = tries + 1;
+  actor.cooldown = CFG.studyTicks;
+  actor.doing = 'studying';
+  const roll = attempt(state, actor, 'studying', CFG.studyDifficulty);
+  room.studies++;
+  if (roll.ok) {
+    room.known = true;
+    room.readBy = actor.name;
+    state.viewDirty = true;
+  }
+  actor.lastWork = { what: 'studying', ok: roll.ok };
+  return roll;
 }
 
 /* ---- describing one, for the inspector ----------------------------------- */

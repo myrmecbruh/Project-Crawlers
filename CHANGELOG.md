@@ -7,6 +7,65 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.13.0 — rooms are places, and places are built out of words
+
+Every room in the labyrinth was one flat sheet of floor. Measured: **90 of 90
+rooms dead flat**, 69% of all walkable ground inside a room, and 1% of the floor
+a ramp. All of the labyrinth's height lived in the corridors. They said it went
+when we moved to rooms and halls, and they were right — the room generator laid
+`c.h = r.elev` across the whole rectangle and never touched it again.
+
+**A room is now a PLACE, and the place is built out of words.** One `function`
+word says what it was built to be — a cistern, an arena, a slave market. Up to
+two `condition` words say what has happened to it since — flooded, collapsed,
+haunted. An optional `people` word says whose it was. "Haunted Silent Miners'
+Bathhouse", "Ruined Shattered Orcish Granary", "Weeping Burnt Quarry" are four
+rows of a new `words` tab found together, and 84 words make about a quarter of a
+million of them.
+
+The design decision that makes it work: **a word carries both halves of itself on
+one line of the sheet** — what it means (its tags) and what it does to the ground
+(its shape moves, the floor it lays). "Flooded" is not a label somebody remembered
+to apply after filling the low ground with water; filling the low ground with
+water IS what the word does. The name and the place cannot drift apart, for the
+same reason a piece of gear carries its look and its effect on one row. Seven
+moves exist — pit, platform, terrace, ring, pillars, rubble, water — and the build
+refuses a word that asks for anything else.
+
+**Their nature is discovered, not given.** A room starts unnamed. A crawler
+standing in one will stop and try to read it — the walls, the bones, what is left
+of the fittings — which is a Studying roll against `room.study_difficulty` like
+anything else, so failing at it teaches them (rule 1) and a place that will not
+give up its name is a place they get better at reading. Three tries each and they
+let it lie, so a crawler with no head for it does not stand in a doorway forever.
+Until somebody reads it, a square there is just floor; afterwards it carries the
+room's name and the room's tags as well as its own.
+
+**Connectivity is guaranteed, not hoped for**, and it took two goes to earn that.
+Heights only ever step by one metre — `smoothRoom()` pulls down anything higher,
+because a pit inside a ring left a two-metre drop and stranded twenty-one squares
+of a flooded orcish arena. Ramps are then placed per PAIR of touching shelves,
+found by flood-filling equal-height regions; grouping them by row instead put a
+ramp in every row and turned each ledge into an open slope. And a block — a
+pillar, a fallen slab — is placed only if the room is still whole with it there,
+checked one block at a time. 0 broken rooms in 154, then 0 in 30 seeds' worth
+under test.
+
+**The mistake that cost 25 tests:** pillars were allowed to stand on a room's
+centre square. The generator uses that square AS the room — it is what a hall is
+aimed at and what the final reachability sweep tests — so a pillar there did not
+block one square, it deleted the whole room. Every room in the world vanished,
+there was no camp, and twenty-five tests failed at once with `undefined`.
+
+**And one test was quietly measuring luck.** "The crawlers gather in one room and
+build a camp" asserted that somebody learned Labouring. On the baseline that
+passed with a single failed clearing roll in the entire match — 0.1 of a pip,
+twice — and one luckier roll would have failed it. The new world rolled slightly
+better and it went red, looking exactly like a broken mechanic. It was not: rule 1
+says succeeding teaches nothing, and the crawler doing the clearing was good at
+it. The claim is now made where it can be made honestly, across six seeds, and
+the single-run test asserts only what a single run can support.
+
 ## v0.12.1 — the controls that walking broke
 
 Four bugs, all children of v0.12.0. Making crawlers move continuously turned
