@@ -144,14 +144,6 @@ camera, or time would wind itself forward for ever. There is a short coast
 (`time.coast_ticks`, currently 45 = three quarters of a second) so a phone does
 not look frozen between drags; set it to 0 for the strict reading.
 
-**13. Gear does three things at once, and it is the same twelve parts that are
-seen.** A piece of gear SHIFTS an attribute (a pack makes you stronger-backed
-and slower), BONUSES a skill (boots help you keep your feet), and some work
-REQUIRES it (building with bare hands is thirty points harder, which is close to
-impossible). All three go through `ability()`, so there is still exactly one
-place anything is resolved. A gear row carries its look and its effect on the
-same line of the spreadsheet, so the two can never drift apart.
-
 **12. The view turns, and it can be raised.** Four quarter turns and two
 angles, Final Fantasy Tactics style, with the swing animated and the focus held
 still so the world turns around what you were looking at. The swing runs on real
@@ -159,6 +151,14 @@ time rather than game time -- the view must move smoothly whether or not the
 world is running. Raising the angle opens the ground out (`tile_h`) and leaves
 wall heights alone, so rule 10's locked 32 pixels to the metre holds at both
 angles. Turning or raising the view is moving it, so it also runs time.
+
+**13. Gear does three things at once, and it is the same twelve parts that are
+seen.** A piece of gear SHIFTS an attribute (a pack makes you stronger-backed
+and slower), BONUSES a skill (boots help you keep your feet), and some work
+REQUIRES it (building with bare hands is thirty points harder, which is close to
+impossible). All three go through `ability()`, so there is still exactly one
+place anything is resolved. A gear row carries its look and its effect on the
+same line of the spreadsheet, so the two can never drift apart.
 
 ---
 
