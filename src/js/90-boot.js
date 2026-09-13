@@ -30,12 +30,30 @@ const Game = {
     const touch = matchMedia('(hover: none)').matches;
     document.getElementById('hint').textContent =
       N(touch ? 'ui.hint_touch' : 'ui.hint_desktop');
+    this.bindButtons();
 
     this.last = performance.now();
     requestAnimationFrame((t) => this.loop(t));
   },
 
   zoom() { return this.state ? this.state.cam.zoom : CFG.zoomStart; },
+
+  /* Rotating and tilting have to be reachable with a thumb, not only a
+     keyboard -- half of rule 8's point is that the game works on a phone. */
+  bindButtons() {
+    const hit = (id, fn) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('click', (e) => { fn(); e.preventDefault(); });
+    };
+    hit('turn-left', () => rotateCamera(this.state, -1));
+    hit('turn-right', () => rotateCamera(this.state, 1));
+    hit('tilt', () => {
+      tiltCamera(this.state);
+      const el = document.getElementById('tilt');
+      if (el) el.classList.toggle('on', this.state.cam.pitchTarget > 0.5);
+    });
+  },
 
   /* The picture is as big as the window allows at this zoom, in whole game
      pixels, capped so a very large screen does not cost a fortune to draw. */
@@ -105,6 +123,7 @@ const Game = {
     const s = this.state;
 
     this.keyPan();
+    camAnimate(s, dt);
 
     if (s.motion > 0) {
       this.acc += dt;

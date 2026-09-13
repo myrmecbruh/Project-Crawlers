@@ -6,11 +6,6 @@
       "unit": "px",
       "note": "Screen width of one square metre of ground. Twice tile_h makes the classic two-to-one isometric view."
     },
-    "render.tile_h": {
-      "value": 32,
-      "unit": "px",
-      "note": "Screen height of one square metre of ground, seen from this angle."
-    },
     "render.rise": {
       "value": 32,
       "unit": "px/m",
@@ -147,9 +142,9 @@
       "note": "Tallest the game picture is ever drawn, before it is blown up."
     },
     "time.coast_ticks": {
-      "value": 0,
+      "value": 45,
       "unit": "ticks",
-      "note": "How long the world keeps running after you stop moving the view. 0 means time stops the instant you do."
+      "note": "How long the world keeps running after you stop moving the view. 60 ticks is a second. Set it to 0 and time stops the very instant you do -- which is strictly what rule 11 says, but on a phone it makes the game look frozen between drags."
     },
     "world.rooms": {
       "value": 9,
@@ -207,14 +202,34 @@
       "note": "How long a crawler takes between efforts. 60 ticks is a second."
     },
     "render.cutaway_fade": {
-      "value": 0.38,
+      "value": 0.3,
       "unit": "alpha",
       "note": "How solid a wall of rock stays when it is standing between you and a floor behind it. This is the see-through fourth wall. 1 = never fades and rooms hide behind their own near walls; 0 = those walls vanish entirely."
     },
     "render.cutaway_depth": {
-      "value": 2,
+      "value": 1,
       "unit": "m",
       "note": "How close a wall has to be to the floor it is hiding before it turns translucent. Small numbers fade only the near wall of a room, which is what you want; large numbers fade half the labyrinth into a haze."
+    },
+    "render.tile_h_low": {
+      "value": 32,
+      "unit": "px",
+      "note": "How tall a square metre of ground looks at the normal angle. Half of tile_w is the classic two-to-one isometric view."
+    },
+    "render.tile_h_high": {
+      "value": 54,
+      "unit": "px",
+      "note": "How tall a square metre of ground looks from the raised angle. Bigger means you are looking down more steeply and can see further into rooms. Walls stay the same height either way, so the locked 32 pixels to the metre holds at both angles."
+    },
+    "camera.swing_ms": {
+      "value": 320,
+      "unit": "ms",
+      "note": "How long the view takes to swing a quarter turn. This runs on real time, not game time, so the swing is smooth whether or not the world is running."
+    },
+    "camera.tilt_ms": {
+      "value": 260,
+      "unit": "ms",
+      "note": "How long the view takes to rise to the higher angle and back."
     }
   },
   "geometry": {
@@ -236,10 +251,10 @@
   },
   "names": {
     "ui.hint_desktop": {
-      "text": "drag to pan  ·  scroll to zoom  ·  hover anything to inspect it"
+      "text": "drag to pan  ·  scroll to zoom  ·  Q/E turn, R raises the angle  ·  hover to inspect"
     },
     "ui.hint_touch": {
-      "text": "drag to pan  ·  pinch to zoom  ·  tap anything to inspect it"
+      "text": "drag to pan  ·  pinch to zoom  ·  buttons turn and raise the view  ·  tap to inspect"
     },
     "ui.label_elevation": {
       "text": "elevation"

@@ -39,6 +39,27 @@ body {
   cursor: crosshair;
   background: #0a0d11;
 }
+#controls {
+  display: flex;
+  gap: 8px;
+}
+#controls button {
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  min-width: 44px;
+  min-height: 34px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+#controls button:hover { color: var(--ink-bright); border-color: rgba(150,190,230,0.4); }
+#controls button:active { background: #182029; }
+#controls button:focus-visible { outline: 2px solid #c9a35e; outline-offset: 1px; }
+#controls button.on { color: #c9a35e; border-color: rgba(201,163,94,0.5); }
+
 #hud {
   display: flex;
   gap: 16px;

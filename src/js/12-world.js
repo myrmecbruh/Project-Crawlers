@@ -275,23 +275,25 @@ const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 /* Does this column of rock stand between the camera and a floor behind it?
  *
- * Straight out of the projection: a column of height H at (x,y) covers the cell
- * k steps further back when H >= h + k * (tile_h / rise). That is the whole
- * fourth-wall problem, answered in a handful of steps per column rather than by
- * comparing every block with every other.
+ * Straight out of the projection: a column of height H covers the cell k steps
+ * further back when H >= h + k * (tile_h / rise). `back` is which way "further
+ * back" points, which depends on which quarter turn you are looking from, and
+ * `tileH` on how steeply you are looking down. That is the whole fourth-wall
+ * problem, answered in a handful of steps per column rather than by comparing
+ * every block with every other.
  */
-function hidesFloorBehind(world, cell) {
+function hidesFloorBehind(world, cell, back, tileH) {
   if (TILE(cell.tile).footing !== 'block') return false;
-  const perStep = CFG.tileH / CFG.rise;
+  const perStep = tileH / CFG.rise;
   /* Only the near wall. Rock that hides a room from further back than this is
      left solid -- fading all of it turns the whole labyrinth into a haze. */
   const reach = Math.min(CFG.cutawayDepth,
                          Math.ceil(cell.h / Math.max(perStep, 0.001)));
   for (let k = 1; k <= reach; k++) {
-    const back = world.at(cell.x - k, cell.y - k);
-    if (!back) break;
-    if (TILE(back.tile).footing === 'block') continue;
-    if (cell.h >= back.h + k * perStep) return true;
+    const far = world.at(cell.x + back[0] * k, cell.y + back[1] * k);
+    if (!far) break;
+    if (TILE(far.tile).footing === 'block') continue;
+    if (cell.h >= far.h + k * perStep) return true;
   }
   return false;
 }

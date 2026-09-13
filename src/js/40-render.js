@@ -37,12 +37,24 @@ const Render = {
   ensure() { if (!this.buf) this.resize(CFG.maxBufW, CFG.maxBufH); },
 
   /* Grid corner (gxx, gyy) at elevation h metres -> game pixels.
-     No zoom term anywhere: the world has exactly one size. */
+     The grid is turned by the camera's yaw first, which is what lets the view
+     swing. No zoom term anywhere: the world has exactly one size. */
   project(s, gxx, gyy, h) {
+    const cam = s.cam;
+    const u = gxx * cam.cos - gyy * cam.sin;
+    const v = gxx * cam.sin + gyy * cam.cos;
     return {
-      x: (gxx - gyy) * (CFG.tileW / 2) - s.cam.x + this.w / 2,
-      y: (gxx + gyy) * (CFG.tileH / 2) - h * CFG.rise - s.cam.y + this.h / 2
+      x: (u - v) * (CFG.tileW / 2) - cam.ox + this.w / 2,
+      y: (u + v) * (cam.tileH / 2) - h * CFG.rise - cam.oy + this.h / 2
     };
+  },
+
+  /* How far back something is, in the direction the camera is looking. Bigger
+     is nearer the camera, so painting in ascending order paints back to front.
+     At any yaw. */
+  depth(s, gxx, gyy) {
+    const cam = s.cam;
+    return gxx * (cam.cos + cam.sin) + gyy * (cam.cos - cam.sin);
   },
 
   box(s, gx, gy, half, z0, z1) {
@@ -81,10 +93,11 @@ const Render = {
     return box;
   },
 
-  /* Painter's order for a heightfield is simply back to front: x + y ascending.
-     Two cells on the same diagonal never overlap, so their order is free.
-     Crawlers and structures are painted directly after the ground they stand
-     on, so they are hidden by what is in front of that ground and nothing else. */
+  /* Painter's order is back to front, which is ascending depth along whatever
+     direction the camera is looking. With the view able to swing, that is no
+     longer the order the cells are stored in, so everything visible goes into
+     one list with its depth and the list is sorted. Crawlers and structures sit
+     a hair in front of the ground they stand on, so they paint after it. */
   build(s) {
     const w = s.world, n = w.n, b = this.batch;
     this.ensure();
@@ -104,88 +117,93 @@ const Render = {
 
     const scale = CFG.actorHeight / CFG.figureNominal;
 
-    for (let d = 0; d <= 2 * (n - 1); d++) {
-      const x0 = Math.max(0, d - n + 1), x1 = Math.min(n - 1, d);
-      for (let x = x0; x <= x1; x++) {
-        const y = d - x;
-        const i = y * n + x;
-        const cell = w.cells[i];
+    for (let i = 0; i < w.cells.length; i++) {
+      const cell = w.cells[i];
+      const x = cell.x, y = cell.y;
 
-        const top = new Array(4);
-        const box = [Infinity, Infinity, -Infinity, -Infinity];
-        for (let c = 0; c < 4; c++) {
-          top[c] = this.project(s, x + CORNERS[c][0], y + CORNERS[c][1],
-                                cornerHeight(cell, c));
-        }
-        this.bounds(top, box);
-        const baseB = this.project(s, x + 1, y, 0);
-        const baseC = this.project(s, x + 1, y + 1, 0);
-        const baseD = this.project(s, x, y + 1, 0);
-        if (baseC.y > box[3]) box[3] = baseC.y;
+      const top = new Array(4);
+      const box = [Infinity, Infinity, -Infinity, -Infinity];
+      for (let c = 0; c < 4; c++) {
+        top[c] = this.project(s, x + CORNERS[c][0], y + CORNERS[c][1],
+                              cornerHeight(cell, c));
+      }
+      this.bounds(top, box);
+      if (box[2] < 0 || box[0] > this.w || box[1] > this.h) continue;
 
-        const onScreen = !(box[2] < 0 || box[0] > this.w || box[3] < 0 || box[1] > this.h);
-        if (onScreen) {
+      const baseB = this.project(s, x + 1, y, 0);
+      const baseC = this.project(s, x + 1, y + 1, 0);
+      const baseD = this.project(s, x, y + 1, 0);
+      const baseA = this.project(s, x, y, 0);
+      let low = Math.max(baseA.y, baseB.y, baseC.y, baseD.y);
+      if (low > box[3]) box[3] = low;
+      if (box[3] < 0) continue;
+
+      const depth = this.depth(s, x + 0.5, y + 0.5);
+
+      /* Which two walls of the block face the camera changes as the view
+         swings, so pick the pair by which corners are lowest on screen. */
+      const order = [0, 1, 2, 3].sort(function (p, q) { return top[p].y - top[q].y; });
+      const near = order[3], left = order[2], right = order[1];
+      const bases = [baseA, baseB, baseC, baseD];
+
+      b.push({
+        kind: 'cell', i: i, cell: cell, top: top, depth: depth,
+        left: [top[near], top[left], bases[left], bases[near]],
+        right: [top[near], top[right], bases[right], bases[near]],
+        solid: cell.h > 0,
+        cutaway: cell.cutaway === true,
+        minX: box[0], minY: box[1], maxX: box[2], maxY: box[3],
+        cx: (top[0].x + top[2].x) / 2, cy: (top[0].y + top[2].y) / 2
+      });
+
+      const ground = surfaceHeight(cell);
+
+      const here = sited[i];
+      if (here) {
+        for (let q = 0; q < here.length; q++) {
+          const site = s.camp.sites[here[q]];
+          const def = STRUCT(site.structure);
+          const frac = site.built ? 1 : site.progress / 100;
+          const zTop = ground + Math.max(0.05, def.height_m * frac);
+          const shape = this.box(s, x + 0.5, y + 0.5, def.half_width, ground, zTop);
+          const sbox = this.bounds(shape.top, [Infinity, Infinity, -Infinity, -Infinity]);
+          if (sbox[2] < 0 || sbox[0] > this.w || sbox[3] + CFG.rise < 0 || sbox[1] > this.h) continue;
           b.push({
-            kind: 'cell', i: i, cell: cell, top: top,
-            right: [top[1], top[2], baseC, baseB],
-            left: [top[2], top[3], baseD, baseC],
-            solid: cell.h > 0,
-            cutaway: cell.cutaway === true,
-            minX: box[0], minY: box[1], maxX: box[2], maxY: box[3],
-            cx: (top[0].x + top[2].x) / 2, cy: (top[0].y + top[2].y) / 2
-          });
-        }
-
-        const ground = surfaceHeight(cell);
-
-        const here = sited[i];
-        if (here) {
-          for (let q = 0; q < here.length; q++) {
-            const site = s.camp.sites[here[q]];
-            const def = STRUCT(site.structure);
-            /* An unfinished site is a marked-out plate; a finished one stands
-               its full height; one part-way up stands part-way up, so how far
-               the camp has got is something you can see rather than read. */
-            const frac = site.built ? 1 : site.progress / 100;
-            const zTop = ground + Math.max(0.05, def.height_m * frac);
-            const shape = this.box(s, x + 0.5, y + 0.5, def.half_width, ground, zTop);
-            const sbox = this.bounds(shape.top, [Infinity, Infinity, -Infinity, -Infinity]);
-            if (sbox[2] < 0 || sbox[0] > this.w || sbox[3] + CFG.rise < 0 || sbox[1] > this.h) continue;
-            b.push({
-              kind: 'site', i: w.cells.length + s.actors.length + here[q],
-              site: site, shape: shape, solid: true,
-              minX: sbox[0], minY: sbox[1], maxX: sbox[2], maxY: sbox[3] + CFG.rise,
-              cx: (shape.top[0].x + shape.top[2].x) / 2,
-              cy: (shape.top[0].y + shape.top[2].y) / 2
-            });
-          }
-        }
-
-        const people = standing[i];
-        if (!people) continue;
-        for (let q = 0; q < people.length; q++) {
-          const actor = s.actors[people[q]];
-          const parts = this.figureParts(actor);
-          const drawn = [];
-          const abox = [Infinity, Infinity, -Infinity, -Infinity];
-          for (let r = 0; r < parts.length; r++) {
-            const f = parts[r].part;
-            const shape = this.box(s, x + 0.5, y + 0.5, f.half_width,
-                                   ground + f.from_m * scale, ground + f.to_m * scale);
-            drawn.push({ id: parts[r].id, colour: f.colour, shape: shape });
-            this.bounds(shape.top, abox);
-          }
-          if (abox[2] < 0 || abox[0] > this.w || abox[3] + CFG.rise < 0 || abox[1] > this.h) continue;
-          const crown = drawn[drawn.length - 1].shape.top;
-          b.push({
-            kind: 'actor', i: w.cells.length + people[q],
-            actor: actor, parts: drawn, top: crown, solid: true,
-            minX: abox[0], minY: abox[1], maxX: abox[2], maxY: abox[3] + CFG.rise,
-            cx: (crown[0].x + crown[2].x) / 2, cy: (crown[0].y + crown[2].y) / 2
+            kind: 'site', i: w.cells.length + s.actors.length + here[q],
+            site: site, shape: shape, solid: true, depth: depth + 0.01,
+            minX: sbox[0], minY: sbox[1], maxX: sbox[2], maxY: sbox[3] + CFG.rise,
+            cx: (shape.top[0].x + shape.top[2].x) / 2,
+            cy: (shape.top[0].y + shape.top[2].y) / 2
           });
         }
       }
+
+      const people = standing[i];
+      if (!people) continue;
+      for (let q = 0; q < people.length; q++) {
+        const actor = s.actors[people[q]];
+        const parts = this.figureParts(actor);
+        const drawn = [];
+        const abox = [Infinity, Infinity, -Infinity, -Infinity];
+        for (let r = 0; r < parts.length; r++) {
+          const f = parts[r].part;
+          const shape = this.box(s, x + 0.5, y + 0.5, f.half_width,
+                                 ground + f.from_m * scale, ground + f.to_m * scale);
+          drawn.push({ id: parts[r].id, colour: f.colour, shape: shape });
+          this.bounds(shape.top, abox);
+        }
+        if (abox[2] < 0 || abox[0] > this.w || abox[3] + CFG.rise < 0 || abox[1] > this.h) continue;
+        const crown = drawn[drawn.length - 1].shape.top;
+        b.push({
+          kind: 'actor', i: w.cells.length + people[q],
+          actor: actor, parts: drawn, top: crown, solid: true, depth: depth + 0.02,
+          minX: abox[0], minY: abox[1], maxX: abox[2], maxY: abox[3] + CFG.rise,
+          cx: (crown[0].x + crown[2].x) / 2, cy: (crown[0].y + crown[2].y) / 2
+        });
+      }
     }
+
+    b.sort(function (p, q) { return p.depth - q.depth; });
     s.geomDirty = false;
     return b;
   },

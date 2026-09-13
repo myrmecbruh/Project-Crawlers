@@ -79,7 +79,7 @@ The characters act on their own initiative.
 
 ## The non-negotiables
 
-*Eleven rules about what this game **is**. Each is one sentence of rule and a
+*Twelve rules about what this game **is**. Each is one sentence of rule and a
 paragraph of what it protects. Do not re-litigate these; do not quietly drift
 away from them. Add to the list the moment something is argued twice.*
 
@@ -140,7 +140,17 @@ halfway across a pixel.
 **11. Time only runs while the view is moving.** Stop scrolling and the
 labyrinth stops with you. This is the idle-game clock: the world advances
 because the player is looking around it. Nothing in the simulation may move the
-camera, or time would wind itself forward for ever.
+camera, or time would wind itself forward for ever. There is a short coast
+(`time.coast_ticks`, currently 45 = three quarters of a second) so a phone does
+not look frozen between drags; set it to 0 for the strict reading.
+
+**12. The view turns, and it can be raised.** Four quarter turns and two
+angles, Final Fantasy Tactics style, with the swing animated and the focus held
+still so the world turns around what you were looking at. The swing runs on real
+time rather than game time -- the view must move smoothly whether or not the
+world is running. Raising the angle opens the ground out (`tile_h`) and leaves
+wall heights alone, so rule 10's locked 32 pixels to the metre holds at both
+angles. Turning or raising the view is moving it, so it also runs time.
 
 ---
 
@@ -241,6 +251,51 @@ perfectly flat, which is the only way to prove no curve was smuggled in.
   to; the player is a head coach.
 - A structure grows to its real height as it is built, so how far the camp has
   got is something you can see rather than read.
+
+---
+
+## Gear: the twelve slots
+
+Agreed, and not to be re-derived. A crawler is composed of twelve parts, which
+are their gear, **both visually and mechanically**:
+
+```
+1  Head            7  Offhand
+2  Neck            8  Belt
+3  Back            9  Legs
+4  Torso          10  Feet        (knees down)
+5  Gloves         11  Trinket 1   (elbow down)
+6  Mainhand       12  Trinket 2
+```
+
+Rule 4 applies to every one of them: worn is drawn, and the build refuses a
+piece of gear that nothing draws. The mechanical half -- how gear changes a
+roll -- is NOT decided yet, and rule 2 says ask before inventing it.
+
+**Still to build (this is the next release):** a skeleton, tapered parts hung
+off bones rather than stacked boxes, procedural animation (walk, work, idle),
+and crawlers turning to face where they are going. The camera work below landed
+first on purpose: figures built against a fixed viewpoint would have had to be
+redone the moment the view could turn.
+
+---
+
+## The camera
+
+- The camera holds a **focus** -- a point on the ground it keeps in the middle
+  of the picture. Turning and tilting keep that point still, so the world turns
+  around whatever you were looking at.
+- **Yaw is continuous**, which is what lets the swing animate; it settles on
+  multiples of a quarter turn. Painter's order is therefore no longer the order
+  cells are stored in: everything visible goes into one list with its depth
+  along the view direction and is sorted.
+- **The cutaway follows the camera.** Which cell is "behind" another depends on
+  which quarter you are looking from (`BEHIND` in `10-state.js`), and how much
+  is hidden depends on the angle, so it is recomputed when the view settles --
+  not every frame.
+- The swing and the tilt advance on **real milliseconds**, not game ticks,
+  because rule 11 stops game time when you are not moving and the view must
+  still move smoothly.
 
 ---
 

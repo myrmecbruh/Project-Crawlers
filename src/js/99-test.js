@@ -43,12 +43,24 @@ window.__test = {
   select(i) { Game.state.selected = i; Game.state.viewDirty = true; Game.render(); },
 
   zoom(z) { setZoom(Game.state, z); Game.render(); return Game.state.cam.zoom; },
-  /* Zoom while holding a point of the picture still, as the wheel does. */
-  zoomAt(bx, by, z) {
-    const was = Game.state.cam.zoom;
-    setZoom(Game.state, z, bx * was, by * was);
+
+  /* Turn the view a quarter, and run the swing to its end. */
+  rotate(quarters) {
+    rotateCamera(Game.state, quarters);
+    this.settle();
+    return this.camera();
+  },
+  tilt(up) {
+    tiltCamera(Game.state, up);
+    this.settle();
+    return this.camera();
+  },
+  /* Push the swing along by hand, in milliseconds of real time. */
+  camStep(ms) { const moved = camAnimate(Game.state, ms); Game.render(); return moved; },
+  settle() {
+    for (let i = 0; i < 400 && camAnimate(Game.state, 16); i++) { /* swing it out */ }
     Game.render();
-    return Game.state.cam.zoom;
+    return this.camera();
   },
   motion() { return Game.state.motion; },
   loopOnce(ms) {
@@ -94,7 +106,14 @@ window.__test = {
     return out;
   },
   pan(dx, dy) { panCamera(Game.state, dx, dy); Game.render(); },
-  camera() { return { x: Game.state.cam.x, y: Game.state.cam.y, zoom: Game.state.cam.zoom }; },
+  camera() {
+    const c = Game.state.cam;
+    return { fx: c.fx, fy: c.fy, fh: c.fh, ox: c.ox, oy: c.oy,
+             yaw: c.yaw, yawTarget: c.yawTarget, quarter: ((c.quarter % 4) + 4) % 4,
+             pitch: c.pitch, pitchTarget: c.pitchTarget,
+             tileH: c.tileH, zoom: c.zoom };
+  },
+  behind() { return behindDir(Game.state); },
 
   step(n) { for (let i = 0; i < (n || 1); i++) step(Game.state); return Game.state.tick; },
   frame(n) { for (let i = 0; i < (n || 1); i++) Game.frame(); return Render.consumed; },
@@ -248,13 +267,17 @@ window.__test = {
       Game.state = a;
       const p0 = Render.project(a, 4, 4, 0);
       const pUp = Render.project(a, 4, 4, 1);
+      add('the view starts square on and at the normal angle',
+          a.cam.quarter === 0 && a.cam.pitch === 0,
+          'quarter ' + a.cam.quarter + ', pitch ' + a.cam.pitch);
       add('one metre is exactly render.rise pixels, at any zoom',
           p0.y - pUp.y === CFG.rise, (p0.y - pUp.y) + 'px for 1 m');
       const pRight = Render.project(a, 5, 4, 0);
       add('one tile east is half a tile wide, half a tile down',
           Math.abs(pRight.x - p0.x - CFG.tileW / 2) < 1e-9
-          && Math.abs(pRight.y - p0.y - CFG.tileH / 2) < 1e-9,
-          'dx=' + (pRight.x - p0.x) + ' dy=' + (pRight.y - p0.y));
+          && Math.abs(pRight.y - p0.y - a.cam.tileH / 2) < 1e-9,
+          'dx=' + (pRight.x - p0.x) + ' dy=' + (pRight.y - p0.y)
+          + ' (tile ' + CFG.tileW + 'x' + a.cam.tileH + ')');
       add('a crawler stands 52 pixels tall at the locked scale',
           Math.round(CFG.actorHeight * CFG.rise) === 52,
           Math.round(CFG.actorHeight * CFG.rise) + 'px for ' + CFG.actorHeight + ' m');
@@ -269,8 +292,8 @@ window.__test = {
           drew.bufW === Math.round(drew.bufW) && drew.bufH === Math.round(drew.bufH)
           && drew.bufW > 0, drew.bufW + 'x' + drew.bufH);
       add('the camera sits on whole pixels, so nothing shimmers',
-          a.cam.x === Math.round(a.cam.x) && a.cam.y === Math.round(a.cam.y),
-          a.cam.x + ',' + a.cam.y);
+          a.cam.ox === Math.round(a.cam.ox) && a.cam.oy === Math.round(a.cam.oy),
+          a.cam.ox + ',' + a.cam.oy);
 
       /* -- painter's order: back to front ----------------------------------- */
       let ordered = true;

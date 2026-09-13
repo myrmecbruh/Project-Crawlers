@@ -7,6 +7,63 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.5.0 — the view turns, and it can be raised
+
+Final Fantasy Tactics' answer to the problem this project kept running into:
+things hiding behind their own near walls. Four quarter turns and two angles.
+
+**Turning.** Q and E, or the buttons under the picture, swing the view a quarter
+turn. The swing is animated and the camera's **focus** — the point of ground it
+keeps in the middle — is held still, so the world turns around whatever you were
+looking at rather than sliding out from under you.
+
+Two things had to change underneath. Yaw is now **continuous**, which is what
+lets the swing animate at all; it merely settles on multiples of a quarter.
+And because of that, painter's order is no longer the order the cells happen to
+be stored in — everything visible now goes into one list with its depth along
+the view direction and gets sorted. The cutaway had to follow too: which cell is
+"behind" another depends entirely on which quarter you are looking from, so
+that is recomputed when the view settles rather than every frame.
+
+**Raising the angle.** R, or the middle button. It opens the ground out and
+leaves wall heights exactly alone, which is deliberate: rule 10 locks 32 pixels
+to the metre, and a true camera pitch would have broken it by making a standing
+crawler shorter. Opening the ground instead keeps the rule intact AND does the
+job better — from up there the whole floor plan of a room reads at once, and
+less than a third as much rock needs fading. A test asserts a metre of height is
+still exactly `render.rise` pixels at both angles.
+
+**The swing runs on real milliseconds, not game ticks.** It has to: rule 11
+stops game time whenever the view is not moving, and a view that only animates
+while it is already moving would never start.
+
+**On the cutaway, again, and the same lesson twice.** Turning the view made the
+translucent-rock problem worse in some directions, for the same reason as last
+release: the rule is correct and applying it broadly is unusable. Cut to the
+immediately adjacent wall only (`render.cutaway_depth` 2 → 1). Worth writing
+down as a pattern: an occlusion rule that is right about *what* is in the way is
+still wrong about *how much* to do something about it, and only a picture tells
+you which.
+
+**Time on a phone.** Rule 11 was working exactly as written — measured on an
+emulated handset, a drag bought 22 ticks and then time stopped dead — but with
+nothing between drags the game reads as broken rather than paused. Added a short
+coast (`time.coast_ticks` 0 → 45, three quarters of a second). That is a knowing
+softening of a non-negotiable, it is recorded in rule 11, and setting the knob
+back to 0 restores the strict reading.
+
+**The twelve gear slots are settled** and written into `CLAUDE.md`: Head, Neck,
+Back, Torso, Gloves, Mainhand, Offhand, Belt, Legs, Feet, Trinket 1, Trinket 2.
+Nothing is built against them yet.
+
+**What this release deliberately is not.** The animated 3D figures were asked
+for first and are not here. The camera had to come first: a skeleton, its parts
+and their shading would all have been built against a fixed viewpoint and then
+rebuilt the moment the view could turn. Figures are next, and now they only have
+to be got right once.
+
+---
+
 ## v0.4.0 — rooms, halls, a camp, and a locked pixel scale
 
 Six decisions arrived at once. Five are in; the sixth is answered below.

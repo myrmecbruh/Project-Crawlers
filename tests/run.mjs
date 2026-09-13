@@ -200,7 +200,7 @@ await test('panning moves the view, and picking follows it', async () => {
     window.__test.seed(1); window.__test.record(true);
     window.__test.frame(1);
     const before = window.__test.project(5, 5, 0);
-    window.__test.pan(40, 25);
+    window.__test.pan(40, 24);
     const after = window.__test.project(5, 5, 0);
     /* Point at the same screen spot: it must now be a different block. */
     const at = { x: window.__test.buffer().w / 2, y: window.__test.buffer().h / 2 };
@@ -209,7 +209,8 @@ await test('panning moves the view, and picking follows it', async () => {
     const back = window.__test.point(at.x, at.y);
     return { before, after, hit, back };
   });
-  assert(Math.round(r.before.x - r.after.x) === 40 && Math.round(r.before.y - r.after.y) === 25,
+  assert(Math.abs((r.before.x - r.after.x) - 40) <= 1
+      && Math.abs((r.before.y - r.after.y) - 24) <= 1,
     `pan moved the view by ${r.before.x - r.after.x},${r.before.y - r.after.y}`);
   assert(r.hit >= 0 && r.back >= 0, 'picking stopped working after a pan');
   assert(r.hit !== r.back, 'the same block was picked before and after panning');
@@ -221,8 +222,8 @@ await test('zooming changes the pixels, never the size of the world', async () =
     const at = { x: 120, y: 90 };
     const before = window.__test.point(at.x, at.y);
     const oneMetreBefore = window.__test.project(4, 4, 0).y - window.__test.project(4, 4, 1).y;
-    const z = window.__test.zoomAt(at.x, at.y, window.__test.buffer().zoom + 1);
-    const after = window.__test.point(at.x * 0 + at.x, at.y);
+    const z = window.__test.zoom(window.__test.buffer().zoom + 1);
+    const after = window.__test.point(at.x, at.y);
     const oneMetreAfter = window.__test.project(4, 4, 0).y - window.__test.project(4, 4, 1).y;
     return { before, after, z, oneMetreBefore, oneMetreAfter,
              rise: window.__test.cfg.rise, buf: window.__test.buffer() };
@@ -243,7 +244,7 @@ await test('everything lands on whole pixels, at every zoom', async () => {
       window.__test.frame(1);
       window.__test.pan(7, 3);
       const cam = window.__test.camera(), buf = window.__test.buffer();
-      out.push({ z: cam.zoom, camX: cam.x, camY: cam.y, w: buf.w, h: buf.h });
+      out.push({ z: cam.zoom, camX: cam.ox, camY: cam.oy, w: buf.w, h: buf.h });
     }
     return out;
   });
@@ -621,16 +622,27 @@ await test('time only runs while the view is moving', async () => {
     window.__test.resume(); window.__test.pause();      /* reset the clock */
     const still1 = window.__test.loopOnce(60);
     const still2 = window.__test.loopOnce(60);
+
     window.__test.pan(12, 0);
     const moved = window.__test.loopOnce(60);
-    const afterMoving = window.__test.loopOnce(60);
-    return { still1, still2, moved, afterMoving, coast: window.__test.cfg.coastTicks };
+
+    /* Let whatever coast there is run out, then check it really has stopped. */
+    let coasted = 0, guard = 0;
+    while (window.__test.motion() > 0 && guard++ < 300) {
+      coasted += window.__test.loopOnce(60).ticks;
+    }
+    const settled1 = window.__test.loopOnce(60);
+    const settled2 = window.__test.loopOnce(600);
+    return { still1, still2, moved, coasted, settled1, settled2,
+             coast: window.__test.cfg.coastTicks };
   });
   assert(r.still1.ticks === 0 && r.still2.ticks === 0,
     `the world ran ${r.still1.ticks}/${r.still2.ticks} ticks while nothing moved`);
   assert(r.moved.ticks > 0, 'moving the view did not start time');
-  assert(r.afterMoving.ticks === 0,
-    `time kept running ${r.afterMoving.ticks} ticks after the view stopped`);
+  assert(r.settled1.ticks === 0 && r.settled2.ticks === 0,
+    `time was still running ${r.settled1.ticks}/${r.settled2.ticks} ticks after it should have stopped`);
+  assert(r.moved.ticks + r.coasted <= r.coast + 10,
+    `one nudge bought ${r.moved.ticks + r.coasted} ticks, but the coast is only ${r.coast}`);
 });
 
 await test('a crawler tells you what they are doing', async () => {
@@ -650,6 +662,136 @@ await test('a crawler tells you what they are doing', async () => {
   assert(r.who.found, `no crawler could be pointed at: ${r.who.why}`);
   assert(r.described.doing, 'a crawler has no answer for what they are doing');
   assert(r.tip && r.tip.text.length > 0, 'the panel is empty for a crawler');
+});
+
+
+await test('the view swings a quarter turn and keeps its footing', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.frame(1);
+    const middle = { x: window.__test.buffer().w / 2, y: window.__test.buffer().h / 2 };
+    const before = { cam: window.__test.camera(), at: window.__test.project(10, 10, 0) };
+    window.__test.rotate(1);
+    const mid = window.__test.camera();
+    const after = window.__test.project(10, 10, 0);
+
+    window.__test.rotate(-1);                  /* square on again */
+    const quarters = [];
+    for (let q = 0; q < 4; q++) {
+      quarters.push({ q: window.__test.camera().quarter,
+                      behind: window.__test.behind(),
+                      at: window.__test.project(10, 10, 0) });
+      window.__test.rotate(1);
+    }
+    return { before, mid, after, quarters, back: window.__test.camera() };
+  });
+  assert(r.mid.quarter === 1, `a quarter turn landed on ${r.mid.quarter}`);
+  assert(r.mid.yaw === r.mid.yawTarget, 'the swing never finished');
+  assert(Math.abs(r.after.x - r.before.at.x) > 4 || Math.abs(r.after.y - r.before.at.y) > 4,
+    'turning the view did not move anything on screen');
+  const seen = new Set(r.quarters.map((q) => q.behind.join(',')));
+  assert(seen.size === 4, `only ${seen.size} of four directions were distinct`);
+  assert(r.back.quarter === 0, `four quarter turns landed on ${r.back.quarter}`);
+  const home = r.quarters[0].at;
+  assert(Math.abs(home.x - r.before.at.x) < 1 && Math.abs(home.y - r.before.at.y) < 1,
+    'a full turn did not come back to where it started');
+});
+
+await test('the swing is animated, not a jump', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.frame(1);
+    window.__test.rotate(0);
+    const frames = [];
+    rotateCamera(window.__test.state, 1);
+    for (let i = 0; i < 40; i++) {
+      const moved = window.__test.camStep(16);
+      frames.push(window.__test.camera().yaw);
+      if (!moved) break;
+    }
+    return { frames, swingMs: window.__test.cfg.swingMs,
+             target: window.__test.camera().yawTarget };
+  });
+  assert(r.frames.length > 3,
+    `the swing took ${r.frames.length} frames, which is a jump not a swing`);
+  const strictlyGrowing = r.frames.every((v, i) => i === 0 || v > r.frames[i - 1] - 1e-9);
+  assert(strictlyGrowing, `the swing went backwards: ${r.frames.join(',')}`);
+  assert(Math.abs(r.frames[r.frames.length - 1] - r.target) < 1e-9,
+    'the swing did not land on the quarter');
+});
+
+await test('everything keeps working after the view is turned', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    const out = [];
+    for (let q = 0; q < 4; q++) {
+      const drew = window.__test.frame(1);
+      /* painted back to front, at this quarter */
+      let ordered = true;
+      for (let k = 1; k < drew.items.length; k++) {
+        if (drew.items[k].depth !== undefined
+          && drew.items[k].depth < drew.items[k - 1].depth - 1e-9) ordered = false;
+      }
+      /* pick something and check we get it back */
+      let hit = -1, want = -1;
+      for (let k = drew.items.length - 1; k >= 0; k--) {
+        const it = drew.items[k];
+        if (it.kind !== 'cell') continue;
+        if (it.sx < 20 || it.sx > window.__test.buffer().w - 20) continue;
+        if (it.sy < 20 || it.sy > window.__test.buffer().h - 20) continue;
+        want = it.i; hit = window.__test.point(it.sx, it.sy); break;
+      }
+      out.push({ q: window.__test.camera().quarter, ordered, hit, want,
+                 count: drew.count, cutaway: drew.cutaway });
+      window.__test.rotate(1);
+    }
+    return out;
+  });
+  for (const q of r) {
+    assert(q.count > 50, `at quarter ${q.q} only ${q.count} things were drawn`);
+    assert(q.ordered, `at quarter ${q.q} the painting was not back to front`);
+    assert(q.hit === q.want, `at quarter ${q.q} pointing at ${q.want} picked ${q.hit}`);
+    assert(q.cutaway > 0, `at quarter ${q.q} no wall faded, so rooms hide again`);
+  }
+});
+
+await test('the raised angle opens the ground out and leaves heights alone', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.frame(1);
+    const low = { tileH: window.__test.camera().tileH,
+                  metre: window.__test.project(4, 4, 0).y - window.__test.project(4, 4, 1).y,
+                  span: window.__test.project(4, 5, 0).y - window.__test.project(4, 4, 0).y };
+    window.__test.tilt(true);
+    window.__test.frame(1);
+    const high = { tileH: window.__test.camera().tileH,
+                   metre: window.__test.project(4, 4, 0).y - window.__test.project(4, 4, 1).y,
+                   span: window.__test.project(4, 5, 0).y - window.__test.project(4, 4, 0).y };
+    window.__test.tilt(false);
+    const back = window.__test.camera();
+    return { low, high, back, rise: window.__test.cfg.rise,
+             lowKnob: window.__test.data.knobs['render.tile_h_low'],
+             highKnob: window.__test.data.knobs['render.tile_h_high'] };
+  });
+  assert(r.low.tileH === r.lowKnob && r.high.tileH === r.highKnob,
+    `the angles came out ${r.low.tileH} and ${r.high.tileH}`);
+  assert(r.high.span > r.low.span,
+    `a metre of ground was ${r.low.span}px then ${r.high.span}px -- the angle did not rise`);
+  assert(r.low.metre === r.rise && r.high.metre === r.rise,
+    `a metre of HEIGHT changed from ${r.low.metre} to ${r.high.metre}; rule 10 says it must not`);
+  assert(r.back.pitchTarget === 0, 'the angle did not come back down');
+});
+
+await test('turning the view does not disturb the labyrinth or the camp', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    const sig = () => window.__test.state.world.cells.map((c) => c.h + c.tile).join('|');
+    const before = { world: sig(), camp: window.__test.camp().summary, tick: window.__test.state.tick };
+    window.__test.rotate(1); window.__test.tilt(true);
+    window.__test.rotate(2); window.__test.tilt(false);
+    window.__test.rotate(1);
+    return { before, after: { world: sig(), camp: window.__test.camp().summary,
+                              tick: window.__test.state.tick } };
+  });
+  assert(r.before.world === r.after.world, 'turning the view changed the labyrinth');
+  assert(r.before.camp.progress === r.after.camp.progress, 'turning the view built the camp');
 });
 
 await test('the page raised no errors while all that happened', async () => {

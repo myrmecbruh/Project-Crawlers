@@ -10,11 +10,24 @@ const KEYMAP = {
 
 const DRAG_SLOP = 4;   /* px of movement before a tap becomes a drag */
 
+/* Turning and tilting are not panning, so they get their own keys. Q and E
+   swing a quarter turn the way Final Fantasy Tactics does; R raises the angle. */
+const VIEW_KEYS = {
+  KeyQ: (s) => rotateCamera(s, -1),
+  KeyE: (s) => rotateCamera(s, 1),
+  KeyR: (s) => tiltCamera(s)
+};
+
 function bindInput(state, canvas, toBuffer) {
   const drag = { active: false, moved: 0, lastX: 0, lastY: 0, id: null };
   const pinch = { active: false, start: 0, zoom: 1 };
 
   function key(e, down) {
+    if (down && VIEW_KEYS[e.code] && !e.repeat) {
+      VIEW_KEYS[e.code](state);
+      e.preventDefault();
+      return;
+    }
     const slot = KEYMAP[e.code];
     if (!slot) return;
     state.input[slot] = down;

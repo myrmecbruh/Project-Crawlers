@@ -56,7 +56,8 @@ function STRUCT(id) {
    happen as well as being slow. */
 const CFG = {
   tileW:       K('render.tile_w'),
-  tileH:       K('render.tile_h'),
+  tileHLow:    K('render.tile_h_low'),
+  tileHHigh:   K('render.tile_h_high'),
   rise:        K('render.rise'),
   occluderFade: K('render.occluder_fade'),
   shadeLeft:   K('render.side_shade_left'),
@@ -69,6 +70,8 @@ const CFG = {
   maxBufH:     K('render.max_buffer_h'),
   cutawayFade: K('render.cutaway_fade'),
   cutawayDepth: K('render.cutaway_depth'),
+  swingMs:     K('camera.swing_ms'),
+  tiltMs:      K('camera.tilt_ms'),
   coastTicks:  K('time.coast_ticks'),
   keyPan:      K('camera.key_pan_speed'),
   chunkTiles:  K('world.chunk_tiles'),
