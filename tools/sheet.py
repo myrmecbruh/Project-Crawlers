@@ -26,13 +26,13 @@ SECTIONS = {
     "bones":    ("id",  ["name", "parent", "x", "y", "z", "note"], False),
     "slots":    ("id",  ["name", "note"], False),
     "speeds":   ("id",  ["name", "multiplier", "note"], False),
-    "gear":     ("id",  ["name", "slot", "tags", "attr", "bonus", "note"], False),
+    "gear":     ("id",  ["name", "slot", "tags", "attr", "bonus", "light", "note"], False),
     "figure":   ("id",  ["name", "slot", "item", "bone", "colour", "ox", "oy",
                          "from_m", "to_m", "w_top", "w_bot", "d_top", "d_bot",
                          "sides", "rings", "bulge", "cap_top", "cap_bot",
-                         "note"], False),
+                         "glow", "note"], False),
     "structures": ("id", ["name", "tags", "colour", "half_width", "height_m",
-                          "skill", "difficulty", "note"], False),
+                          "skill", "difficulty", "light", "note"], False),
 }
 
 # Columns that are documentation. They may be edited freely and are never
@@ -55,10 +55,10 @@ def norm(col, v):
     if blank(v):
         return ""
     if col in ("value", "cross", "clear", "half_width", "from_m", "to_m",
-               "height_m", "difficulty", "without", "multiplier",
+               "height_m", "difficulty", "without", "multiplier", "light",
                "x", "y", "z", "ox", "oy",
                "w_top", "w_bot", "d_top", "d_bot",
-               "sides", "rings", "bulge", "cap_top", "cap_bot"):
+               "sides", "rings", "bulge", "cap_top", "cap_bot", "glow"):
         try:
             f = float(v)
             return int(f) if f == int(f) else round(f, 10)
@@ -165,6 +165,7 @@ def for_game(merged):
                              "height_m": norm("height_m", r["height_m"]),
                              "skill": str(r["skill"]).strip().lower(),
                              "difficulty": norm("difficulty", r["difficulty"]),
+                             "light": norm("light", r.get("light")) or 0,
                              "note": str(r.get("note", ""))}
                          for k, r in merged["structures"].items()}
 
@@ -195,6 +196,7 @@ def for_game(merged):
     out["gear"] = {k: {"name": str(r["name"]), "slot": norm("slot", r["slot"]),
                        "tags": [t for t in norm("tags", r["tags"]).split(",") if t],
                        "attr": pairs_of(r.get("attr")), "bonus": pairs_of(r.get("bonus")),
+                       "light": norm("light", r.get("light")) or 0,
                        "note": str(r.get("note", ""))}
                    for k, r in merged["gear"].items()}
     out["figure"] = {k: {"name": str(r["name"]), "slot": norm("slot", r["slot"]),
@@ -213,6 +215,7 @@ def for_game(merged):
                          "bulge": norm("bulge", r.get("bulge")) or 0,
                          "cap_top": norm("cap_top", r.get("cap_top")) or 0,
                          "cap_bot": norm("cap_bot", r.get("cap_bot")) or 0,
+                         "glow": norm("glow", r.get("glow")) or 0,
                          "note": str(r.get("note", ""))}
                      for k, r in merged["figure"].items()}
     return out
@@ -351,6 +354,16 @@ def check_vocabulary(game):
         if sk["without"] and not sk["needs_tag"]:
             errors.append("skills: '%s' penalises going without, but never says "
                           "without what" % sid)
+
+    # A light that reaches nowhere, or across the whole chunk, is a mistake.
+    for gid, g in game["gear"].items():
+        if g["light"] and not (0.5 <= g["light"] <= 20):
+            errors.append("gear: '%s' throws light %s metres; between 0.5 and 20 "
+                          "or none at all" % (gid, g["light"]))
+    for stid, st in game["structures"].items():
+        if st["light"] and not (0.5 <= st["light"] <= 20):
+            errors.append("structures: '%s' throws light %s metres; between 0.5 "
+                          "and 20 or none at all" % (stid, st["light"]))
 
     slots = set(game["slots"])
     for gid, g in game["gear"].items():
@@ -536,7 +549,7 @@ def selftest():
         "slots": dict((s_, {"name": s_, "note": ""}) for s_ in
                       ("head", "neck", "back", "torso", "gloves", "mainhand",
                        "offhand", "belt", "legs", "feet", "trinket1", "trinket2")),
-        "gear": dict((s_, {"name": s_, "slot": s_, "tags": "t1", "note": ""}) for s_ in
+        "gear": dict((s_, {"name": s_, "slot": s_, "tags": "t1", "light": 0, "note": ""}) for s_ in
                      ("head", "neck", "back", "torso", "gloves", "mainhand",
                       "offhand", "belt", "legs", "feet", "trinket1", "trinket2")),
         "figure": dict([("torso_body", {"name": "Torso", "slot": "body", "item": "",
@@ -557,7 +570,7 @@ def selftest():
                                      "mainhand", "offhand", "belt", "legs",
                                      "feet", "trinket1", "trinket2")]),
         "structures": {"fire": {"name": "Fire", "tags": "t1", "colour": "#900",
-                                "half_width": 0.3, "height_m": 0.5,
+                                "half_width": 0.3, "height_m": 0.5, "light": 0,
                                 "skill": "mig_agi", "difficulty": 40, "note": ""}},
     }
 

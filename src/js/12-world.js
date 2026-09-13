@@ -342,3 +342,81 @@ function stepToward(world, from, field) {
   }
   return best;
 }
+
+/* ---- light ---------------------------------------------------------------
+ * The labyrinth is dark. Light is something you carry into it, or build.
+ *
+ * Worked out per SQUARE rather than as a glow on the screen, and spread by
+ * flooding outwards from each source through whatever does not block sight --
+ * so a fire lights its room and the hall leading out of it, and not the room on
+ * the other side of the wall. Blocked squares still catch the light on their
+ * near face; they just do not pass it on.
+ */
+function lightSourcesIn(state) {
+  const out = [];
+  for (let i = 0; i < state.actors.length; i++) {
+    const a = state.actors[i];
+    let best = 0;
+    for (let k = 0; k < SLOT_IDS.length; k++) {
+      const item = a.worn[SLOT_IDS[k]];
+      if (item && GEAR(item).light > best) best = GEAR(item).light;
+    }
+    if (best > 0) out.push({ x: a.x, y: a.y, r: best });
+  }
+  if (state.camp) {
+    for (let i = 0; i < state.camp.sites.length; i++) {
+      const site = state.camp.sites[i];
+      const def = STRUCT(site.structure);
+      if (site.built && def.light > 0) out.push({ x: site.x, y: site.y, r: def.light });
+    }
+  }
+  return out;
+}
+
+function computeLight(state) {
+  const w = state.world, n = w.n;
+  if (!state.light || state.light.length !== n * n) state.light = new Float32Array(n * n);
+  state.light.fill(0);
+
+  const sources = lightSourcesIn(state);
+  const dist = new Int16Array(n * n);
+  for (let si = 0; si < sources.length; si++) {
+    const src = sources[si];
+    const reach = Math.ceil(src.r);
+    dist.fill(-1);
+    const start = src.y * n + src.x;
+    if (start < 0 || start >= dist.length) continue;
+    dist[start] = 0;
+    const queue = [start];
+    for (let head = 0; head < queue.length; head++) {
+      const i = queue[head];
+      const c = w.cells[i];
+      const d = dist[i];
+      const fall = Math.max(0, 1 - Math.pow(d / src.r, CFG.falloff));
+      if (fall > state.light[i]) state.light[i] = fall;
+      if (d >= reach) continue;
+      /* Rock catches the light but does not pass it on. */
+      if (TILE(c.tile).tags.indexOf('blocks-sight') >= 0 && d > 0) continue;
+      for (let k = 0; k < STEPS.length; k++) {
+        const to = w.at(c.x + STEPS[k][0], c.y + STEPS[k][1]);
+        if (!to) continue;
+        const j = to.y * n + to.x;
+        if (dist[j] >= 0) continue;
+        dist[j] = d + 1;
+        queue.push(j);
+      }
+    }
+  }
+  state.lightDirty = false;
+  state.viewDirty = true;
+  state.geomDirty = true;
+  return sources.length;
+}
+
+/* Stepped, so the picture reads as painted pools rather than a smooth gradient
+   -- and so the pattern cache underneath it stays small. */
+function lightAt(state, index) {
+  if (!state.light) return 1;
+  const raw = state.light[index] || 0;
+  return Math.round(raw * CFG.lightSteps) / CFG.lightSteps;
+}

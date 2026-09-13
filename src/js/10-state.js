@@ -26,6 +26,8 @@ function newState(seed) {
     actors: [],
     camp: null,
     rolls: 0,
+    light: null,
+    lightDirty: true,
     /* The player's own clock. Paused stops the world; speed multiplies it.
        Neither touches the camera, which always moves on real time. */
     paused: false,
@@ -46,6 +48,7 @@ function newState(seed) {
   };
   s.actors = populate(s);
   s.camp = makeCamp(s);
+  computeLight(s);
   centreCamera(s);
   markCutaway(s);
   return s;

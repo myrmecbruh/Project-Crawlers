@@ -417,6 +417,35 @@ Frame cost with the camp in view: about 8.7 ms, of which 1.9 ms is geometry.
 
 ---
 
+## Light, and the dark
+
+The labyrinth is dark. `light.ambient` is 0.14 — you can just make out shapes.
+Light is something you carry into it or build.
+
+- Worked out **per square**, not as a glow on the screen: each source floods
+  outwards through whatever does not block sight, so a fire lights its room and
+  the hall out of it and **not the room through the wall**. Rock catches the
+  light on its near face and does not pass it on. A test walks outward from every
+  source and fails if a single square behind rock is lit.
+- Sources are a `light` column on **gear** and on **structures**, in metres:
+  candle 3, lantern 6, torch 8, campfire 9. A crawler uses the brightest thing
+  they carry. Add a row with a `light` value and it lights the way.
+- Light is **stepped** (`light.steps`), so the picture reads as painted pools
+  rather than a smooth gradient -- and so the pattern cache underneath stays
+  small.
+- Lit things go **warm** (`light.warmth`), because what is doing the lighting is
+  a flame.
+- A figure part with `glow` 1 (a torch flame, a candle flame) is never darkened
+  by the room, because it IS the light.
+- `state.lightDirty` is set when a light-carrier moves or a fire is finished;
+  the map is rebuilt then, not every frame.
+
+**Do not confuse the two ambients.** `render.light_ambient` is how lit the
+darkest FACE of a thing is -- that is shape. `light.ambient` is how dark the room
+is.
+
+---
+
 ## The camera
 
 - The camera holds a **focus** -- a point on the ground it keeps in the middle

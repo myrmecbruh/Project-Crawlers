@@ -247,7 +247,7 @@ const Render = {
       if (!faces.length) continue;
       this.bounds(scr, box);
       out.push({ id: parts[i].id, slot: f.slot, item: f.item, colour: f.colour,
-                 faces: faces,
+                 glow: f.glow > 0, faces: faces,
                  depth: this.towardCamera(s, gx + cx / n8, gy + cy / n8, ground + cz / n8) });
     }
     /* Nearest last. Two dozen convex parts sort reliably by their middles. */
@@ -273,6 +273,7 @@ const Render = {
   build(s) {
     const w = s.world, n = w.n, b = this.batch;
     this.ensure();
+    if (s.lightDirty) computeLight(s);
     b.length = 0;
 
     const standing = {}, sited = {};
@@ -311,6 +312,7 @@ const Render = {
       if (box[3] < 0) continue;
 
       const depth = this.depth(s, x + 0.5, y + 0.5);
+      const light = lightAt(s, i);
 
       /* Which two walls of the block face the camera changes as the view
          swings, so pick the pair by which corners are lowest on screen. */
@@ -319,7 +321,7 @@ const Render = {
       const bases = [baseA, baseB, baseC, baseD];
 
       b.push({
-        kind: 'cell', i: i, cell: cell, top: top, depth: depth,
+        kind: 'cell', i: i, cell: cell, top: top, depth: depth, light: light,
         left: [top[near], top[left], bases[left], bases[near]],
         right: [top[near], top[right], bases[right], bases[near]],
         solid: cell.h > 0,
@@ -342,7 +344,7 @@ const Render = {
           if (sbox[2] < 0 || sbox[0] > this.w || sbox[3] + CFG.rise < 0 || sbox[1] > this.h) continue;
           b.push({
             kind: 'site', i: w.cells.length + s.actors.length + here[q],
-            site: site, shape: shape, solid: true, depth: depth + 0.01,
+            site: site, shape: shape, solid: true, depth: depth + 0.01, light: light, light: light,
             minX: sbox[0], minY: sbox[1], maxX: sbox[2], maxY: sbox[3] + CFG.rise,
             cx: (shape.top[0].x + shape.top[2].x) / 2,
             cy: (shape.top[0].y + shape.top[2].y) / 2
@@ -360,7 +362,7 @@ const Render = {
         if (abox[2] < 0 || abox[0] > this.w || abox[3] < 0 || abox[1] > this.h) continue;
         b.push({
           kind: 'actor', i: w.cells.length + people[q],
-          actor: actor, parts: fig.parts, solid: true, depth: depth + 0.02,
+          actor: actor, parts: fig.parts, solid: true, depth: depth + 0.02, light: light, light: light,
           minX: abox[0], minY: abox[1], maxX: abox[2], maxY: abox[3],
           cx: (abox[0] + abox[2]) / 2, cy: abox[1] + (abox[3] - abox[1]) * 0.35
         });
@@ -492,9 +494,11 @@ const Render = {
         const aStamp = 'a' + it.i + ',' + Math.round(it.minX) + ',' + Math.round(it.minY);
         for (let r = 0; r < it.parts.length; r++) {
           const pt = it.parts[r];
+          /* A flame is not darkened by the room it is lighting. */
+          const pl = pt.glow ? 1 : it.light;
           for (let g = 0; g < pt.faces.length; g++) {
             this.poly(ctx, pt.faces[g].pts,
-              this.surface(shade(pt.colour, pt.faces[g].lit), true,
+              this.surface(litShade(pt.colour, pt.faces[g].lit, pl), true,
                            it.minX, it.minY, aStamp));
           }
           if (pt.slot !== 'body') wornDrawn.push(pt.item);
@@ -518,10 +522,12 @@ const Render = {
         const done = it.site.built;
         const col = done ? def.colour : shade(def.colour, 0.45);
         const sStamp = 's' + it.i + ',' + Math.round(it.minX) + ',' + Math.round(it.minY);
-        const sk = (c) => this.surface(c, true, it.minX, it.minY, sStamp);
-        this.poly(ctx, it.shape.left, sk(shade(col, CFG.shadeLeft)));
-        this.poly(ctx, it.shape.right, sk(shade(col, CFG.shadeRight)));
-        this.poly(ctx, it.shape.top, sk(col));
+        const lit = STRUCT(it.site.structure).light > 0 && done ? 1 : it.light;
+        const sk = (c, f) => this.surface(litShade(c, f, lit), true,
+                                          it.minX, it.minY, sStamp);
+        this.poly(ctx, it.shape.left, sk(col, CFG.shadeLeft));
+        this.poly(ctx, it.shape.right, sk(col, CFG.shadeRight));
+        this.poly(ctx, it.shape.top, sk(col, 1));
         if (!done) this.outline(ctx, it.shape.top, 'rgba(255,233,168,0.35)');
         structures++; drawn++;
         if (items) {
@@ -540,18 +546,19 @@ const Render = {
          and edge-on; grain there costs a third of the frame and reads as almost
          nothing, so they stay flat. */
       if (it.solid) {
-        this.poly(ctx, it.left, shade(def.side, CFG.shadeLeft * lift));
-        this.poly(ctx, it.right, shade(def.side, CFG.shadeRight * lift));
+        this.poly(ctx, it.left, litShade(def.side, CFG.shadeLeft * lift, it.light));
+        this.poly(ctx, it.right, litShade(def.side, CFG.shadeRight * lift, it.light));
       }
       this.poly(ctx, it.top,
-        this.surface(shade(def.top, lift), false, -s.cam.ox, -s.cam.oy, worldStamp));
+        this.surface(litShade(def.top, lift, it.light), false,
+                     -s.cam.ox, -s.cam.oy, worldStamp));
 
       kinds[it.cell.tile] = (kinds[it.cell.tile] || 0) + 1;
       drawn++;
       if (items) {
         items.push({ i: it.i, kind: 'cell', x: it.cell.x, y: it.cell.y, h: it.cell.h,
                      tile: it.cell.tile, slope: it.cell.slope, cutaway: it.cutaway,
-                     alpha: alpha, sx: it.cx, sy: it.cy });
+                     light: it.light, alpha: alpha, sx: it.cx, sy: it.cy });
       }
     }
 
@@ -561,6 +568,7 @@ const Render = {
       tick: s.tick, count: drawn, kinds: kinds,
       people: people, structures: structures, worn: wornDrawn,
       faded: faded, cutaway: cutaway, outlined: outlined,
+      lights: s.light ? lightSourcesIn(s).length : 0,
       focus: focusIdx, zoom: s.cam.zoom,
       bufW: this.w, bufH: this.h
     };

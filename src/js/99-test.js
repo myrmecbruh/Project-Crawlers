@@ -87,6 +87,20 @@ window.__test = {
       })
     };
   },
+  lightAt(x, y) {
+    const s = Game.state;
+    return lightAt(s, y * s.world.n + x);
+  },
+  lightSources() { return lightSourcesIn(Game.state); },
+  litCells() {
+    const s = Game.state;
+    let lit = 0, dark = 0;
+    for (let i = 0; i < s.world.cells.length; i++) {
+      if (lightAt(s, i) > 0.15) lit++; else dark++;
+    }
+    return { lit: lit, dark: dark, total: s.world.cells.length };
+  },
+
   rooms() {
     return Game.state.world.rooms.map(function (r) {
       return { index: r.index, x: r.x, y: r.y, w: r.w, h: r.h,

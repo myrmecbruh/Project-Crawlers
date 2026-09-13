@@ -272,12 +272,12 @@
       "note": "How long a crawler takes to turn to face a new direction."
     },
     "render.light_ambient": {
-      "value": 0.46,
+      "value": 0.55,
       "unit": "x",
-      "note": "How lit the darkest face of anything is. Raise it to flatten the lighting."
+      "note": "How lit the darkest FACE of something is, once the lamp has reached it. This is the shape of a thing, not how dark the room is -- that is light.ambient."
     },
     "render.light_diffuse": {
-      "value": 0.62,
+      "value": 0.45,
       "unit": "x",
       "note": "How much brighter a face gets for facing the light."
     },
@@ -335,6 +335,26 @@
       "value": 6,
       "unit": "faces",
       "note": "How many faces each die has."
+    },
+    "light.ambient": {
+      "value": 0.14,
+      "unit": "0-1",
+      "note": "How much you can see where nothing is lighting the way. Very low: the labyrinth is dark, and light is something you carry into it."
+    },
+    "light.warmth": {
+      "value": 0.45,
+      "unit": "0-1",
+      "note": "How much a lit thing goes orange rather than just brighter. 0 is cold light, 1 is firelight."
+    },
+    "light.steps": {
+      "value": 6,
+      "unit": "steps",
+      "note": "How many levels of brightness there are between dark and fully lit. Few levels look painted; many look smooth and cost more to draw."
+    },
+    "light.falloff": {
+      "value": 1.35,
+      "unit": "x",
+      "note": "How sharply light dies with distance. Above 1 keeps the bright part close to the source."
     }
   },
   "geometry": {
@@ -608,8 +628,8 @@
       "top": "#6e7278",
       "side": "#585c61",
       "footing": "walk",
-      "cross": 4,
-      "clear": 8,
+      "cross": 7,
+      "clear": 11,
       "note": "Worked flagstone. The default footing of the labyrinth."
     },
     "packed_earth": {
@@ -618,8 +638,8 @@
       "top": "#7d6c54",
       "side": "#63553f",
       "footing": "walk",
-      "cross": 5,
-      "clear": 9,
+      "cross": 8,
+      "clear": 12,
       "note": "Trodden soil."
     },
     "moss_stone": {
@@ -628,8 +648,8 @@
       "top": "#5f7557",
       "side": "#4a5c45",
       "footing": "walk",
-      "cross": 7,
-      "clear": 11,
+      "cross": 10,
+      "clear": 14,
       "note": "Stone gone green where the water sits."
     },
     "shallow_water": {
@@ -638,8 +658,8 @@
       "top": "#3f6b7d",
       "side": "#335667",
       "footing": "walk",
-      "cross": 10,
-      "clear": 15,
+      "cross": 13,
+      "clear": 18,
       "note": "Ankle deep. Slows a walker, ruins what it soaks."
     },
     "rubble": {
@@ -648,8 +668,8 @@
       "top": "#6d6860",
       "side": "#57534c",
       "footing": "walk",
-      "cross": 11,
-      "clear": 14,
+      "cross": 14,
+      "clear": 17,
       "note": "Collapsed masonry, not yet cleared."
     },
     "bone_litter": {
@@ -658,8 +678,8 @@
       "top": "#8d8672",
       "side": "#6f6959",
       "footing": "walk",
-      "cross": 6,
-      "clear": 10,
+      "cross": 9,
+      "clear": 13,
       "note": "Somebody else got this far."
     },
     "stone_ramp": {
@@ -668,8 +688,8 @@
       "top": "#73777d",
       "side": "#5b5f64",
       "footing": "ramp",
-      "cross": 8,
-      "clear": 12,
+      "cross": 11,
+      "clear": 15,
       "note": "A climbable one-metre slope."
     },
     "stone_block": {
@@ -842,6 +862,7 @@
       "bulge": 0.04,
       "cap_top": 0.42,
       "cap_bot": 0.2,
+      "glow": 0,
       "note": "Always drawn. Eight sides and a domed top: at 52 pixels tall the silhouette is most of what you read."
     },
     "neck": {
@@ -863,6 +884,7 @@
       "bulge": 0,
       "cap_top": 0,
       "cap_bot": 0,
+      "glow": 0,
       "note": ""
     },
     "torso": {
@@ -884,6 +906,7 @@
       "bulge": 0.1,
       "cap_top": 0.16,
       "cap_bot": 0.12,
+      "glow": 0,
       "note": "Always drawn. Wider at the shoulders, pinched at the waist, and swelling slightly in between -- that is what makes a figure read as a body."
     },
     "pelvis": {
@@ -905,6 +928,7 @@
       "bulge": 0.06,
       "cap_top": 0.1,
       "cap_bot": 0.1,
+      "glow": 0,
       "note": ""
     },
     "upperarm_l": {
@@ -926,6 +950,7 @@
       "bulge": 0.07,
       "cap_top": 0.1,
       "cap_bot": 0.18,
+      "glow": 0,
       "note": ""
     },
     "forearm_l": {
@@ -947,6 +972,7 @@
       "bulge": 0.05,
       "cap_top": 0.08,
       "cap_bot": 0.2,
+      "glow": 0,
       "note": ""
     },
     "hand_l": {
@@ -968,6 +994,7 @@
       "bulge": 0.05,
       "cap_top": 0.35,
       "cap_bot": 0.3,
+      "glow": 0,
       "note": ""
     },
     "thigh_l": {
@@ -989,6 +1016,7 @@
       "bulge": 0.11,
       "cap_top": 0.14,
       "cap_bot": 0.1,
+      "glow": 0,
       "note": ""
     },
     "shin_l": {
@@ -1010,6 +1038,7 @@
       "bulge": 0.09,
       "cap_top": 0.1,
       "cap_bot": 0.18,
+      "glow": 0,
       "note": ""
     },
     "foot_l": {
@@ -1031,6 +1060,7 @@
       "bulge": 0.04,
       "cap_top": 0.22,
       "cap_bot": 0.1,
+      "glow": 0,
       "note": ""
     },
     "upperarm_r": {
@@ -1052,6 +1082,7 @@
       "bulge": 0.07,
       "cap_top": 0.1,
       "cap_bot": 0.18,
+      "glow": 0,
       "note": ""
     },
     "forearm_r": {
@@ -1073,6 +1104,7 @@
       "bulge": 0.05,
       "cap_top": 0.08,
       "cap_bot": 0.2,
+      "glow": 0,
       "note": ""
     },
     "hand_r": {
@@ -1094,6 +1126,7 @@
       "bulge": 0.05,
       "cap_top": 0.35,
       "cap_bot": 0.3,
+      "glow": 0,
       "note": ""
     },
     "thigh_r": {
@@ -1115,6 +1148,7 @@
       "bulge": 0.11,
       "cap_top": 0.14,
       "cap_bot": 0.1,
+      "glow": 0,
       "note": ""
     },
     "shin_r": {
@@ -1136,6 +1170,7 @@
       "bulge": 0.09,
       "cap_top": 0.1,
       "cap_bot": 0.18,
+      "glow": 0,
       "note": ""
     },
     "foot_r": {
@@ -1157,6 +1192,7 @@
       "bulge": 0.04,
       "cap_top": 0.22,
       "cap_bot": 0.1,
+      "glow": 0,
       "note": ""
     },
     "hood_v": {
@@ -1178,6 +1214,7 @@
       "bulge": 0.06,
       "cap_top": 0.38,
       "cap_bot": 0.1,
+      "glow": 0,
       "note": ""
     },
     "collar_v": {
@@ -1199,6 +1236,7 @@
       "bulge": 0.1,
       "cap_top": 0.05,
       "cap_bot": 0.05,
+      "glow": 0,
       "note": ""
     },
     "pack_v": {
@@ -1220,6 +1258,7 @@
       "bulge": 0.08,
       "cap_top": 0.14,
       "cap_bot": 0.14,
+      "glow": 0,
       "note": "Sits behind the chest, which is what the oy offset is for."
     },
     "jerkin_v": {
@@ -1241,6 +1280,7 @@
       "bulge": 0.11,
       "cap_top": 0.14,
       "cap_bot": 0.1,
+      "glow": 0,
       "note": ""
     },
     "glove_fore_l": {
@@ -1262,6 +1302,7 @@
       "bulge": 0.06,
       "cap_top": 0.08,
       "cap_bot": 0.18,
+      "glow": 0,
       "note": ""
     },
     "glove_hand_l": {
@@ -1283,6 +1324,7 @@
       "bulge": 0.05,
       "cap_top": 0.32,
       "cap_bot": 0.28,
+      "glow": 0,
       "note": ""
     },
     "breech_l": {
@@ -1304,6 +1346,7 @@
       "bulge": 0.12,
       "cap_top": 0.12,
       "cap_bot": 0.08,
+      "glow": 0,
       "note": ""
     },
     "boot_shin_l": {
@@ -1325,6 +1368,7 @@
       "bulge": 0.1,
       "cap_top": 0.08,
       "cap_bot": 0.14,
+      "glow": 0,
       "note": ""
     },
     "boot_foot_l": {
@@ -1346,6 +1390,7 @@
       "bulge": 0.05,
       "cap_top": 0.2,
       "cap_bot": 0.08,
+      "glow": 0,
       "note": ""
     },
     "glove_fore_r": {
@@ -1367,6 +1412,7 @@
       "bulge": 0.06,
       "cap_top": 0.08,
       "cap_bot": 0.18,
+      "glow": 0,
       "note": ""
     },
     "glove_hand_r": {
@@ -1388,6 +1434,7 @@
       "bulge": 0.05,
       "cap_top": 0.32,
       "cap_bot": 0.28,
+      "glow": 0,
       "note": ""
     },
     "breech_r": {
@@ -1409,6 +1456,7 @@
       "bulge": 0.12,
       "cap_top": 0.12,
       "cap_bot": 0.08,
+      "glow": 0,
       "note": ""
     },
     "boot_shin_r": {
@@ -1430,6 +1478,7 @@
       "bulge": 0.1,
       "cap_top": 0.08,
       "cap_bot": 0.14,
+      "glow": 0,
       "note": ""
     },
     "boot_foot_r": {
@@ -1451,6 +1500,7 @@
       "bulge": 0.05,
       "cap_top": 0.2,
       "cap_bot": 0.08,
+      "glow": 0,
       "note": ""
     },
     "belt_v": {
@@ -1472,6 +1522,7 @@
       "bulge": 0.04,
       "cap_top": 0,
       "cap_bot": 0,
+      "glow": 0,
       "note": ""
     },
     "spade_haft": {
@@ -1493,6 +1544,7 @@
       "bulge": 0,
       "cap_top": 0,
       "cap_bot": 0,
+      "glow": 0,
       "note": ""
     },
     "spade_blade": {
@@ -1514,6 +1566,7 @@
       "bulge": 0,
       "cap_top": 0,
       "cap_bot": 0,
+      "glow": 0,
       "note": ""
     },
     "lantern_v": {
@@ -1535,6 +1588,7 @@
       "bulge": 0.1,
       "cap_top": 0.12,
       "cap_bot": 0.12,
+      "glow": 0,
       "note": ""
     },
     "coil_v": {
@@ -1556,6 +1610,7 @@
       "bulge": 0.18,
       "cap_top": 0.18,
       "cap_bot": 0.18,
+      "glow": 0,
       "note": "Drawn larger than life so the coil reads at 32 pixels to the metre."
     },
     "charm_v": {
@@ -1577,7 +1632,96 @@
       "bulge": 0.1,
       "cap_top": 0.3,
       "cap_bot": 0.3,
+      "glow": 0,
       "note": "Drawn larger than life: a true-scale knuckle bone would be under a pixel wide, and rule 4 says it has to be visible."
+    },
+    "torch_haft": {
+      "name": "Torch",
+      "slot": "offhand",
+      "item": "torch",
+      "bone": "hand_l",
+      "colour": "#4a3826",
+      "ox": 0,
+      "oy": 0.04,
+      "from_m": -0.16,
+      "to_m": 0.34,
+      "w_top": 0.026,
+      "w_bot": 0.03,
+      "d_top": 0.026,
+      "d_bot": 0.03,
+      "sides": 5,
+      "rings": 3,
+      "bulge": 0.05,
+      "cap_top": 0.05,
+      "cap_bot": 0.05,
+      "glow": 0,
+      "note": ""
+    },
+    "torch_flame": {
+      "name": "Torch Flame",
+      "slot": "offhand",
+      "item": "torch",
+      "bone": "hand_l",
+      "colour": "#e8923a",
+      "ox": 0,
+      "oy": 0.04,
+      "from_m": 0.3,
+      "to_m": 0.5,
+      "w_top": 0.03,
+      "w_bot": 0.06,
+      "d_top": 0.03,
+      "d_bot": 0.06,
+      "sides": 6,
+      "rings": 3,
+      "bulge": 0.15,
+      "cap_top": 0.6,
+      "cap_bot": 0.1,
+      "glow": 1,
+      "note": "The lit end. glow 1 means it is never darkened by the room, because it IS the light."
+    },
+    "candle_v": {
+      "name": "Candle",
+      "slot": "offhand",
+      "item": "candle",
+      "bone": "hand_l",
+      "colour": "#d8cfae",
+      "ox": 0,
+      "oy": 0.04,
+      "from_m": -0.1,
+      "to_m": 0.14,
+      "w_top": 0.024,
+      "w_bot": 0.026,
+      "d_top": 0.024,
+      "d_bot": 0.026,
+      "sides": 5,
+      "rings": 3,
+      "bulge": 0.04,
+      "cap_top": 0.3,
+      "cap_bot": 0.1,
+      "glow": 0,
+      "note": ""
+    },
+    "candle_flame": {
+      "name": "Candle Flame",
+      "slot": "offhand",
+      "item": "candle",
+      "bone": "hand_l",
+      "colour": "#f0b055",
+      "ox": 0,
+      "oy": 0.04,
+      "from_m": 0.12,
+      "to_m": 0.2,
+      "w_top": 0.012,
+      "w_bot": 0.026,
+      "d_top": 0.012,
+      "d_bot": 0.026,
+      "sides": 5,
+      "rings": 3,
+      "bulge": 0.1,
+      "cap_top": 0.6,
+      "cap_bot": 0.1,
+      "glow": 1,
+      "note": ""
     }
   },
   "structures": {
@@ -1589,7 +1733,8 @@
       "height_m": 0.55,
       "skill": "building",
       "difficulty": 15,
-      "note": "The heart of a camp. Everything else is laid out around it."
+      "light": 9,
+      "note": "The heart of a camp, and the only thing that lights a room. Everything else is laid out around it."
     },
     "bedroll": {
       "name": "Bedroll",
@@ -1599,6 +1744,7 @@
       "height_m": 0.22,
       "skill": "building",
       "difficulty": 11,
+      "light": 0,
       "note": "Somewhere to sleep. The easiest thing in a camp to put up."
     },
     "store": {
@@ -1609,6 +1755,7 @@
       "height_m": 0.85,
       "skill": "building",
       "difficulty": 13,
+      "light": 0,
       "note": "Keeps supplies off the wet floor."
     },
     "windbreak": {
@@ -1619,6 +1766,7 @@
       "height_m": 1.45,
       "skill": "building",
       "difficulty": 17,
+      "light": 0,
       "note": "The hardest thing in a starting camp, and the one that makes it feel like one."
     }
   },
@@ -1817,6 +1965,7 @@
       "tags": "cloth,leather",
       "attr": "willpower:1",
       "bonus": "",
+      "light": 0,
       "note": "Keeps the drip off."
     },
     "collar": {
@@ -1825,6 +1974,7 @@
       "tags": "leather",
       "attr": "presence:1",
       "bonus": "",
+      "light": 0,
       "note": "A worn strap, buckled at the throat."
     },
     "pack": {
@@ -1833,6 +1983,7 @@
       "tags": "leather,store",
       "attr": "might:1,agility:-1",
       "bonus": "labouring:1",
+      "light": 0,
       "note": "Everything they own, on their back. Carries more and slows you down: the trade-off is the point."
     },
     "jerkin": {
@@ -1841,6 +1992,7 @@
       "tags": "leather",
       "attr": "endurance:1,agility:-1",
       "bonus": "",
+      "light": 0,
       "note": "Boiled hide. Better than nothing."
     },
     "gloves": {
@@ -1849,6 +2001,7 @@
       "tags": "leather",
       "attr": "",
       "bonus": "labouring:2,tinkering:1",
+      "light": 0,
       "note": "Elbow to fingertip."
     },
     "spade": {
@@ -1857,6 +2010,7 @@
       "tags": "iron,wood,tool",
       "attr": "",
       "bonus": "labouring:3,building:3",
+      "light": 0,
       "note": "For digging, clearing and, at a push, arguing. Counts as a tool, so it is what makes Building and Labouring possible at all."
     },
     "lantern": {
@@ -1865,6 +2019,7 @@
       "tags": "iron,glass,light",
       "attr": "",
       "bonus": "studying:2,foraging:1",
+      "light": 6,
       "note": "Burns something. Nobody asks what."
     },
     "toolbelt": {
@@ -1873,6 +2028,7 @@
       "tags": "leather,tool",
       "attr": "",
       "bonus": "crafting:2,building:1",
+      "light": 0,
       "note": "Loops and a buckle. Also counts as a tool."
     },
     "breeches": {
@@ -1881,6 +2037,7 @@
       "tags": "cloth",
       "attr": "endurance:1",
       "bonus": "",
+      "light": 0,
       "note": "Hip to knee."
     },
     "boots": {
@@ -1889,6 +2046,7 @@
       "tags": "leather",
       "attr": "",
       "bonus": "clambering:2,ranging:2",
+      "light": 0,
       "note": "Knee down. The first thing a crawler buys."
     },
     "coil": {
@@ -1897,6 +2055,7 @@
       "tags": "rope",
       "attr": "",
       "bonus": "clambering:1",
+      "light": 0,
       "note": "Twenty metres, if you believe the seller."
     },
     "charm": {
@@ -1905,7 +2064,26 @@
       "tags": "organic,charm,grim",
       "attr": "willpower:1,presence:-1",
       "bonus": "",
+      "light": 0,
       "note": "Somebody's knuckle, on a thong."
+    },
+    "torch": {
+      "name": "Torch",
+      "slot": "offhand",
+      "tags": "wood,fire,light",
+      "attr": "",
+      "bonus": "",
+      "light": 8,
+      "note": "Burns bright and burns out. The most light anybody carries."
+    },
+    "candle": {
+      "name": "Candle",
+      "slot": "offhand",
+      "tags": "fire,light",
+      "attr": "",
+      "bonus": "studying:1",
+      "light": 3,
+      "note": "Barely enough to read by, and it does not free a hand."
     }
   },
   "speeds": {

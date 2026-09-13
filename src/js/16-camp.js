@@ -130,7 +130,7 @@ function workSite(state, actor, site) {
   const roll = attempt(state, actor, def.skill, def.difficulty);
   if (roll.ok) {
     site.progress = Math.min(100, site.progress + CFG.campProgress);
-    if (site.progress >= 100) { site.built = true; state.viewDirty = true; }
+    if (site.progress >= 100) { site.built = true; state.viewDirty = true; state.lightDirty = true; }
     state.geomDirty = true;
   }
   actor.lastWork = { site: site.index, what: 'building', ok: roll.ok };

@@ -7,6 +7,51 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.11.0 — the dark, and what you carry into it
+
+The labyrinth is dark now. You can just make out shapes; everything else is
+something a crawler brought with them or built.
+
+**Light is worked out per square, not as a glow on the screen.** Each source
+floods outward through whatever does not block sight, so a fire lights its room
+and the hall leading out of it and stops dead at the rock. Rock catches the light
+on the face pointing at the flame and passes none of it on. That is the whole
+reason it is done per square rather than as a radial gradient: a gradient would
+have lit the room next door straight through the wall, which in a labyrinth is
+not a subtlety, it is the game.
+
+A test walks outward from every light in eight directions, finds the first rock,
+and fails if the square behind it is lit.
+
+**What throws light is a column in the sheet**, in metres: candle 3, lantern 6,
+torch 8, campfire 9. A crawler uses the brightest thing they are carrying, and
+the off hand now has three things that can turn up in it rather than one. Add a
+row with a light value and it lights the way; a flame part marked `glow` is never
+darkened by the room it is lighting, because it *is* the light.
+
+Light is **stepped** rather than smooth, so it reads as painted pools — which is
+rule 10's tactility, and also keeps the pattern cache from exploding. Lit things
+go warm, because what is doing the lighting is a fire.
+
+**Three balance problems the new scale had hidden, which the dark exposed.**
+Moving the numbers to 1–6 quietly made everything too easy: a crawler brings
+about 4 and throws 2d6, so any difficulty under 7 can never be failed. Crossing
+ordinary stone was 4 and clearing it was 8 — both unfailable, so **nobody
+stumbled and nobody learned a thing**. Rule 1 needs failure to be reachable or
+the whole progression is dead. Ground and clearing difficulties raised so that
+ordinary stone trips you occasionally and rubble is genuinely hard.
+
+That is the standing order working as written: a number so wrong it hides the
+mechanic is not a balance question, and it got moved far enough to see the thing
+work.
+
+**And one honest weakening of a test.** Whole pips make progress steppy — a
+crawler gains nothing for a while and then a whole point at once — so the
+block-by-block monotonic check on rule 1 was wrong, not the game. It now asserts
+the trend across halves, which is what rule 1 actually claims.
+
+---
+
 ## v0.10.0 — low numbers, and dice
 
 Rule 10 arrived nine releases late: **boardgame aesthetics, low numbers, and

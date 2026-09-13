@@ -140,6 +140,10 @@ const CFG = {
   texSeed:     K('texture.seed'),
   lightAmbient: K('render.light_ambient'),
   lightDiffuse: K('render.light_diffuse'),
+  darkAmbient: K('light.ambient'),
+  warmth:      K('light.warmth'),
+  lightSteps:  K('light.steps'),
+  falloff:     K('light.falloff'),
   figureNominal: G('figure.nominal_height_m'),
   metresPerTile: G('world.metres_per_tile'),
   isoRatio:    G('render.iso_ratio')
@@ -152,10 +156,20 @@ const TILE_METRES = CFG.metresPerTile;
    and every rate in the game is quoted per tick. */
 const TICK_MS = 1000 / 60;
 
-function shade(hex, f) {
+function shade(hex, f) { return litShade(hex, f, 1); }
+
+/* A surface colour, shaded for its own facing AND for how much light is
+   reaching it. The labyrinth is dark; `light` is what a fire or a carried lamp
+   has managed to put on this square. Lit things also go warm, because what is
+   doing the lighting is a flame. */
+function litShade(hex, f, light) {
   let h = String(hex).replace('#', '');
   if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
   const n = parseInt(h, 16);
-  const c = (v) => Math.max(0, Math.min(255, Math.round(v * f)));
-  return 'rgb(' + c((n >> 16) & 255) + ',' + c((n >> 8) & 255) + ',' + c(n & 255) + ')';
+  const lvl = CFG.darkAmbient + (1 - CFG.darkAmbient) * light;
+  const w = CFG.warmth * light;
+  const c = (v, k) => Math.max(0, Math.min(255, Math.round(v * f * lvl * k)));
+  return 'rgb(' + c((n >> 16) & 255, 1 + w * 0.30)
+       + ',' + c((n >> 8) & 255, 1 + w * 0.10)
+       + ',' + c(n & 255, 1 - w * 0.30) + ')';
 }

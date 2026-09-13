@@ -169,9 +169,11 @@ function makeActor(rand, index, name) {
   /* Rule 4: what they are wearing is on them, not in a panel. Twelve slots,
      and what turns up in each is down to the seed. */
   const worn = {};
-  for (let i = 0; i < GEAR_IDS.length; i++) {
-    const g = GEAR_IDS[i];
-    if (rand() < CFG.gearChance) worn[GEAR(g).slot] = g;
+  for (let i = 0; i < SLOT_IDS.length; i++) {
+    const slot = SLOT_IDS[i];
+    const choices = GEAR_IDS.filter(function (g) { return GEAR(g).slot === slot; });
+    if (!choices.length) continue;
+    if (rand() < CFG.gearChance) worn[slot] = choices[Math.floor(rand() * choices.length)];
   }
   return {
     index: index,
@@ -253,6 +255,7 @@ function tryStep(state, actor, to, dx, dy) {
     actor.x = to.x;
     actor.y = to.y;
     actor.steps++;
+    state.lightDirty = true;      /* whatever they are carrying moved with them */
   } else {
     actor.stumbles++;
   }
