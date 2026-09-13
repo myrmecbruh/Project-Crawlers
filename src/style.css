@@ -1,0 +1,41 @@
+:root {
+  --ground: #070a0e;
+  --ink: #93a7bd;
+  --ink-bright: #d6e6f7;
+}
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 0 16px;
+  padding-block: 12px;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+#screen {
+  display: block;
+  max-width: 100%;
+  border: 1px solid rgba(90, 200, 255, 0.18);
+  border-radius: 6px;
+  touch-action: none;
+  background: #0b0f14;
+}
+#hud {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: center;
+  letter-spacing: 0.04em;
+}
+#version { color: var(--ink-bright); }
+#hint { opacity: 0.65; }
+#readout { opacity: 0.45; font-variant-numeric: tabular-nums; }
