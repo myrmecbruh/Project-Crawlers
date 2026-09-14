@@ -40,6 +40,13 @@ SECTIONS = {
     # on the same line, so the name and the place cannot drift apart.
     "words":    ("id",  ["name", "slot", "weight", "tags", "shape",
                          "floor", "speckle", "note"], False),
+    # The camp, as real geometry. Same lathe as a crawler's parts, but hung at
+    # an offset from the square instead of off a bone.
+    "structure_parts": ("id", ["name", "structure", "colour", "x", "y", "z",
+                               "lean", "spin", "from_m", "to_m",
+                               "w_top", "w_bot", "d_top", "d_bot",
+                               "sides", "rings", "bulge", "cap_top", "cap_bot",
+                               "glow", "grows", "note"], False),
 }
 
 # Columns that are documentation. They may be edited freely and are never
@@ -66,7 +73,8 @@ def norm(col, v):
                "weight",
                "x", "y", "z", "ox", "oy",
                "w_top", "w_bot", "d_top", "d_bot",
-               "sides", "rings", "bulge", "cap_top", "cap_bot", "glow"):
+               "sides", "rings", "bulge", "cap_top", "cap_bot", "glow",
+               "lean", "spin", "grows"):
         try:
             f = float(v)
             return int(f) if f == int(f) else round(f, 10)
@@ -74,7 +82,8 @@ def norm(col, v):
             return str(v).strip()
     if col in ("shape", "floor", "speckle", "pattern"):
         return str(v).strip().lower()
-    if col in ("footing", "slot", "item", "bone", "parent", "needs_tag"):
+    if col in ("footing", "slot", "item", "bone", "parent", "needs_tag",
+               "structure"):
         return str(v).strip().lower()
     if col in ("derives", "attr", "bonus"):
         return ",".join(t.strip().lower() for t in str(v).split(",") if t.strip())
@@ -205,6 +214,19 @@ def for_game(merged):
             "speckle": norm("speckle", r.get("speckle")),
             "note": str(r.get("note", ""))}
 
+    NUM = ["x", "y", "z", "lean", "spin", "from_m", "to_m", "w_top", "w_bot",
+           "d_top", "d_bot", "sides", "rings", "bulge", "cap_top", "cap_bot",
+           "glow", "grows"]
+    out["structure_parts"] = {}
+    for k, r in merged["structure_parts"].items():
+        row = {"name": str(r["name"]),
+               "structure": norm("structure", r["structure"]),
+               "colour": str(r["colour"]).strip(),
+               "note": str(r.get("note", ""))}
+        for col in NUM:
+            row[col] = norm(col, r.get(col)) or 0
+        out["structure_parts"][k] = row
+
     out["bones"] = {k: {"name": str(r["name"]), "parent": norm("parent", r["parent"]),
                         "x": norm("x", r["x"]), "y": norm("y", r["y"]),
                         "z": norm("z", r["z"]), "note": str(r.get("note", ""))}
@@ -268,9 +290,11 @@ def check_vocabulary(game):
             if tag not in known:
                 errors.append("tiles: '%s' claims the tag '%s', which is not in "
                               "the tags sheet" % (tid, tag))
-        if t.get("pattern") and t["pattern"] not in ("masonry",):
-            errors.append("tiles: '%s' asks for the pattern '%s'; the renderer "
-                          "only knows 'masonry' (blank means plain)"
+        if t.get("pattern") and t["pattern"] not in (
+                "masonry", "flagstone", "dirt", "moss", "water",
+                "rubble", "bones", "rock"):
+            errors.append("tiles: '%s' asks for the pattern '%s', which the "
+                          "renderer does not know (blank means plain)"
                           % (tid, t["pattern"]))
         if t["footing"] not in ("walk", "ramp", "block"):
             errors.append("tiles: '%s' has footing '%s'; expected walk, ramp or "
@@ -279,9 +303,57 @@ def check_vocabulary(game):
             errors.append("tiles: '%s' has a non-numeric crossing difficulty "
                           "'%s'" % (tid, t["cross"]))
 
+    # Rule 4 for the camp: a structure nothing draws is a structure nobody sees,
+    # and a part hung on a structure that does not exist is a typo.
+    built = {}
+    for pid, pr in game.get("structure_parts", {}).items():
+        if pr["structure"] not in game["structures"]:
+            errors.append("structure_parts: '%s' belongs to '%s', which is not a "
+                          "structure" % (pid, pr["structure"]))
+        else:
+            built[pr["structure"]] = built.get(pr["structure"], 0) + 1
+        if pr["rings"] < 2:
+            errors.append("structure_parts: '%s' has %s rings; a lathe needs at "
+                          "least 2" % (pid, pr["rings"]))
+        if (pr["cap_top"] > 0 or pr["cap_bot"] > 0) and pr["rings"] < 3:
+            errors.append("structure_parts: '%s' rounds an end with only %s "
+                          "rings; both would collapse to a point"
+                          % (pid, pr["rings"]))
+        if pr["to_m"] <= pr["from_m"]:
+            errors.append("structure_parts: '%s' has no length" % pid)
+    if game.get("structure_parts"):
+        for stid in game["structures"]:
+            if not built.get(stid):
+                errors.append("structures: '%s' has no parts, so nothing would "
+                              "ever draw it (rule 4)" % stid)
+
     # The room vocabulary. A word that claims an unknown tag, names a tile that
     # does not exist, or asks for a shape move the generator has never heard of
     # is a typo that would otherwise produce a silently blander labyrinth.
+    # Rule 4 for the camp: a structure nothing draws is a structure nobody sees,
+    # and a part hung on a structure that does not exist is a typo.
+    built = {}
+    for pid, pr in game.get("structure_parts", {}).items():
+        if pr["structure"] not in game["structures"]:
+            errors.append("structure_parts: '%s' belongs to '%s', which is not a "
+                          "structure" % (pid, pr["structure"]))
+        else:
+            built[pr["structure"]] = built.get(pr["structure"], 0) + 1
+        if pr["rings"] < 2:
+            errors.append("structure_parts: '%s' has %s rings; a lathe needs at "
+                          "least 2" % (pid, pr["rings"]))
+        if (pr["cap_top"] > 0 or pr["cap_bot"] > 0) and pr["rings"] < 3:
+            errors.append("structure_parts: '%s' rounds an end with only %s "
+                          "rings; both would collapse to a point"
+                          % (pid, pr["rings"]))
+        if pr["to_m"] <= pr["from_m"]:
+            errors.append("structure_parts: '%s' has no length" % pid)
+    if game.get("structure_parts"):
+        for stid in game["structures"]:
+            if not built.get(stid):
+                errors.append("structures: '%s' has no parts, so nothing would "
+                              "ever draw it (rule 4)" % stid)
+
     SHAPES = {"pit", "platform", "terrace", "pillars", "rubble", "water", "ring"}
     SLOTS = {"function", "condition", "people"}
     tiles = set(game["tiles"])

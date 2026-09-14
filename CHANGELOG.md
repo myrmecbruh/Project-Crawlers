@@ -7,6 +7,53 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.16.0 — materials for everything, and a camp with real shape
+
+Research first: the standard dark-fantasy tile vocabulary is twelve floors —
+flagstone, cobble, dirt, moss, rubble, wood, water and so on — and the rule that
+makes such a set hang together is **one locked palette, so anything you put down
+belongs with everything else**. Also worth stealing: hue-shifted shadows, which
+are what stop a dark picture reading as grey mud.
+
+**Nothing was downloaded.** Photographic tiles would have to be embedded in the
+one playable file, they carry licences that do not obviously permit publishing
+them onward, and the whole texture system here is generative and tunable from the
+sheet. The research informed eight new GENERATED materials instead: flagstone,
+dirt, moss, water, rubble, bones, raw rock and the masonry already built. Every
+tile in the game now names one, the tile colours were retuned to a single
+grimdark palette, and a shaded face now goes cold as well as dark.
+
+**The camp is real geometry.** A new `structure_parts` tab, the same lathe as a
+crawler's parts but hung at an offset from the square instead of off a bone, with
+its own lean and spin. A campfire is three hearth stones, three logs leaning in,
+embers and a flame. A store is a hooped barrel with a lid. A bedroll is a mat
+with the blanket rolled at the head. A windbreak is two posts, a cross-piece and
+stretched cloth. Parts marked `grows` rise out of the floor as the work goes on —
+which is how you can still SEE how far a camp has got — and parts that do not
+grow (the flame, the lid, the blanket) are simply absent until the job is done.
+The build refuses a structure with no parts and a part hung on a structure that
+does not exist.
+
+**And the performance mistake, which took five wrong guesses to find.** Drawing
+went from 7.96 ms to 43 ms. In order, the things it was not: the pattern matrix
+being reallocated per face (reusing one changed nothing); the material tile being
+32px instead of 16 (8px was no faster); the camp's new geometry (removing the
+whole camp did not help); the crawlers (removing them made it *worse*, which is
+how noisy that probe was). Counting the actual transform calls found it: **686
+mapped fills a frame, at about 50 microseconds each** — because giving raw rock a
+material meant every rock side face got the texture mapped onto it.
+
+Masonry has to be mapped onto the face; courses run along a wall. Fractured rock,
+dirt and moss have no direction to get wrong. So only masonry is mapped now, and
+everything else takes the cheap pinned path on the top with flat sides — which is
+the decision this project had already made about rock walls, for exactly the same
+reason, and which I had quietly undone. **7.96 ms → 9.78 ms**, for eight new
+materials and a camp made of eighteen parts instead of four boxes.
+
+The camp geometry was also cut to a budget on the way past: these things are
+fifteen to twenty-five pixels across, and nine sides with five rings is detail
+nobody can see.
+
 ## v0.15.0 — walls somebody built
 
 A new tile, **Stone Block Wall**, tagged `stone` and `constructed` as they asked.

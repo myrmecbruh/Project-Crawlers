@@ -37,7 +37,7 @@ const Render = {
   ensure() {
     if (!this.buf) this.resize(CFG.maxBufW, CFG.maxBufH);
     if (!this.grainCoarse) this.makeGrain();
-    if (!this.masonry) this.makeMasonry();
+    if (!this.mats) this.mats = {};
   },
 
   /* ---- the grain ---------------------------------------------------------
@@ -112,9 +112,151 @@ const Render = {
    * each course's stones to sum exactly to its width, so there is no seam to
    * find. A wall is a metre of pattern repeated, and a metre is 32 pixels.
    */
-  makeMasonry() {
-    const px = Math.max(8, Math.round(CFG.masonryPx));
-    const rand = makeRand(CFG.texSeed + 4099);
+  /* ---- the materials -----------------------------------------------------
+   * Every surface in the labyrinth is GENERATED, not painted, and every one of
+   * them is a transparent OVERLAY a metre square: dark where the stone is cut,
+   * light where it catches, nothing where the base colour should show. One
+   * tile is one square metre, so a material lands ON the grid rather than
+   * floating over it.
+   *
+   * The look follows the standard dark-fantasy tile vocabulary -- flagstone,
+   * cobble, dirt, moss, rubble, bone, water, raw rock -- and the rule that
+   * makes such a set hang together: ONE LOCKED PALETTE, so anything you put
+   * down belongs with everything else. The tiles tab holds that palette; these
+   * only cut the shapes.
+   */
+  matTile(name) {
+    if (this.mats[name]) return this.mats[name];
+    const px = Math.max(8, Math.round(CFG.patternPx));
+    const rand = makeRand(CFG.texSeed + name.length * 977 + 31);
+    const c = document.createElement('canvas');
+    c.width = px; c.height = px;
+    const g = c.getContext('2d');
+    const dark = (a) => 'rgba(16,13,11,' + Math.max(0, a).toFixed(3) + ')';
+    const pale = (a) => 'rgba(255,250,238,' + Math.max(0, a).toFixed(3) + ')';
+    /* a rectangle drawn three times across, so nothing is cut by the seam */
+    const wrapRect = (x, y, w, h, fill) => {
+      g.fillStyle = fill;
+      for (let k = -1; k <= 1; k++) g.fillRect(x + k * px, y, w, h);
+    };
+    const speck = (n, size, fill) => {
+      g.fillStyle = fill;
+      for (let i = 0; i < n; i++) {
+        const sx = Math.floor(rand() * px), sy = Math.floor(rand() * px);
+        const w = 1 + Math.floor(rand() * size);
+        g.fillRect(sx, sy, w, 1 + Math.floor(rand() * size));
+        if (sx + w > px) g.fillRect(sx - px, sy, w, 1);
+      }
+    };
+
+    if (name === 'masonry') { this.mats[name] = this.matMasonry(px, rand); return this.mats[name]; }
+
+    if (name === 'flagstone') {
+      /* Big cut slabs, laid square and worn at the edges. The joints are the
+         whole read at this size, so they are the only strong marks. */
+      const cut = [0, Math.round(px * 0.5)];
+      const rows = [0, Math.round(px * 0.52)];
+      for (const y of rows) {
+        const off = y ? Math.round(px * 0.27) : 0;
+        for (const x of cut) {
+          const sx = x + off;
+          wrapRect(sx, y, 1, Math.round(px * 0.5), dark(0.30));   /* the joint */
+          wrapRect(sx + 1, y + 1, Math.round(px * 0.5) - 2, 1, pale(0.05));
+        }
+        g.fillStyle = dark(0.30); g.fillRect(0, y, px, 1);
+      }
+      speck(14, 2, dark(0.10));
+      speck(8, 1, pale(0.07));
+
+    } else if (name === 'rock') {
+      /* Rock somebody hacked through: no courses, no joints, just fracture.
+         Every crack takes its own ANGLE -- stepping them all the same way down
+         the tile made regular parallel hatching, which reads as a drawn shade
+         rather than as broken stone. */
+      for (let i = 0; i < 30; i++) {
+        let x = rand() * px, y = rand() * px;
+        const a = rand() * Math.PI * 2;
+        let dx = Math.cos(a), dy = Math.sin(a);
+        const steps = 2 + Math.floor(rand() * (px * 0.3));
+        g.fillStyle = rand() < 0.6 ? dark(0.17) : pale(0.07);
+        for (let k = 0; k < steps; k++) {
+          g.fillRect(((Math.round(x) % px) + px) % px, ((Math.round(y) % px) + px) % px, 1, 1);
+          /* the crack wanders as it runs, the way a split in stone does */
+          if (rand() < 0.3) { const t = dx; dx = dy * (rand() < 0.5 ? 1 : -1); dy = t; }
+          x += dx; y += dy;
+        }
+      }
+      speck(22, 2, dark(0.12));
+
+    } else if (name === 'dirt') {
+      /* Trodden earth: clods and small stones, no structure at all. */
+      speck(46, 3, dark(0.13));
+      speck(26, 2, pale(0.07));
+      for (let i = 0; i < 7; i++) {                     /* the odd pebble */
+        const x = Math.floor(rand() * px), y = Math.floor(rand() * px);
+        wrapRect(x, y, 2, 2, pale(0.13));
+        wrapRect(x, y + 2, 2, 1, dark(0.18));
+      }
+
+    } else if (name === 'moss') {
+      /* Growth taking a floor back. A blotch is a CLUMP of little squares, not
+         a circle: drawn as circles they came out as evenly spaced polka dots,
+         which is the one shape nothing organic makes. */
+      for (let i = 0; i < 22; i++) {
+        const bx = rand() * px, by = rand() * px;
+        const n = 4 + Math.floor(rand() * 10);
+        g.fillStyle = rand() < 0.55 ? dark(0.15) : pale(0.09);
+        for (let k = 0; k < n; k++) {
+          const ox = Math.round(bx + (rand() - 0.5) * 7);
+          const oy = Math.round(by + (rand() - 0.5) * 6);
+          const w = 1 + Math.floor(rand() * 3), h = 1 + Math.floor(rand() * 2);
+          for (let q = -1; q <= 1; q++) g.fillRect(ox + q * px, oy, w, h);
+        }
+      }
+      speck(34, 2, dark(0.11));
+
+    } else if (name === 'water') {
+      /* Standing water: a few long soft ripples, not a scratchy hatch. Drawn
+         every other row it read as scored lines rather than a surface. */
+      for (let i = 0; i < 9; i++) {
+        const y = Math.floor(rand() * px);
+        const w = px * (0.25 + rand() * 0.45);
+        const x = rand() * px;
+        wrapRect(Math.round(x), y, Math.round(w), 1,
+                 rand() < 0.55 ? pale(0.07) : dark(0.05));
+      }
+      /* and the odd bright catch where it moves */
+      for (let i = 0; i < 5; i++) {
+        const x = Math.floor(rand() * px), y = Math.floor(rand() * px);
+        wrapRect(x, y, 1 + Math.floor(rand() * 3), 1, pale(0.16));
+      }
+
+    } else if (name === 'rubble') {
+      /* Collapse: angular pieces at every size, piled without order. */
+      for (let i = 0; i < 34; i++) {
+        const x = Math.floor(rand() * px), y = Math.floor(rand() * px);
+        const w = 2 + Math.floor(rand() * 5), h = 2 + Math.floor(rand() * 4);
+        wrapRect(x, y, w, h, rand() < 0.5 ? dark(0.16) : pale(0.09));
+        wrapRect(x, y + h, w, 1, dark(0.22));          /* its shadow */
+      }
+
+    } else if (name === 'bones') {
+      /* Somebody else got this far: pale splinters on a dark floor. */
+      speck(30, 2, dark(0.14));
+      for (let i = 0; i < 16; i++) {
+        const x = Math.floor(rand() * px), y = Math.floor(rand() * px);
+        const len = 2 + Math.floor(rand() * 5);
+        if (rand() < 0.5) wrapRect(x, y, len, 1, pale(0.30));
+        else wrapRect(x, y, 1, len, pale(0.26));
+        wrapRect(x, y + 1, len, 1, dark(0.12));
+      }
+    }
+
+    this.mats[name] = c;
+    return c;
+  },
+
+  matMasonry(px, rand) {
     const pick = (lo, hi) => lo + Math.floor(rand() * (hi - lo + 1));
 
     /* Build the wall as a MODEL first, then draw it. The first version walked
@@ -198,24 +340,25 @@ const Render = {
       }
     }
 
-    this.masonry = c;
-    this.patCache = {};
+    return c;
   },
 
   /* A surface colour with the masonry and the grain baked into it, cached the
      same way and by the same rules. */
-  masonryPattern(colour) {
-    const key = 'm|' + colour;
+  matPattern(colour, name) {
+    const key = 'm|' + name + '|' + colour;
     let pat = this.patCache[key];
     if (pat) return pat;
-    const px = this.masonry.width;
+    const tile = this.matTile(name);
+    const px = tile.width;
     const c = document.createElement('canvas');
     c.width = px; c.height = px;
     const g = c.getContext('2d');
     g.fillStyle = colour;
     g.fillRect(0, 0, px, px);
-    g.drawImage(this.masonry, 0, 0);
-    /* the stones keep their grit: the coarse tile is 16px into a 32px wall */
+    g.drawImage(tile, 0, 0);
+    /* the material keeps its grit: the grain tile is smaller, so it is laid
+       across the material rather than stretched over it */
     if (this.grainOn) {
       for (let oy = 0; oy < px; oy += this.grainCoarse.height) {
         for (let ox = 0; ox < px; ox += this.grainCoarse.width) {
@@ -269,12 +412,17 @@ const Render = {
      the stonework slid across the wall as the camera moved. */
   faceFill(pat, a, b, d, wM, hM) {
     if (!pat || !pat.setTransform) return pat;
-    const px = this.masonry.width;
+    const px = Math.max(8, Math.round(CFG.patternPx));
     const su = wM * px, sv = hM * px;
-    const m = [(b.x - a.x) / su, (b.y - a.y) / su,
-               (d.x - a.x) / sv, (d.y - a.y) / sv, a.x, a.y];
-    pat.setTransform(new DOMMatrix(m));
-    pat._lastMatrix = m;       /* kept so a test can check where it landed */
+    /* ONE matrix, reused. Allocating a DOMMatrix per face costs more than the
+       fill it configures -- there are about a thousand faces in a frame. */
+    const dm = this._faceM || (this._faceM = new DOMMatrix());
+    dm.a = (b.x - a.x) / su; dm.b = (b.y - a.y) / su;
+    dm.c = (d.x - a.x) / sv; dm.d = (d.y - a.y) / sv;
+    dm.e = a.x; dm.f = a.y;
+    pat.setTransform(dm);
+    /* kept as plain numbers so a test can check where the texture landed */
+    pat._lastMatrix = [dm.a, dm.b, dm.c, dm.d, dm.e, dm.f];
     pat._pinned = '';          /* per face now: never reuse a stale transform */
     return pat;
   },
@@ -292,7 +440,13 @@ const Render = {
 
   /* The finished fill for one surface: colour, or colour-with-grain pinned to
      its anchor. */
-  surface(colour, fine, ox, oy, stamp) {
+  surface(colour, fine, ox, oy, stamp, mat) {
+    /* A material on the GROUND is pinned to the world, exactly like the grain:
+       one transform per pattern per frame. Anchoring it to each square instead
+       cost 16ms a frame for 350 squares, and a floor is flat -- it has no
+       direction to get wrong. A WALL does, which is why walls still get
+       faceFill(). */
+    if (mat) return this.pin(this.matPattern(colour, mat), ox, oy, stamp);
     if (!this.grainOn) return colour;
     return this.pin(this.grainPattern(colour, fine), ox, oy, stamp);
   },
@@ -349,6 +503,76 @@ const Render = {
     /* Stepped, not continuous: it keeps the grain cache small and it reads as
        paint rather than as a gradient. */
     return Math.round(lit * 14) / 14;
+  },
+
+  /* One piece of the camp, as real geometry rather than a box.
+   *
+   * Same lathe as a crawler's parts -- the sheet columns are the same -- but a
+   * part hangs at an offset from the SQUARE instead of off a bone, with its own
+   * lean and spin, so a log can lie across a fire and a mat can lie flat.
+   *
+   * `frac` is how far the thing has been built. A part marked `grows` rises out
+   * of the floor as the work goes on, which is how you can SEE how far a camp
+   * has got; a part that does not grow (a flame, a lid, a blanket) simply is not
+   * there until the job is done.
+   */
+  structure3d(s, site, def, gx, gy, ground, frac) {
+    const parts = STRUCT_PARTS(site.structure);
+    const out = [];
+    const box = [Infinity, Infinity, -Infinity, -Infinity];
+    const done = frac >= 1;
+
+    for (let i = 0; i < parts.length; i++) {
+      const f = parts[i].part;
+      if (!f.grows && !done) continue;
+      const rise = f.grows && !done ? Math.max(0.08, frac) : 1;
+      /* Lean tips the lathe over, spin turns it about the upright. */
+      const bone = { p: [f.x, f.y, (f.z + ground) / 1], m: matMul(matRotZ(f.spin * DEG),
+                                                                  matRotX(f.lean * DEG)) };
+      const shrunk = { from_m: f.from_m * rise, to_m: f.to_m * rise,
+                       w_top: f.w_top, w_bot: f.w_bot, d_top: f.d_top, d_bot: f.d_bot,
+                       sides: f.sides, rings: f.rings, bulge: f.bulge,
+                       cap_top: f.cap_top, cap_bot: f.cap_bot, ox: 0, oy: 0 };
+      const mesh = partMesh({ p: [f.x, f.y, f.z * rise], m: bone.m }, shrunk, 1);
+      const pts = mesh.verts, n8 = pts.length;
+      const scr = new Array(n8);
+      let cx = 0, cy = 0, cz = 0;
+      for (let c = 0; c < n8; c++) {
+        const q = pts[c];
+        scr[c] = this.project(s, gx + q[0], gy + q[1], ground + q[2]);
+        cx += q[0]; cy += q[1]; cz += q[2];
+      }
+      const faces = [];
+      let biggest = null, biggestArea = 0;
+      for (let k = 0; k < mesh.faces.length; k++) {
+        const fa = mesh.faces[k];
+        const a = pts[fa[0]], b2 = pts[fa[1]], c2 = pts[fa[2]];
+        const ux = b2[0] - a[0], uy = b2[1] - a[1], uz = b2[2] - a[2];
+        const vx = c2[0] - b2[0], vy = c2[1] - b2[1], vz = c2[2] - b2[2];
+        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        if (this.towardCamera(s, nx, ny, nz) <= 0) continue;
+        const poly = new Array(fa.length);
+        for (let q = 0; q < fa.length; q++) poly[q] = scr[fa[q]];
+        let area = 0;
+        for (let q = 0; q < poly.length; q++) {
+          const a1 = poly[q], b1 = poly[(q + 1) % poly.length];
+          area += a1.x * b1.y - b1.x * a1.y;
+        }
+        const lit = this.lightOn(nx, ny, nz);
+        const size = Math.abs(area) * 0.5;
+        if (size > biggestArea) { biggestArea = size; biggest = { pts: poly, lit: lit }; }
+        if (size < CFG.minFacePx) continue;
+        faces.push({ pts: poly, lit: lit });
+      }
+      if (!faces.length && biggest) faces.push(biggest);
+      if (!faces.length) continue;
+      this.bounds(scr, box);
+      out.push({ id: parts[i].id, colour: f.colour, glow: f.glow > 0, faces: faces,
+                 depth: this.towardCamera(s, gx + cx / n8, gy + cy / n8,
+                                          ground + cz / n8) });
+    }
+    out.sort(function (a, b) { return a.depth - b.depth; });
+    return { parts: out, box: box };
   },
 
   /* One posed crawler, as real boxes on real bones. */
@@ -496,16 +720,15 @@ const Render = {
           const site = s.camp.sites[here[q]];
           const def = STRUCT(site.structure);
           const frac = site.built ? 1 : site.progress / 100;
-          const zTop = ground + Math.max(0.05, def.height_m * frac);
-          const shape = this.box(s, x + 0.5, y + 0.5, def.half_width, ground, zTop);
-          const sbox = this.bounds(shape.top, [Infinity, Infinity, -Infinity, -Infinity]);
-          if (sbox[2] < 0 || sbox[0] > this.w || sbox[3] + CFG.rise < 0 || sbox[1] > this.h) continue;
+          const fig = this.structure3d(s, site, def, x + 0.5, y + 0.5, ground, frac);
+          if (!fig.parts.length) continue;
+          const sbox = fig.box;
+          if (sbox[2] < 0 || sbox[0] > this.w || sbox[3] < 0 || sbox[1] > this.h) continue;
           b.push({
             kind: 'site', i: w.cells.length + s.actors.length + here[q],
-            site: site, shape: shape, solid: true, depth: depth + 0.01, light: light, light: light,
-            minX: sbox[0], minY: sbox[1], maxX: sbox[2], maxY: sbox[3] + CFG.rise,
-            cx: (shape.top[0].x + shape.top[2].x) / 2,
-            cy: (shape.top[0].y + shape.top[2].y) / 2
+            site: site, parts: fig.parts, solid: true, depth: depth + 0.01, light: light,
+            minX: sbox[0], minY: sbox[1], maxX: sbox[2], maxY: sbox[3],
+            cx: (sbox[0] + sbox[2]) / 2, cy: sbox[1] + (sbox[3] - sbox[1]) * 0.4
           });
         }
       }
@@ -553,16 +776,15 @@ const Render = {
 
   /* Every polygon a thing is made of, so it can be haloed as one shape. */
   shapeOf(item) {
-    if (item.kind === 'actor') {
+    /* A crawler and a piece of the camp are both made of parts now, so one
+       path rings either of them. */
+    if (item.parts) {
       const out = [];
       for (let i = 0; i < item.parts.length; i++) {
         const fs = item.parts[i].faces;
         for (let g = 0; g < fs.length; g++) out.push(fs[g].pts);
       }
       return out;
-    }
-    if (item.kind === 'site') {
-      return [item.shape.top, item.shape.left, item.shape.right];
     }
     return item.solid ? [item.top, item.left, item.right] : [item.top];
   },
@@ -616,6 +838,8 @@ const Render = {
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#06080b';
     ctx.fillRect(0, 0, this.w, this.h);
+    /* changes whenever the view does, which is when the anchors must be redone */
+    this._frameStamp = s.cam.ox + ',' + s.cam.oy + ',' + s.cam.yaw + ',' + s.cam.tileH;
 
     /* A pinned selection outranks whatever the pointer happens to be over, so
        the crawler you picked stays ringed while they walk away. */
@@ -688,22 +912,28 @@ const Render = {
       }
 
       if (it.kind === 'site') {
-        const def = STRUCT(it.site.structure);
         const done = it.site.built;
-        const col = done ? def.colour : shade(def.colour, 0.45);
         const sStamp = 's' + it.i + ',' + Math.round(it.minX) + ',' + Math.round(it.minY);
+        /* A fire lights itself once it is burning. */
         const lit = STRUCT(it.site.structure).light > 0 && done ? 1 : it.light;
-        const sk = (c, f) => this.surface(litShade(c, f, lit), true,
-                                          it.minX, it.minY, sStamp);
-        this.poly(ctx, it.shape.left, sk(col, CFG.shadeLeft));
-        this.poly(ctx, it.shape.right, sk(col, CFG.shadeRight));
-        this.poly(ctx, it.shape.top, sk(col, 1));
-        if (!done) this.outline(ctx, it.shape.top, 'rgba(255,233,168,0.35)');
+        for (let k = 0; k < it.parts.length; k++) {
+          const pt = it.parts[k];
+          /* Unfinished work is drawn dim: the shape is there, the thing is not
+             yet. A flame is never dimmed -- it IS the light. */
+          const col = pt.glow || done ? pt.colour : shade(pt.colour, 0.55);
+          const pl = pt.glow ? 1 : lit;
+          for (let g = 0; g < pt.faces.length; g++) {
+            this.poly(ctx, pt.faces[g].pts,
+              this.surface(litShade(col, pt.faces[g].lit, pl), true,
+                           it.minX, it.minY, sStamp));
+          }
+        }
         structures++; drawn++;
         if (items) {
           items.push({ i: it.i, kind: 'site', structure: it.site.structure,
                        x: it.site.x, y: it.site.y, built: done,
                        progress: it.site.progress, cleared: it.site.cleared,
+                       parts: it.parts.map(function (q) { return q.id; }),
                        alpha: alpha, sx: it.cx, sy: it.cy });
         }
         continue;
@@ -715,7 +945,19 @@ const Render = {
          anything that stands on it. The two side walls of a block are in shadow
          and edge-on; grain there costs a third of the frame and reads as almost
          nothing, so they stay flat. */
-      const laid = def.pattern === 'masonry' && it.wallM > 0;
+      /* Every tile may name its own material; blank is plain colour.
+       *
+       * Only a DIRECTIONAL material is mapped onto the vertical faces, and
+       * masonry is the only one: courses have to run along the wall. Fracture,
+       * dirt and moss have no direction to get wrong, so they take the cheap
+       * pinned path on the top and leave the sides flat -- which is what this
+       * project already decided about rock, for the same reason.
+       *
+       * Measured: mapping a material onto a face costs about 50 microseconds.
+       * Giving raw rock a mapped material meant 686 of them a frame and took
+       * drawing from 8.7ms to 43ms. Masonry walls are ~100 cells, and cheap. */
+      const mat = def.pattern;
+      const laid = mat === 'masonry' && it.wallM > 0;
       if (it.solid) {
         /* Raw rock keeps its flat sides -- grain there costs a third of the
            frame and reads as almost nothing. A wall somebody BUILT is the
@@ -724,19 +966,19 @@ const Render = {
            mapped ONTO each face rather than pasted over it. */
         const lf = litShade(def.side, CFG.shadeLeft * lift, it.light);
         const rf = litShade(def.side, CFG.shadeRight * lift, it.light);
+        /* flat sides for everything that is not laid masonry */
         this.poly(ctx, it.left, laid
-          ? this.faceFill(this.masonryPattern(lf),
+          ? this.faceFill(this.matPattern(lf, mat),
                           it.left[0], it.left[1], it.left[3], 1, it.wallM)
           : lf);
         this.poly(ctx, it.right, laid
-          ? this.faceFill(this.masonryPattern(rf),
+          ? this.faceFill(this.matPattern(rf, mat),
                           it.right[0], it.right[1], it.right[3], 1, it.wallM)
           : rf);
       }
       const tf = litShade(def.top, lift, it.light);
-      this.poly(ctx, it.top, laid
-        ? this.faceFill(this.masonryPattern(tf), it.top[0], it.top[1], it.top[3], 1, 1)
-        : this.surface(tf, false, -s.cam.ox, -s.cam.oy, worldStamp));
+      this.poly(ctx, it.top,
+        this.surface(tf, false, -s.cam.ox, -s.cam.oy, worldStamp, mat));
 
       kinds[it.cell.tile] = (kinds[it.cell.tile] || 0) + 1;
       drawn++;
@@ -785,9 +1027,10 @@ const Render = {
         continue;
       }
       if (it.kind === 'site') {
-        this.poly(ctx, it.shape.left, col);
-        this.poly(ctx, it.shape.right, col);
-        this.poly(ctx, it.shape.top, col);
+        for (let r = 0; r < it.parts.length; r++) {
+          const fs = it.parts[r].faces;
+          for (let g = 0; g < fs.length; g++) this.poly(ctx, fs[g].pts, col);
+        }
         continue;
       }
       if (it.solid) { this.poly(ctx, it.left, col); this.poly(ctx, it.right, col); }

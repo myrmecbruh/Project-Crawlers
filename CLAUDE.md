@@ -479,6 +479,15 @@ rows at the crown and three at the sole before judging**: a head and a toe are
 supposed to taper, and counting them as defects failed 26 poses for the wrong
 reason.
 
+**The camp is real geometry too** (`structure_parts` tab): the same lathe as a
+crawler's parts, hung at an offset from the SQUARE instead of off a bone, with
+its own `lean` and `spin` so a log can lie across a fire. A part marked `grows`
+rises out of the floor as the work goes on -- that is how a half-built camp still
+reads as half-built -- and a part that does not grow (a flame, a lid, a blanket)
+is absent until the job is done. The build refuses a structure with no parts.
+**Keep the budget in mind: these are 15-25 pixels across**, so four or five sides
+and three rings, not nine and five.
+
 **Animation is procedural, and split on purpose:** the SHAPE of each clip (walk,
 work, idle) is code in `18-figure.js` because it is logic; every AMOUNT is a
 knob, so the stride can be widened or the work slowed without touching it.
@@ -532,6 +541,19 @@ by **Stone Block Wall** (`stone`, `constructed`, `solid`, `blocks-sight`).
   are cut, so doorways stay doorways.
 - Cost: 7.6 ms -> 8.0 ms of drawing, because only ~100 cells a world are walls.
 
+- **Only a DIRECTIONAL material is mapped onto a face; everything else is
+  pinned.** Masonry must be mapped -- courses run along a wall. Fracture, dirt
+  and moss have no direction to get wrong. A mapped fill costs about **50
+  microseconds**, so giving raw rock a mapped material meant 686 of them a frame
+  and took drawing from 7.96 ms to 43 ms. Mapped: laid masonry, ~100 cells a
+  world. Pinned: every floor, one transform per pattern per frame.
+- **Materials are a `pattern` on the tiles tab** -- flagstone, dirt, moss, water,
+  rubble, bones, rock, masonry -- all generated, all a metre square, all
+  transparent overlays over the tile's own colour, and the build refuses a
+  pattern the renderer does not know. **One locked palette** across every tile is
+  what makes them belong together.
+- **Shaded faces go COLD, not just dark** (`texture.hue_shift`). A flat multiply
+  takes every material to the same sludge.
 - **Side walls of blocks are left flat.** The ground is what you look at. Measured
   on v0.14.0 by switching the grain off and diffing the picture: grain reaches
   **78% of ground and rock pixels, 95% of a crawler's and 95% of a structure's**
@@ -656,9 +678,10 @@ ruler is worse than no ruler.
 
 ### The master spreadsheet, which is the authority
 
-`docs/crawlers.xlsx` holds every number and every piece of wording, across fourteen
+`docs/crawlers.xlsx` holds every number and every piece of wording, across fifteen
 tabs: `knobs`, `geometry` (read only), `names`, `tags`, `tiles`, `attributes`,
-`skills`, `figure`, `structures`, `bones`, `slots`, `gear`, `speeds`, `words`.
+`skills`, `figure`, `structures`, `structure_parts`, `bones`, `slots`, `gear`,
+`speeds`, `words`.
 The `tiles` tab carries a `pattern` column: blank for plain, `masonry` for laid
 stone. `src/defaults.json` carries the same values so a fresh
 checkout still builds. The build reconciles the two and inlines the result.
@@ -761,6 +784,17 @@ checkout still builds. The build reconciles the two and inlines the result.
     measured which part won the depth sort, not whether there was a hole. The
     question that finally worked was the simplest one -- "is any row of this
     figure empty?"
+
+14. **When a change costs five times the frame, COUNT the calls before guessing
+    at the cause.** Materials took drawing from 7.96 ms to 43 ms. Five guesses
+    were wrong in a row -- reallocating the pattern matrix, the texture tile
+    size, the camp's new geometry, the crawlers, the number of fills -- and two
+    of the probes were so noisy they reported removing work as making it slower.
+    Counting the actual transform calls found it in one go: 686 mapped fills a
+    frame at ~50 microseconds each, because raw rock had been given a mapped
+    material. Generalised: a cost has a UNIT. Find how many of the expensive
+    thing happen and what one costs, and the answer falls out; A/B-ing whole
+    features against each other just moves noise around.
 
 ---
 

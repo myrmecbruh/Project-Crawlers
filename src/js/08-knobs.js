@@ -71,6 +71,16 @@ function WORD(id) {
 }
 
 const STRUCTURE_IDS = Object.keys(DATA.structures);
+const SPART_IDS = Object.keys(DATA.structure_parts);
+/* The parts of one structure, in sheet order (ground up, like a figure). */
+function STRUCT_PARTS(id) {
+  const out = [];
+  for (let i = 0; i < SPART_IDS.length; i++) {
+    const pr = DATA.structure_parts[SPART_IDS[i]];
+    if (pr.structure === id) out.push({ id: SPART_IDS[i], part: pr });
+  }
+  return out;
+}
 function STRUCT(id) {
   const s = DATA.structures[id];
   if (!s) throw new Error('unknown structure: ' + id);
@@ -155,7 +165,8 @@ const CFG = {
   texStrength: K('texture.strength'),
   texSpeck:    K('texture.speck'),
   texSeed:     K('texture.seed'),
-  masonryPx:        K('texture.masonry_px'),
+  patternPx:        K('texture.pattern_px'),
+  hueShift:         K('texture.hue_shift'),
   masonryMortar:    K('texture.masonry_mortar'),
   masonryVariation: K('texture.masonry_variation'),
   masonryCourseMin: K('texture.masonry_course_min'),
@@ -192,8 +203,12 @@ function litShade(hex, f, light) {
   const n = parseInt(h, 16);
   const lvl = CFG.darkAmbient + (1 - CFG.darkAmbient) * light;
   const w = CFG.warmth * light;
+  /* A face turned away from the light goes COLD as well as dark. Hue-shifted
+     shadows are what keep a dark picture from reading as grey mud; a flat
+     multiply takes every material to the same sludge. */
+  const cold = (1 - f) * CFG.hueShift;
   const c = (v, k) => Math.max(0, Math.min(255, Math.round(v * f * lvl * k)));
-  return 'rgb(' + c((n >> 16) & 255, 1 + w * 0.30)
-       + ',' + c((n >> 8) & 255, 1 + w * 0.10)
-       + ',' + c(n & 255, 1 - w * 0.30) + ')';
+  return 'rgb(' + c((n >> 16) & 255, (1 + w * 0.30) * (1 - cold * 0.55))
+       + ',' + c((n >> 8) & 255, (1 + w * 0.10) * (1 - cold * 0.18))
+       + ',' + c(n & 255, (1 - w * 0.30) * (1 + cold * 0.65)) + ')';
 }

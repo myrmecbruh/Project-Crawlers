@@ -1892,6 +1892,134 @@ await test('the masonry actually reaches the screen', async () => {
     + 'on the screen to begin with');
 });
 
+/* ---- v0.16.0: materials, and the camp as real geometry ------------------ */
+
+await test('every surface in the labyrinth has a material, and it reaches the screen',
+  async () => {
+    const r = await page.evaluate(() => {
+      window.__test.seed(1);
+      const s = Game.state;
+      const tiles = window.__test.data.tiles;
+      const plain = Object.keys(tiles).filter((k) => !tiles[k].pattern);
+      /* Paint a patch of every tile right where the camera is looking, so each
+         material is certainly in shot. */
+      const ids = Object.keys(tiles);
+      const cx = Math.round(s.cam.fx), cy = Math.round(s.cam.fy);
+      let n = 0;
+      for (let dy = -3; dy <= 3; dy++) {
+        for (let dx = -3; dx <= 3; dx++) {
+          const c = s.world.at(cx + dx, cy + dy);
+          if (!c) continue;
+          c.tile = ids[n % ids.length]; c.h = 0; c.slope = ''; n++;
+        }
+      }
+      s.lightDirty = true;
+      const shot = () => {
+        s.geomDirty = true; s.viewDirty = true;
+        Render.build(s); Render.draw(s);
+        return Render.bctx.getImageData(0, 0, Render.w, Render.h).data.slice();
+      };
+      const withMat = shot();
+      const kept = {};
+      for (const k of ids) { kept[k] = tiles[k].pattern; tiles[k].pattern = ''; }
+      Render.patCache = {};
+      const without = shot();
+      for (const k of ids) tiles[k].pattern = kept[k];
+      Render.patCache = {};
+      let differ = 0;
+      for (let i = 0; i < withMat.length; i += 4) {
+        if (withMat[i] !== without[i] || withMat[i + 1] !== without[i + 1]
+          || withMat[i + 2] !== without[i + 2]) differ++;
+      }
+      return { plain, differ, materials: [...new Set(Object.values(kept))].filter(Boolean) };
+    });
+    assert(r.plain.length === 0,
+      `these tiles have no material at all: ${r.plain.join(', ')}`);
+    assert(r.materials.length >= 6,
+      `only ${r.materials.length} distinct materials across the whole tile set`);
+    assert(r.differ > 2000,
+      `switching every material off changed only ${r.differ} pixels, so they were `
+      + 'never on the screen');
+  });
+
+await test('the camp is built from real parts, not a box', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    for (let i = 0; i < 90; i++) window.__test.frame(60);
+    const s = Game.state;
+    const counts = {};
+    for (const id of Object.keys(window.__test.data.structures)) {
+      counts[id] = STRUCT_PARTS(id).length;
+    }
+    /* And what actually reached the buffer for each finished piece. */
+    for (const site of s.camp.sites) { site.built = true; site.progress = 100; }
+    s.geomDirty = true; s.viewDirty = true;
+    const drew = window.__test.redraw();
+    const drawn = {};
+    for (const it of drew.items) {
+      if (it.kind !== 'site' || !it.parts) continue;
+      drawn[it.structure] = Math.max(drawn[it.structure] || 0, it.parts.length);
+    }
+    return { counts, drawn };
+  });
+  /* Two is not a box: a bedroll really is a mat and a rolled blanket. What
+     would be a box is ONE part, and the whole camp being four of them. */
+  for (const [id, n] of Object.entries(r.counts)) {
+    assert(n >= 2, `"${id}" is made of ${n} part(s) -- that is still a box`);
+  }
+  const total = Object.values(r.counts).reduce((a, n) => a + n, 0);
+  assert(total >= 14,
+    `the whole camp is ${total} parts across ${Object.keys(r.counts).length} pieces`);
+  const seen = Object.keys(r.drawn);
+  assert(seen.length >= 3,
+    `only ${seen.length} kinds of camp piece reached the screen`);
+  for (const [id, n] of Object.entries(r.drawn)) {
+    assert(n >= 2, `"${id}" reached the screen as ${n} part(s)`);
+  }
+});
+
+await test('a fire only burns once it is finished, and the camp grows as it is built',
+  async () => {
+    const r = await page.evaluate(() => {
+      window.__test.seed(1); window.__test.record(true);
+      for (let i = 0; i < 90; i++) window.__test.frame(60);
+      const s = Game.state;
+      const fire = s.camp.sites.find((q) => q.structure === 'campfire');
+      if (!fire) return { found: false };
+      const look = () => {
+        s.geomDirty = true; s.viewDirty = true;
+        const drew = window.__test.redraw();
+        const it = drew.items.find((q) => q.kind === 'site'
+          && q.x === fire.x && q.y === fire.y);
+        return it ? it.parts : [];
+      };
+      fire.built = false; fire.cleared = true; fire.progress = 40;
+      const half = look();
+      fire.built = true; fire.progress = 100;
+      const done = look();
+      /* how tall the thing stands, half-built against finished */
+      const height = (built) => {
+        fire.built = built; fire.progress = built ? 100 : 40;
+        s.geomDirty = true; s.viewDirty = true;
+        Render.build(s);
+        const want = Render.siteBase(s) + s.camp.sites.indexOf(fire);
+        const q = Render.batch.find((z) => z.i === want);
+        return q ? q.maxY - q.minY : 0;
+      };
+      return { found: true, half, done,
+               halfTall: height(false), doneTall: height(true) };
+    });
+    assert(r.found, 'no campfire in the camp');
+    assert(r.done.indexOf('fire_flame') >= 0,
+      'a finished fire is not burning: ' + r.done.join(', '));
+    assert(r.half.indexOf('fire_flame') < 0,
+      'a half-built fire is already alight: ' + r.half.join(', '));
+    assert(r.half.length > 0, 'a half-built fire is nothing at all');
+    assert(r.doneTall > r.halfTall,
+      `a finished fire stands ${r.doneTall.toFixed(1)}px and a half-built one `
+      + `${r.halfTall.toFixed(1)}px -- the camp does not visibly grow`);
+  });
+
 await test('the page raised no errors while all that happened', async () => {
   assert(errors.length === 0, errors.join(' | '));
 });

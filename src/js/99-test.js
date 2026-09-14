@@ -219,9 +219,9 @@ window.__test = {
     if (!it) return null;
     Render.draw(s);
     const def = TILE(it.cell.tile);
-    const pat = Render.masonryPattern(litShade(def.side, CFG.shadeLeft, it.light));
+    const pat = Render.matPattern(litShade(def.side, CFG.shadeLeft, it.light), def.pattern);
     Render.faceFill(pat, it.left[0], it.left[1], it.left[3], 1, it.wallM);
-    const px = Render.masonry.width;
+    const px = Math.round(CFG.patternPx);
     /* Where the texture's own corners land once the map is applied. */
     const m = pat._lastMatrix;
     const put = function (tx, ty) {
