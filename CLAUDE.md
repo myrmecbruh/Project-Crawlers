@@ -5,6 +5,11 @@ Read this first, every session. It is the only memory that survives.
 **The permanent playable link — publish here every time, forever:**
 https://claude.ai/code/artifact/4938012a-682f-46b7-8ca3-41ecef8219b6
 
+**`ROADMAP.md` is the queue** — what has been offered, measured or asked and is
+waiting, including the questions they have not answered yet. Read it before
+proposing what to do next, so the same thing is not offered twice. Nothing in it
+is agreed; this file is the law, that one is the list.
+
 ---
 
 ## How to talk to the person you are working for
@@ -190,6 +195,7 @@ src/js/*.js           the game, assembled in filename order
   90-boot.js          the pixel-perfect buffer, whole-number zoom, the loop
   99-test.js          window.__test - the only way a test touches the game
 tests/run.mjs         headless tests, driven through window.__test
+ROADMAP.md            the queue: what is parked, and what they have not answered
 tools/sheet.py        how the spreadsheet is laid out, read and reconciled
 tools/make_sheet.py   create docs/crawlers.xlsx (refuses to clobber hand edits)
 tools/tweak_sheet.py  a one-value copy of the sheet, for tests only

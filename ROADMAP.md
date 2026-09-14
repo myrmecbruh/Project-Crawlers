@@ -1,0 +1,86 @@
+# Project Crawlers — the roadmap
+
+What is parked, and why. **Nothing in here is agreed or scheduled** — it is the
+list of things that have been raised, measured or offered, so that neither of us
+has to remember them. `CLAUDE.md` is the law; this is the queue.
+
+When something here gets built, it moves out of this file and into `CLAUDE.md`
+(if it is how the game now works) or `CHANGELOG.md` (for the reasoning).
+
+---
+
+## Where the game actually is, measured
+
+Taken from a real match on v0.14.0, not from memory:
+
+- **Four of the fifteen skills are used by anything.** Clambering (walking),
+  Labouring (clearing ground), Building (raising a camp), Studying (reading a
+  room). The other **eleven are rows in the sheet that nothing ever calls**:
+  Wrangling, Fighting, Ranging, Performing, Crafting, Tinkering, Tending,
+  Foraging, Enduring, Bargaining, Leading.
+- **There are no creatures at all.** Rule 6 is entirely unbuilt.
+- **The labyrinth is one fixed patch**, 56×56 metres, nine rooms. You can walk to
+  the edge of the world.
+- **Nobody arrives or leaves.** Six crawlers spawn and that is the population.
+- **Crawlers need nothing.** No hunger, no sleep, no warmth, no mood. The fire is
+  decoration; the bedrolls are scenery.
+
+---
+
+## Parked: what to build next
+
+Offered as four options in September 2026. **They chose "the labyrinth goes on
+forever", then asked for it to be saved for later in the roadmap rather than
+built now.** So it is the front-runner, not the current job.
+
+### 1. The labyrinth goes on forever  ← their pick, deferred
+It branches and extends as the crawlers explore, so there is always somewhere
+further in. Gives Ranging and Mapmaking a job and turns the game into an
+expedition. Caveat raised at the time: without needs or creatures, walking
+further is not yet dangerous, so this may want one of the others underneath it.
+
+### 2. Hunger, tiredness, warmth
+Crawlers start needing things. The fire stops being decoration and becomes the
+reason they survive the night; someone has to forage, cook and tend the sick.
+Puts five or six dead skills to work at once and makes failure cost something
+other than time.
+
+### 3. Things that live down there
+Creatures, generated from tags rather than hand-authored (rule 6). Brings danger,
+makes carrying a light a real decision, gives Fighting and Wrangling a job. But
+it is the combat fifth of the game, and rule 3 caps that at 20%.
+
+### 4. Hands and work — crafting, cooking, repair
+Gather materials, cook a meal, sew a coat, mend a broken spade. Puts Crafting,
+Foraging and Tinkering to work and makes gear something you maintain. Depends on
+the gear-wears-out question below.
+
+---
+
+## Parked: questions waiting on them
+
+Rule 2 says ask and wait. These have been asked and are still open.
+
+1. **Gear can push an attribute past 6.** A crawler wearing the right kit shows
+   Endurance 7, and rule 10 says attributes run 1 to 6. Clamp it at 6, or let
+   gear break the scale on purpose?
+2. **Gear never wears out, breaks, gets lost or gets swapped.** A spade is as good
+   on day two hundred as on day one. Adding wear is a new mechanic, so it needs
+   asking for before it is built.
+3. **"Boardgame aesthetics" — what it means for the LOOK.** Rule 10 is settled for
+   the numbers (1–6, 2d6). Asked twice about the picture — painted miniatures on a
+   board, versus the grit and gloom currently laid down — and never answered. The
+   grit is what is built; it stays until they say otherwise.
+
+---
+
+## Parked: smaller things, offered and measured
+
+- **Grain on the rock walls.** The grit reaches 78% of ground and rock pixels,
+  95% of a crawler, 95% of anything built. The missing fifth is the vertical rock
+  faces, left smooth because they are the most expensive surface to texture.
+  Measured cost of adding it: **7.6 ms → 10.7 ms of drawing per frame**. Offered;
+  not taken up.
+- **The camera snaps when you pick a crawler.** Clicking one locks the view onto
+  them instantly rather than easing across. It was left as a snap because they
+  asked for a lock; if the jump annoys, it is a few lines to glide instead.
