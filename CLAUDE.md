@@ -498,15 +498,20 @@ back every time.
 - **The grain is baked into cached per-colour patterns**, not painted as a second
   fill. Filling every face twice cost 8 ms a frame -- half the budget. Baking
   colour and grain together costs one fill again, at the price of stepping the
-  lighting so the cache stays small (around 80 patterns).
+  lighting so the cache stays bounded (about 700 patterns now that rooms dress
+  their own floors -- it was 80 before the `words` tab existed).
 - The grain is **pinned**: the world's to the world, a crawler's to the crawler,
   so it does not swim as things move.
-- **Side walls of blocks are left flat.** Grain there cost a third of the frame
-  and read as almost nothing; the ground is what you look at.
+- **Side walls of blocks are left flat.** The ground is what you look at. Measured
+  on v0.14.0 by switching the grain off and diffing the picture: grain reaches
+  **78% of ground and rock pixels, 95% of a crawler's and 95% of a structure's**
+  -- the missing fifth is the vertical rock faces. Putting it on them too costs
+  **7.6 ms -> 10.7 ms of drawing** (measured, seed 1, camp in view), so it is a
+  real choice rather than a free one.
 - `texture.strength` 0 turns it all off, and a test compares a grained picture
   against a flat one of the same moment to prove it reached the screen.
 
-Frame cost with the camp in view: about 8.7 ms, of which 1.9 ms is geometry.
+Frame cost with the camp in view: about 7.6 ms of drawing, 0.7 ms of geometry.
 
 ---
 
