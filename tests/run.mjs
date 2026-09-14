@@ -1134,36 +1134,47 @@ await test('the controls say what the clock is doing', async () => {
     'the pause button looks the same paused as running');
 });
 
-await test('the grain actually reaches the screen (and can be switched off)', async () => {
+await test('materials reach the screen, and nothing else is textured', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(1); window.__test.record(true);
     for (let i = 0; i < 20; i++) window.__test.frame(60);
     const rows = [Math.round(Render.h * 0.3), Math.round(Render.h * 0.5),
                   Math.round(Render.h * 0.7)];
 
-    const on = window.__test.setTexture(window.__test.data.knobs['texture.strength']);
+    const full = window.__test.data.knobs['texture.strength'];
+    const on = window.__test.setTexture(full);
     window.__test.redraw();
     const textured = rows.map((y) => window.__test.colourSpread(y));
+    const kindsOn = window.__test.fillKinds();
 
     const off = window.__test.setTexture(0);
     window.__test.redraw();
     const flat = rows.map((y) => window.__test.colourSpread(y));
+    const kindsOff = window.__test.fillKinds();
 
-    window.__test.setTexture(window.__test.data.knobs['texture.strength']);
-    return { on, off, textured, flat,
-             floorPx: window.__test.cfg.floorPx, finePx: window.__test.cfg.finePx };
+    window.__test.setTexture(full);
+    return { on, off, textured, flat, kindsOn, kindsOff };
   });
   assert(r.on.on === true && r.off.on === false, 'the texture switch does nothing');
-  assert(r.on.coarse === r.floorPx && r.on.fine === r.finePx,
-    `grain tiles came out ${r.on.coarse} and ${r.on.fine}, the sheet says ${r.floorPx} and ${r.finePx}`);
-  assert(r.on.fine < r.on.coarse,
-    'the grain on crawlers is not finer than the grain on the floor');
-  for (let i = 0; i < r.textured.length; i++) {
-    assert(r.textured[i] > r.flat[i],
-      `row ${i}: ${r.textured[i]} colours with grain against ${r.flat[i]} without -- the grain never reached the screen`);
-  }
-  assert(r.textured.reduce((a, b) => a + b) > r.flat.reduce((a, b) => a + b) * 1.5,
-    'the grain is there but barely changes anything');
+  assert(r.on.materials > 0, 'no material was ever generated');
+  let better = 0;
+  for (let i = 0; i < r.textured.length; i++) if (r.textured[i] > r.flat[i]) better++;
+  assert(better >= 2,
+    `materials changed only ${better} of 3 lines across the picture: ` +
+    `${r.textured.join('/')} with against ${r.flat.join('/')} without`);
+
+  /* The grit is gone: with the materials off there is not one patterned fill
+     left in the whole frame, and with them on the patterns never outnumber the
+     ground squares -- so no crawler and no camp piece is carrying one. */
+  assert(r.kindsOff.pattern === 0,
+    `${r.kindsOff.pattern} faces are still filled with a texture when texture is off`);
+  assert(r.kindsOn.pattern > 0, 'the materials never reached a fill');
+  assert(r.kindsOn.pattern <= r.kindsOn.cells,
+    `${r.kindsOn.pattern} textured fills against ${r.kindsOn.cells} ground squares ` +
+    `-- something other than the ground is textured`);
+  assert(r.kindsOn.plain > r.kindsOn.pattern,
+    `${r.kindsOn.plain} plain fills against ${r.kindsOn.pattern} textured -- ` +
+    'most of the picture should be flat colour now');
 });
 
 await test('a crawler is built from rounded parts, not boxes', async () => {

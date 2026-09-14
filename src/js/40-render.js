@@ -36,66 +36,8 @@ const Render = {
 
   ensure() {
     if (!this.buf) this.resize(CFG.maxBufW, CFG.maxBufH);
-    if (!this.grainCoarse) this.makeGrain();
+    if (!this.patCache) this.patCache = {};
     if (!this.mats) this.mats = {};
-  },
-
-  /* ---- the grain ---------------------------------------------------------
-   * Grit, rust and mottling, generated once into two small tiles: a coarse one
-   * for the ground and a finer one for crawlers and what they build, because a
-   * face is only about eight pixels across and the floor is sixty-four.
-   *
-   * It is a transparent OVERLAY rather than a coloured texture, so one tile
-   * works over every material and the lighting underneath still shows through.
-   * Seeded, so the same grit comes back every time.
-   */
-  makeGrain() {
-    const build = (px) => {
-      const c = document.createElement('canvas');
-      c.width = px; c.height = px;
-      const g = c.getContext('2d');
-      const img = g.createImageData(px, px);
-      const rand = makeRand(CFG.texSeed + px);
-
-      /* A low-frequency lattice, wrapped so the tile has no seam, gives soft
-         blotches -- damp, soot, wear. Per-pixel white noise gives a dither
-         checkerboard instead, which is what the first attempt looked like. */
-      const lo = 4;
-      const lat = new Float32Array(lo * lo);
-      for (let i = 0; i < lat.length; i++) lat[i] = rand();
-      const at = (x, y) => lat[((y % lo) + lo) % lo * lo + ((x % lo) + lo) % lo];
-      const smooth = (t) => t * t * (3 - 2 * t);
-
-      for (let y = 0; y < px; y++) {
-        for (let x = 0; x < px; x++) {
-          const fx = x / px * lo, fy = y / px * lo;
-          const x0 = Math.floor(fx), y0 = Math.floor(fy);
-          const tx = smooth(fx - x0), ty = smooth(fy - y0);
-          const top = at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx;
-          const bot = at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx;
-          const m = top * (1 - ty) + bot * ty;
-
-          /* Mostly grime, with the occasional hard fleck of grit or rust. */
-          let v = (m - 0.5) * 0.8 - 0.10;
-          const roll = rand();
-          if (roll < CFG.texSpeck) v -= 0.45 + rand() * 0.55;
-          else if (roll < CFG.texSpeck * 1.35) v += 0.40 + rand() * 0.35;
-
-          const i = (y * px + x) * 4;
-          const dark = v < 0;
-          img.data[i] = dark ? 6 : 255;
-          img.data[i + 1] = dark ? 5 : 246;
-          img.data[i + 2] = dark ? 4 : 226;
-          img.data[i + 3] = Math.min(255, Math.abs(v) * 255 * CFG.texStrength);
-        }
-      }
-      g.putImageData(img, 0, 0);
-      return c;
-    };
-    this.grainCoarse = build(Math.max(2, Math.round(CFG.floorPx)));
-    this.grainFine = build(Math.max(2, Math.round(CFG.finePx)));
-    this.patCache = {};
-    this.grainOn = CFG.texStrength > 0;
   },
 
   /* ---- masonry -----------------------------------------------------------
@@ -103,7 +45,7 @@ const Render = {
    * blocks, big ones packed among small ones, with the joints between them
    * showing dark.
    *
-   * Like the grain it is an OVERLAY -- dark lines along the joints and a small
+   * It is an OVERLAY -- dark lines along the joints and a small
    * shade delta per stone -- so it works over any colour at any light level and
    * goes through the same cached-pattern path. It is generated, not painted,
    * and seeded, so the same wall comes back every time.
@@ -343,8 +285,11 @@ const Render = {
     return c;
   },
 
-  /* A surface colour with the masonry and the grain baked into it, cached the
-     same way and by the same rules. */
+  /* A surface colour with its material baked into it, cached: one fill, not
+     two. Filling every face twice -- once for the colour, once for an overlay
+     on top -- cost eight milliseconds a frame, which was half the budget. The
+     price of baking is that the lighting has to be stepped so the cache stays
+     small; at this resolution the banding reads as paint. */
   matPattern(colour, name) {
     const key = 'm|' + name + '|' + colour;
     let pat = this.patCache[key];
@@ -356,41 +301,9 @@ const Render = {
     const g = c.getContext('2d');
     g.fillStyle = colour;
     g.fillRect(0, 0, px, px);
+    g.globalAlpha = Math.max(0, Math.min(1, CFG.texStrength));
     g.drawImage(tile, 0, 0);
-    /* the material keeps its grit: the grain tile is smaller, so it is laid
-       across the material rather than stretched over it */
-    if (this.grainOn) {
-      for (let oy = 0; oy < px; oy += this.grainCoarse.height) {
-        for (let ox = 0; ox < px; ox += this.grainCoarse.width) {
-          g.drawImage(this.grainCoarse, ox, oy);
-        }
-      }
-    }
-    pat = this.bctx.createPattern(c, 'repeat');
-    pat._pinned = '';
-    this.patCache[key] = pat;
-    return pat;
-  },
-
-  /* A surface colour with the grain already baked into it, cached.
-   *
-   * Filling every face twice -- once for colour, once for grain -- cost eight
-   * milliseconds a frame, which is half the budget. Baking the two together and
-   * keeping the result means one fill again, at the price of quantising the
-   * lighting so the cache stays small. The banding that costs is not a loss:
-   * at this resolution it reads as paint.
-   */
-  grainPattern(colour, fine) {
-    const key = (fine ? 'f|' : 'c|') + colour;
-    let pat = this.patCache[key];
-    if (pat) return pat;
-    const tile = fine ? this.grainFine : this.grainCoarse;
-    const c = document.createElement('canvas');
-    c.width = tile.width; c.height = tile.height;
-    const g = c.getContext('2d');
-    g.fillStyle = colour;
-    g.fillRect(0, 0, c.width, c.height);
-    g.drawImage(tile, 0, 0);
+    g.globalAlpha = 1;
     pat = this.bctx.createPattern(c, 'repeat');
     pat._pinned = '';
     this.patCache[key] = pat;
@@ -427,9 +340,8 @@ const Render = {
     return pat;
   },
 
-  /* Pin the grain to something so it does not swim: the world's is pinned to
-     the world, a crawler's to the crawler. Each pattern is moved at most once
-     per frame per anchor. */
+  /* Pin a material to the world so it does not swim as the view moves. Each
+     pattern is moved at most once per frame per anchor. */
   pin(pat, ox, oy, stamp) {
     if (!pat || !pat.setTransform) return pat;
     if (pat._pinned === stamp) return pat;
@@ -438,17 +350,16 @@ const Render = {
     return pat;
   },
 
-  /* The finished fill for one surface: colour, or colour-with-grain pinned to
-     its anchor. */
-  surface(colour, fine, ox, oy, stamp, mat) {
-    /* A material on the GROUND is pinned to the world, exactly like the grain:
-       one transform per pattern per frame. Anchoring it to each square instead
-       cost 16ms a frame for 350 squares, and a floor is flat -- it has no
-       direction to get wrong. A WALL does, which is why walls still get
-       faceFill(). */
-    if (mat) return this.pin(this.matPattern(colour, mat), ox, oy, stamp);
-    if (!this.grainOn) return colour;
-    return this.pin(this.grainPattern(colour, fine), ox, oy, stamp);
+  /* The finished fill for one surface: a plain colour unless the tile names a
+     material, in which case the material pinned to the world.
+     
+     A material on the GROUND is pinned: one transform per pattern per frame.
+     Anchoring it to each square instead cost 16ms a frame for 350 squares, and
+     a floor is flat -- it has no direction to get wrong. A WALL does, which is
+     why walls get faceFill() instead. */
+  surface(colour, ox, oy, stamp, mat) {
+    if (!mat || CFG.texStrength <= 0) return colour;
+    return this.pin(this.matPattern(colour, mat), ox, oy, stamp);
   },
 
   /* Grid corner (gxx, gyy) at elevation h metres -> game pixels.
@@ -500,7 +411,7 @@ const Render = {
     const len = Math.hypot(nx, ny, nz) || 1;
     const d = (nx * 0.30 + ny * -0.42 + nz * 0.86) / len;
     const lit = CFG.lightAmbient + CFG.lightDiffuse * Math.max(0, d);
-    /* Stepped, not continuous: it keeps the grain cache small and it reads as
+    /* Stepped, not continuous: it keeps the pattern cache small and it reads as
        paint rather than as a gradient. */
     return Math.round(lit * 14) / 14;
   },
@@ -762,16 +673,14 @@ const Render = {
     return b;
   },
 
-  /* One path, filled with the surface colour and then again with the grain --
-     which costs a second fill but not a second path. */
-  poly(ctx, pts, fill, grain) {
+  /* One path, one fill. */
+  poly(ctx, pts, fill) {
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
     for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
     ctx.closePath();
     ctx.fillStyle = fill;
     ctx.fill();
-    if (grain) { ctx.fillStyle = grain; ctx.fill(); }
   },
 
   /* Every polygon a thing is made of, so it can be haloed as one shape. */
@@ -881,16 +790,12 @@ const Render = {
       ctx.globalAlpha = alpha;
 
       if (it.kind === 'actor') {
-        /* A crawler's grain travels with them rather than sliding underneath. */
-        const aStamp = 'a' + it.i + ',' + Math.round(it.minX) + ',' + Math.round(it.minY);
         for (let r = 0; r < it.parts.length; r++) {
           const pt = it.parts[r];
           /* A flame is not darkened by the room it is lighting. */
           const pl = pt.glow ? 1 : it.light;
           for (let g = 0; g < pt.faces.length; g++) {
-            this.poly(ctx, pt.faces[g].pts,
-              this.surface(litShade(pt.colour, pt.faces[g].lit, pl), true,
-                           it.minX, it.minY, aStamp));
+            this.poly(ctx, pt.faces[g].pts, litShade(pt.colour, pt.faces[g].lit, pl));
           }
           if (pt.slot !== 'body') wornDrawn.push(pt.item);
         }
@@ -913,7 +818,6 @@ const Render = {
 
       if (it.kind === 'site') {
         const done = it.site.built;
-        const sStamp = 's' + it.i + ',' + Math.round(it.minX) + ',' + Math.round(it.minY);
         /* A fire lights itself once it is burning. */
         const lit = STRUCT(it.site.structure).light > 0 && done ? 1 : it.light;
         for (let k = 0; k < it.parts.length; k++) {
@@ -923,9 +827,7 @@ const Render = {
           const col = pt.glow || done ? pt.colour : shade(pt.colour, 0.55);
           const pl = pt.glow ? 1 : lit;
           for (let g = 0; g < pt.faces.length; g++) {
-            this.poly(ctx, pt.faces[g].pts,
-              this.surface(litShade(col, pt.faces[g].lit, pl), true,
-                           it.minX, it.minY, sStamp));
+            this.poly(ctx, pt.faces[g].pts, litShade(col, pt.faces[g].lit, pl));
           }
         }
         structures++; drawn++;
@@ -941,10 +843,6 @@ const Render = {
 
       const def = TILE(it.cell.tile);
       const lift = Math.round((1 + it.cell.h * CFG.heightTint) * 100) / 100;
-      /* Grain goes on the ground, which is most of what you look at, and on
-         anything that stands on it. The two side walls of a block are in shadow
-         and edge-on; grain there costs a third of the frame and reads as almost
-         nothing, so they stay flat. */
       /* Every tile may name its own material; blank is plain colour.
        *
        * Only a DIRECTIONAL material is mapped onto the vertical faces, and
@@ -959,9 +857,10 @@ const Render = {
       const mat = def.pattern;
       const laid = mat === 'masonry' && it.wallM > 0;
       if (it.solid) {
-        /* Raw rock keeps its flat sides -- grain there costs a third of the
-           frame and reads as almost nothing. A wall somebody BUILT is the
-           exception: its whole point is that you can see it was laid by hand,
+        /* Raw rock keeps its flat sides: they are in shadow and edge-on, so a
+           texture there reads as almost nothing and costs a third of the frame.
+           A wall somebody BUILT is the exception: its whole point is that you
+           can see it was laid by hand,
            so a tile carrying a pattern pays for its faces, and the stonework is
            mapped ONTO each face rather than pasted over it. */
         const lf = litShade(def.side, CFG.shadeLeft * lift, it.light);
@@ -978,7 +877,7 @@ const Render = {
       }
       const tf = litShade(def.top, lift, it.light);
       this.poly(ctx, it.top,
-        this.surface(tf, false, -s.cam.ox, -s.cam.oy, worldStamp, mat));
+        this.surface(tf, -s.cam.ox, -s.cam.oy, worldStamp, mat));
 
       kinds[it.cell.tile] = (kinds[it.cell.tile] || 0) + 1;
       drawn++;

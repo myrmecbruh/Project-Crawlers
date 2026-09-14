@@ -7,6 +7,69 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.17.0 — the grit comes off, and the frame gets counted
+
+**The grit is gone.** It had been there since v0.02: a generated speckle tile
+laid over every face in the game — ground, rock, crawlers, campfire, everything.
+They asked what it was, and then asked for it to go. It did not read as a
+surface; it read as dirt on the lens, and it was the same dirt on a stone floor,
+a leather boot and a flame.
+
+What survives is the thing that actually IS a surface: the eight generated
+materials from v0.16.0 — flagstone, dirt, moss, water, rubble, bones, raw rock,
+masonry — which live on the ground and on laid walls, where they belong. A
+crawler and a piece of the camp are now flat-coloured lit faces, and the figure
+is what you read them by. Side effect worth having: a crawler used to be a dark
+smudge at this resolution, because the speckle was competing with the shading for
+the same eight pixels. They read as people now.
+
+`texture.strength` was kept and repointed: it used to say how hard the grit bit,
+and now says how strongly a material marks its surface. 0 still leaves plain flat
+colour everywhere, which is what the test diffs against. `texture.floor_px`,
+`texture.fine_px` and `texture.speck` were the grit's own dials and are deleted
+from both the sheet and the code defaults.
+
+**The old test proved the wrong thing.** It compared a grained picture against a
+flat one and asserted more colours along three lines — which would still pass
+with the grit back on crawlers, since it only ever asked "is anything textured".
+The new one counts what KIND of fill every face got, and fails if the number of
+patterned fills ever exceeds the number of ground squares. That is the assertion
+that keeps the grit off, rather than merely faint.
+
+**What it bought, and what it did not.** Drawing a frame went 9.3 → 7.0 ms (seed
+1, camp in view, 80 draws of one frame). Patterned fills went 1,009 → 343, and
+the pattern cache 668 → 20, because crawlers and camp pieces no longer need a
+baked pattern for every colour at every light level.
+
+**Then the frame was counted properly**, which is the part worth keeping:
+
+| | ms |
+|---|---|
+| drawing the picture | 7.0 |
+| the hidden picture the pointer is found in | 4.8 |
+| working out the shapes | 1.4 |
+| cutaway + light map + simulation, together | <0.3 |
+
+And inside the drawing, the answer to "what else is killing performance" is not
+what anyone had been guessing at. **Two thirds of it is rock side walls** — 686
+faces, 2.9 ms, covering ten screenfuls of pixels into a picture 534×348 across.
+They are painted from the top of each column *all the way down to the floor of
+the world*, whatever is standing in front of them. Across seeds 1, 2, 3, 7 and
+777, **90–96% of every metre of wall painted is buried inside the rock next to
+it**. Crawlers and the whole camp together are 666 faces and under 10,000 pixels
+— about 5% of one screenful. They were never the problem, and two earlier
+sessions had gone looking at them.
+
+Parked in `ROADMAP.md` rather than fixed here, because it is a separate change
+with one real catch: where the see-through fourth wall fades a near column you
+*can* see through it, so those neighbours must not be clipped.
+
+Lesson 14 again, and it worked again: count the expensive thing, price one of
+it, and the answer falls out. Five guesses had been wrong in a row the last time
+this was done by A/B-ing whole features.
+
+---
+
 ## v0.16.0 — materials for everything, and a camp with real shape
 
 Research first: the standard dark-fantasy tile vocabulary is twelve floors —

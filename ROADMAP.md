@@ -69,19 +69,31 @@ Rule 2 says ask and wait. These have been asked and are still open.
    asking for before it is built.
 3. **"Boardgame aesthetics" — what it means for the LOOK.** Rule 10 is settled for
    the numbers (1–6, 2d6). Asked twice about the picture — painted miniatures on a
-   board, versus the grit and gloom currently laid down — and never answered. The
-   grit is what is built; it stays until they say otherwise.
+   board, versus the gloom currently laid down — and never answered. The grit
+   overlay that was part of that answer is **gone** as of v0.17.0, at their
+   request; the generated materials on the ground stay.
 
 ---
 
 ## Parked: smaller things, offered and measured
 
-- **Grain on the raw rock walls.** (Built walls now carry masonry, which is a
-  different thing; this is about the rock that was only dug through.) The grit reaches 78% of ground and rock pixels,
-  95% of a crawler, 95% of anything built. The missing fifth is the vertical rock
-  faces, left smooth because they are the most expensive surface to texture.
-  Measured cost of adding it: **7.6 ms → 10.7 ms of drawing per frame**. Offered;
-  not taken up.
+- **Rock walls are painted from the top of each column down to the floor of the
+  world, even where they are buried.** Measured on v0.17.0: 686 side faces a
+  frame, **2.9 ms of the 7.0 ms of drawing**, covering **ten screenfuls** of
+  pixels into a picture 534×348 across. Across seeds 1, 2, 3, 7 and 777,
+  **90–96% of every metre of wall painted is inside the rock standing next to
+  it** — invisible by construction. A wall only ever needs to drop as far as the
+  neighbour it faces. The one catch is the see-through fourth wall: where a
+  near column is faded you CAN see through it, so those neighbours must not
+  clip. Expected saving: most of 2.9 ms, and the picture provably unchanged.
+  **This is the biggest remaining cost in the frame and should be done before
+  any other performance work.** Offered, not yet taken up.
+- **The hidden picture used to find what is under the pointer costs 4.8 ms**, and
+  it draws every face in the scene a second time to do it. It only runs when a
+  pointer actually asks, so it is free when the mouse is still — but it is the
+  single most expensive thing that happens while the mouse is moving. Could be
+  answered arithmetically (point-in-polygon, back to front) with no second
+  picture at all.
 - **The camera snaps when you pick a crawler.** Clicking one locks the view onto
   them instantly rather than easing across. It was left as a snap because they
   asked for a lock; if the jump annoys, it is a few lines to glide instead.

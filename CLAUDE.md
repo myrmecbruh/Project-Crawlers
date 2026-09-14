@@ -498,38 +498,50 @@ when they pause and runs fast when they speed up.
 
 ---
 
-## The grain (textures)
+## The surfaces (materials)
 
-Everything has grit on it, generated rather than painted: two small tiles, a
-coarse one for the ground (`texture.floor_px`, 16) and a finer one for crawlers
-and what they build (`texture.fine_px`, 8), both seeded so the same grit comes
-back every time.
-
-- It is **soft mottling plus sparse hard specks**, not per-pixel noise. The first
-  attempt was white noise and came out as a dither checkerboard that read as a
-  repeating grid. Low-frequency blotches are what look like damp and soot.
-- It is an **overlay**, so one tile works over every material and the lighting
-  underneath still shows.
-- **The grain is baked into cached per-colour patterns**, not painted as a second
-  fill. Filling every face twice cost 8 ms a frame -- half the budget. Baking
-  colour and grain together costs one fill again, at the price of stepping the
-  lighting so the cache stays bounded (about 700 patterns now that rooms dress
-  their own floors -- it was 80 before the `words` tab existed).
-- The grain is **pinned**: the world's to the world, a crawler's to the crawler,
-  so it does not swim as things move.
-### Masonry, and mapping a texture onto the model
+**There is no grit overlay.** There was one for fifteen versions -- a generated
+speckle laid over every single face in the game, crawlers and camp included --
+and it was removed in v0.17.0 because it read as dirt sprayed across the lens
+rather than as anything belonging to a surface. What is left is the thing that
+IS the surface.
 
 A tile may name a `pattern` in the `tiles` tab; blank means plain, and the build
-refuses any pattern the renderer does not know. `masonry` is the first one, worn
-by **Stone Block Wall** (`stone`, `constructed`, `solid`, `blocks-sight`).
+refuses any pattern the renderer does not know. **Materials are generated, not
+painted** -- flagstone, dirt, moss, water, rubble, bones, rock, masonry -- all a
+metre square, all transparent overlays over the tile's own colour, and **one
+locked palette** across every tile is what makes them belong together.
+
+- **A material goes on the GROUND and on a laid wall. Nothing else is textured.**
+  A crawler and a piece of the camp are flat-coloured lit faces, and the figure
+  is what you read them by. A test counts pattern fills against plain ones and
+  fails if anything but the ground is carrying a texture -- which is how "the
+  grit is gone" stays true rather than drifting back.
+- **The material is baked into a cached per-colour pattern**, not painted as a
+  second fill. Filling every face twice cost 8 ms a frame -- half the budget.
+  Baking costs one fill again, at the price of stepping the lighting so the
+  cache stays bounded (20 patterns now the grit is gone; it was about 700).
+- **Shaded faces go COLD, not just dark** (`texture.hue_shift`). A flat multiply
+  takes every material to the same sludge.
+- **Side walls of blocks are left flat.** The ground is what you look at; the
+  sides are in shadow and edge-on. Texturing them too cost 7.6 -> 10.7 ms of
+  drawing when it was measured on v0.14.0.
+- `texture.strength` 0 turns every material off and leaves plain colours, and a
+  test compares a textured picture against a flat one of the same moment to
+  prove the materials reached the screen.
+
+### Masonry, and mapping a texture onto the model
+
+`masonry` is worn by **Stone Block Wall** (`stone`, `constructed`, `solid`,
+`blocks-sight`).
 
 - **A directional texture must be MAPPED ONTO THE FACE, never pinned to the
-  screen.** The grain gets away with screen-space pinning because it is isotropic
-  noise. Masonry is not: pasted flat it sheared with the projection and slid
-  across the wall as the camera moved. `faceFill()` gives each face its own
-  affine map -- one tile of texture to one metre of wall -- built from that
-  face's own corners. A planar quad under an isometric projection maps exactly
-  affinely, so there is no perspective term to miss.
+  screen.** Isotropic noise gets away with screen-space pinning; masonry does
+  not -- pasted flat it sheared with the projection and slid across the wall as
+  the camera moved. `faceFill()` gives each face its own affine map -- one tile
+  of texture to one metre of wall -- built from that face's own corners. A planar
+  quad under an isometric projection maps exactly affinely, so there is no
+  perspective term to miss.
 - **Generate from a model, then draw it.** The first masonry walked its
   randomness twice, once for the stone shades and once for the joints, and the
   two walks drifted apart so the joints missed the stones.
@@ -539,31 +551,31 @@ by **Stone Block Wall** (`stone`, `constructed`, `solid`, `blocks-sight`).
 - Only rock facing a room somebody MADE is faced (`worked` in the room's tags);
   a mine or a quarry keeps the rock it was hacked out of. Done after the halls
   are cut, so doorways stay doorways.
-- Cost: 7.6 ms -> 8.0 ms of drawing, because only ~100 cells a world are walls.
-
 - **Only a DIRECTIONAL material is mapped onto a face; everything else is
-  pinned.** Masonry must be mapped -- courses run along a wall. Fracture, dirt
-  and moss have no direction to get wrong. A mapped fill costs about **50
-  microseconds**, so giving raw rock a mapped material meant 686 of them a frame
-  and took drawing from 7.96 ms to 43 ms. Mapped: laid masonry, ~100 cells a
-  world. Pinned: every floor, one transform per pattern per frame.
-- **Materials are a `pattern` on the tiles tab** -- flagstone, dirt, moss, water,
-  rubble, bones, rock, masonry -- all generated, all a metre square, all
-  transparent overlays over the tile's own colour, and the build refuses a
-  pattern the renderer does not know. **One locked palette** across every tile is
-  what makes them belong together.
-- **Shaded faces go COLD, not just dark** (`texture.hue_shift`). A flat multiply
-  takes every material to the same sludge.
-- **Side walls of blocks are left flat.** The ground is what you look at. Measured
-  on v0.14.0 by switching the grain off and diffing the picture: grain reaches
-  **78% of ground and rock pixels, 95% of a crawler's and 95% of a structure's**
-  -- the missing fifth is the vertical rock faces. Putting it on them too costs
-  **7.6 ms -> 10.7 ms of drawing** (measured, seed 1, camp in view), so it is a
-  real choice rather than a free one.
-- `texture.strength` 0 turns it all off, and a test compares a grained picture
-  against a flat one of the same moment to prove it reached the screen.
+  pinned.** Fracture, dirt and moss have no direction to get wrong. A mapped fill
+  costs about **50 microseconds**, so giving raw rock a mapped material meant 686
+  of them a frame and took drawing from 7.96 ms to 43 ms. Mapped: laid masonry,
+  ~100 cells a world. Pinned: every floor, one transform per pattern per frame.
 
-Frame cost with the camp in view: about 7.6 ms of drawing, 0.7 ms of geometry.
+### What a frame costs, and where it goes
+
+Measured on v0.17.0, seed 1, camp in view, 1100x760, 80 draws of one frame:
+
+| what | ms | note |
+|---|---|---|
+| drawing the picture | **7.0** | 1,695 faces; 343 patterned (the ground), 1,352 flat |
+| the hidden picture the pointer is found in | **4.8** | only painted when a pointer asks (`pickAt`), not every frame |
+| working out the shapes | **1.4** | grows with the size of the labyrinth; everything else does not |
+| the cutaway, the light map, the simulation | **<0.3** | together. Not worth looking at. |
+
+Inside the drawing, **the rock side walls are two thirds of it**: 686 faces,
+2.9 ms, covering ten screenfuls of pixels. They are drawn from each column's top
+**all the way down to the floor of the world**, so 90-96% of what is painted is
+inside the rock standing next to it (measured on seeds 1, 2, 3, 7, 777). Parked
+in `ROADMAP.md`; see it before opening any other performance investigation.
+
+Crawlers and camp pieces together are 666 faces but under 10,000 pixels -- about
+5% of one screenful. They are not the problem and never were.
 
 ---
 
@@ -780,7 +792,8 @@ checkout still builds. The build reconciles the two and inlines the result.
     64 poses -- rather than anything a taste argument would have produced. Three
     rulers were wrong before one was right: cropping by a guessed offset from the
     figure's centre cut the feet off; matching exact colours found nothing
-    because the grain shifts every pixel; and counting each part's VISIBLE colour
+    because the grit overlay of the day shifted every pixel; and counting each
+    part's VISIBLE colour
     measured which part won the depth sort, not whether there was a hole. The
     question that finally worked was the simplest one -- "is any row of this
     figure empty?"
@@ -795,6 +808,24 @@ checkout still builds. The build reconciles the two and inlines the result.
     material. Generalised: a cost has a UNIT. Find how many of the expensive
     thing happen and what one costs, and the answer falls out; A/B-ing whole
     features against each other just moves noise around.
+
+15. **A test that proves a thing is THERE cannot prove it is only where it
+    should be.** For fifteen versions the grit test asserted "more colours along
+    three lines with texture than without". That was true, and it would have
+    stayed true with grit sprayed over every crawler in the game -- which is
+    exactly what was wrong and what nobody's test could see. The replacement
+    counts what KIND of fill each face got and fails if patterned fills ever
+    outnumber the ground squares. Generalised: when the requirement is "X is
+    only on Y", the assertion has to be a census of everything, not a sample of
+    somewhere X is expected. Presence and confinement are different claims.
+
+16. **The thing you are looking at is rarely the thing you are paying for.**
+    Asked what was costing the frame, two sessions went at the crawlers and the
+    camp -- the detailed, obviously-expensive-looking things. Counted: together
+    they are 666 faces and under 10,000 pixels, about 5% of one screenful. The
+    bill was with the rock side walls, which nobody looks at: 686 faces and ten
+    screenfuls of pixels, 90-96% of it painted inside other rock. Detail is not
+    area, and area is what a fill costs.
 
 ---
 

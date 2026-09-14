@@ -338,17 +338,38 @@ window.__test = {
     return { found: false, why: 'every crawler is out of sight' };
   },
 
-  /* Rebuild the grain at a different strength, so a test can compare a
+  /* Rebuild the materials at a different strength, so a test can compare a
      textured picture against a flat one of the same moment. */
   setTexture(strength) {
     CFG.texStrength = strength;
-    Render.makeGrain();
+    Render.patCache = {};
     Game.state.geomDirty = true; Game.state.viewDirty = true;
-    return { strength: CFG.texStrength, on: Render.grainOn,
-             coarse: Render.grainCoarse.width, fine: Render.grainFine.width };
+    return { strength: CFG.texStrength, on: CFG.texStrength > 0,
+             materials: Object.keys(Render.mats || {}).length };
   },
+  /* Draw one frame and count what KIND of fill each face got: a plain colour,
+     or a repeating pattern. Patterns are the expensive kind, and since the grit
+     was taken off crawlers and camp pieces only the ground should still use
+     them -- so this is how a test proves the grit is really gone rather than
+     merely faint. */
+  fillKinds() {
+    const s = Game.state, ctx = Render.bctx;
+    const real = ctx.fill.bind(ctx);
+    let plain = 0, pattern = 0;
+    ctx.fill = function () {
+      if (typeof this.fillStyle === 'object') pattern++; else plain++;
+      return real();
+    };
+    s.geomDirty = true; s.viewDirty = true;
+    Render.build(s); Render.draw(s);
+    ctx.fill = real;
+    return { plain: plain, pattern: pattern, drawn: Render.consumed.count,
+             cells: Render.consumed.count - Render.consumed.people
+                    - Render.consumed.structures };
+  },
+
   /* How many different colours appear along one line across the picture. A flat
-     fill gives few; a grained one gives more. */
+     fill gives few; a textured one gives more. */
   colourSpread(y) {
     const px = Render.buf.getContext('2d').getImageData(0, Math.floor(y), Render.w, 1).data;
     const seen = {};
