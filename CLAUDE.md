@@ -437,6 +437,16 @@ them.
   **A rounded end needs at least 3 rings** -- with 2, both rings sit inside the
   cap, both collapse to a point, and the whole part disappears. The build
   refuses that combination, because it took a missing pelvis to notice.
+- **A cap belongs only on an end you can SEE.** `cap_top`/`cap_bot` round an end
+  down to a point -- right for a skull, a sole, a fingertip. On the end of a limb
+  that is BURIED in the next limb it is not a nicety, it is a pinch: both sides of
+  the joint taper to nothing and meet as two points. Every joint on the crawler
+  had them, the knee necked to one pixel and then to none, and the figure read as
+  a head, a blob and two floating feet.
+- **Joints OVERLAP; they never meet.** Two centimetres is the floor, and the
+  buried end is flat and full width. A part authored to meet the next one comes
+  apart the moment the pose bends it (lesson 7, which this project had already
+  written down once).
 - Rule 4 has a floor: if every face of a worn part comes out smaller than
   `render.min_face_px`, the largest is drawn anyway rather than letting a piece
   of gear silently vanish. Small gear (a charm, a rope coil) is also drawn
@@ -451,6 +461,17 @@ them.
   keeps the texture cache small and reads as paint rather than gradient.
 - Parts are depth-sorted within a figure along the camera axis, which swings
   with the view.
+
+**The figure is measured, not admired.** `__test.figureRows()` draws one crawler
+alone and counts how many of their pixels land on each row of the picture;
+`__test.figureSpans()` gives every part's extent in metres. Two tests use them:
+one fails on an empty row or a one-pixel row across 40 renders (five poses, four
+camera turns, dressed and bare), the other fails if any joint in the skeleton
+does not overlap, or if the result stops being shaped like a person -- height
+within 6% of `actor.height_m`, head 11-17% of it, shoulders 17-27%. **Trim two
+rows at the crown and three at the sole before judging**: a head and a toe are
+supposed to taper, and counting them as defects failed 26 poses for the wrong
+reason.
 
 **Animation is procedural, and split on purpose:** the SHAPE of each clip (walk,
 work, idle) is code in `18-figure.js` because it is logic; every AMOUNT is a
@@ -691,6 +712,18 @@ checkout still builds. The build reconciles the two and inlines the result.
     check the margin it was passing by -- and when a claim needs luck to hold,
     make it over several seeds or make it somewhere it can be made honestly.
     (Rule 1 is proved on the bench, where the success rate is pinned at zero.)
+
+13. **"Better X" is a request to go and MEASURE X, not to restyle it.** Asked for
+    better human models, the honest first move was to render one crawler alone,
+    large, with each part in its own colour, and count the pixels. That found
+    holes -- three or four completely empty rows at the knee and ankle in 37 of
+    64 poses -- rather than anything a taste argument would have produced. Three
+    rulers were wrong before one was right: cropping by a guessed offset from the
+    figure's centre cut the feet off; matching exact colours found nothing
+    because the grain shifts every pixel; and counting each part's VISIBLE colour
+    measured which part won the depth sort, not whether there was a hole. The
+    question that finally worked was the simplest one -- "is any row of this
+    figure empty?"
 
 ---
 

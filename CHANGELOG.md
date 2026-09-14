@@ -7,6 +7,51 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.14.0 — the crawlers are one person, not a pile of parts
+
+They asked for better human models. What the measurement found was worse than
+"could be prettier": **in 37 of 64 poses the figure had three or four completely
+empty rows of picture in it** — at 63–69% down the body (the knee) and 84–89%
+(the ankle). The crawlers were not badly drawn humans. They were a head, a blob
+and two floating feet, and they had been since the figure was first authored.
+
+**What was doing it: `cap_top` and `cap_bot`.** A cap rounds a lathed part's end
+down to a POINT. That is right for a skull or a toe. Every limb had them on the
+ends BURIED inside the next limb, so both sides of every joint tapered to
+nothing and met as two points. The knee necked down to one pixel and then to
+none. Caps now stay only on ends you can actually see — the crown, the sole, the
+fingertips — and the buried ends are flat and full width.
+
+Four other things were wrong and are fixed, all of them numbers in the sheet:
+
+- **A 3.7cm hole at the throat.** The torso stopped at 1.28m and the neck began
+  at 1.32m. The head was joined to the body by nothing at all.
+- **Joints authored to MEET, not to touch** — the neck and head overlapped by
+  2mm, the elbows and wrists by 1cm. That is lesson 7, which this project already
+  had written down, happening again in a different system.
+- **Shoulders at 19% of height** where a person is about 23%, which is why the
+  torso read as a slab. Now 21–22%, with the shoulder bones moved out to match.
+- **Feet 1.6cm below the floor.** They stood in the ground, not on it.
+
+Values were also lifted off the floor of the palette: the legs were `#33302c`,
+which on a shaded face is rgb(28,26,24) against a rgb(6,8,11) background. Under
+rule 4 a leg that exists has to be SEEN, and at 32 pixels to the metre that one
+was not.
+
+**Two tests now hold this.** One reads the figure back out of the buffer and
+counts how many pixels of the crawler land on each row, for five poses times four
+camera turns times dressed and bare — 40 renders — and fails on an empty row or a
+row one pixel wide. The other checks every joint in the skeleton actually
+overlaps, and that the result is still shaped like a person: height within 6% of
+the sheet's `actor.height_m`, head 11–17% of it, shoulders 17–27%.
+
+The first cut of the row test failed 26 poses for the wrong reason: it counted
+the crown of the head and the toe of a boot as defects, when both are supposed to
+taper. A ruler that reports real geometry as a bug is worse than no ruler
+(lesson 2), so it now trims two rows at the crown and three at the sole and
+argues only about the body in between. Proof that it still bites: rebuilt with
+the old leg numbers restored, it catches 37 of 64 poses; with the new ones, 0.
+
 ## v0.13.0 — rooms are places, and places are built out of words
 
 Every room in the labyrinth was one flat sheet of floor. Measured: **90 of 90

@@ -205,6 +205,77 @@ window.__test = {
   },
   rolls() { return Game.state.rolls; },
 
+  /* ---- the figure, measured rather than admired ------------------------- */
+
+  /* Draw ONE crawler alone and count how many pixels of them land on each row
+     of the picture. A hole in the body shows up as a row with nothing in it; a
+     joint pinched down to a point shows up as a row one pixel wide. Neither is
+     visible in a screenshot at 32 pixels to the metre, and both made the figure
+     read as a pile of floating chunks. */
+  figureRows(index, doing, tick) {
+    const s = Game.state, i = index || 0, a = s.actors[i];
+    if (!a) return null;
+    const wasDoing = a.doing, wasTick = s.tick;
+    if (doing) a.doing = doing;
+    if (tick !== undefined) s.tick = tick;
+    const wasSel = s.selected, wasHover = s.hover, wasOver = s.pointer.over;
+    s.selected = -1; s.hover = -1; s.pointer.over = false;
+    s.geomDirty = true; s.viewDirty = true;
+    Render.build(s);
+    const want = Render.actorBase(s) + i;
+    const keep = Render.batch.filter(function (z) { return z.i === want; });
+    if (!keep.length) {
+      a.doing = wasDoing; s.tick = wasTick;
+      s.selected = wasSel; s.hover = wasHover; s.pointer.over = wasOver;
+      return null;
+    }
+    Render.batch.length = 0;
+    for (let k = 0; k < keep.length; k++) Render.batch.push(keep[k]);
+    Render.draw(s);
+    const px = Render.bctx.getImageData(0, 0, Render.w, Render.h).data;
+    const y0 = Math.max(0, Math.floor(keep[0].minY));
+    const y1 = Math.min(Render.h - 1, Math.ceil(keep[0].maxY));
+    const rows = [];
+    for (let y = y0; y <= y1; y++) {
+      let n = 0;
+      for (let x = 0; x < Render.w; x++) {
+        const q = (y * Render.w + x) * 4;
+        /* the buffer is cleared to #06080b; anything brighter is the crawler */
+        if (px[q] > 18 || px[q + 1] > 18 || px[q + 2] > 22) n++;
+      }
+      rows.push(n);
+    }
+    a.doing = wasDoing; s.tick = wasTick;
+    s.selected = wasSel; s.hover = wasHover; s.pointer.over = wasOver;
+    s.geomDirty = true; s.viewDirty = true;
+    return { y0: y0, y1: y1, rows: rows, doing: doing || wasDoing };
+  },
+
+  /* Where every part of the skeleton actually sits, in metres, so a test can
+     argue about whether two parts that are supposed to join actually overlap
+     -- authoring them to MEET is authoring them to come apart. */
+  figureSpans(index) {
+    const s = Game.state, a = s.actors[index || 0];
+    if (!a) return null;
+    const pose = poseFor(a, s.tick);
+    const bones = buildSkeleton(pose);
+    const scale = CFG.actorHeight / CFG.figureNominal;
+    const out = {};
+    const parts = figureParts(a);
+    for (let i = 0; i < parts.length; i++) {
+      const f = parts[i].part, bone = bones[f.bone];
+      if (!bone) continue;
+      const m = partMesh(bone, f, scale);
+      let lo = Infinity, hi = -Infinity, xl = Infinity, xh = -Infinity;
+      for (let v = 0; v < m.verts.length; v++) {
+        lo = Math.min(lo, m.verts[v][2]); hi = Math.max(hi, m.verts[v][2]);
+        xl = Math.min(xl, m.verts[v][0]); xh = Math.max(xh, m.verts[v][0]);
+      }
+      out[parts[i].id] = { lo: lo, hi: hi, w: xh - xl };
+    }
+    return out;
+  },
+
   /* Put the camera on a crawler AND get the pointer onto them. They are
      scattered over 56 metres and something may be standing in front, so a test
      that wants to inspect one has to go and look, then probe down the figure

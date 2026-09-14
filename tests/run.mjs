@@ -1666,6 +1666,95 @@ await test('a place keeps its name secret until a crawler reads it', async () =>
   }
 });
 
+/* ---- v0.14.0: the figure, measured rather than admired ----------------- */
+
+await test('a crawler is ONE figure, not a pile of floating parts', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1); window.__test.record(true);
+    for (let i = 0; i < 20; i++) window.__test.frame(60);
+    const s = Game.state;
+    const got = window.__test.pointAtAnyActor();
+    if (!got.found) return { found: false, why: got.why };
+    const bad = [], seen = [];
+    const kit = { head: 'hood', torso: 'jerkin', legs: 'breeches',
+                  feet: 'boots', gloves: 'gloves' };
+    for (const worn of [{}, kit]) {
+      s.actors[got.index].worn = Object.assign({}, worn);
+      for (const [doing, tick] of [['idle', 40], ['walking', 17], ['walking', 26],
+                                   ['clearing', 25], ['clearing', 36]]) {
+        for (let q = 0; q < 4; q++) {
+          s.cam.quarter = q; s.cam.yaw = s.cam.yawTarget = q * Math.PI / 2;
+          camRefresh(s);
+          const m = window.__test.figureRows(got.index, doing, tick);
+          if (!m) continue;
+          /* Trim the crown and the soles. A skull (and a hood over it) rounds
+             off at the top, and a foot tapers to a toe -- both SHOULD come to
+             a point, and both did, which is why the first cut of this test
+             failed 26 poses for the wrong reason. Everything between them is
+             body, and body may not come apart. */
+          const body = m.rows.slice(2, m.rows.length - 3);
+          if (!body.length) continue;
+          const holes = body.filter((n) => n === 0).length;
+          const pinch = Math.min.apply(null, body);
+          seen.push({ doing, q, worn: Object.keys(worn).length, pinch, holes,
+                      tall: m.rows.length });
+          if (holes > 0 || pinch < 2) bad.push(`${doing} t${tick} turn ${q}`
+            + (Object.keys(worn).length ? ' dressed' : ' bare')
+            + `: ${holes} empty rows, narrowest ${pinch}px`);
+        }
+      }
+    }
+    return { found: true, bad, seen };
+  });
+  assert(r.found, `no crawler could be looked at: ${r.why}`);
+  assert(r.seen.length >= 30, `only ${r.seen.length} poses were measured`);
+  /* A hole is a row of the body with nothing painted in it. A pinch is a row
+     one pixel wide -- which is what a rounded end BURIED in the next limb does,
+     and it is why the crawlers read as a head, a blob and two floating feet. */
+  assert(r.bad.length === 0,
+    `the figure comes apart in ${r.bad.length} of ${r.seen.length} poses:\n         `
+    + r.bad.slice(0, 6).join('\n         '));
+});
+
+await test('every part of a crawler overlaps the part it hangs from', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    Game.state.actors[0].worn = {};
+    Game.state.actors[0].doing = 'idle';
+    const sp = window.__test.figureSpans(0);
+    /* child part -> the part it must be joined to */
+    const CHAIN = [['foot_l', 'shin_l'], ['shin_l', 'thigh_l'], ['thigh_l', 'pelvis'],
+                   ['foot_r', 'shin_r'], ['shin_r', 'thigh_r'], ['thigh_r', 'pelvis'],
+                   ['pelvis', 'torso'], ['torso', 'neck'], ['neck', 'head'],
+                   ['hand_l', 'forearm_l'], ['forearm_l', 'upperarm_l'],
+                   ['hand_r', 'forearm_r'], ['forearm_r', 'upperarm_r']];
+    const out = [];
+    for (const [lo, hi] of CHAIN) {
+      if (!sp[lo] || !sp[hi]) { out.push({ lo, hi, overlap: null }); continue; }
+      out.push({ lo, hi, overlap: +(sp[lo].hi - sp[hi].lo).toFixed(3) });
+    }
+    return { joints: out, height: Math.max.apply(null, Object.values(sp).map((q) => q.hi))
+                             - Math.min.apply(null, Object.values(sp).map((q) => q.lo)),
+             head: sp.head ? sp.head.hi - sp.head.lo : 0,
+             shoulders: sp.torso ? sp.torso.w : 0,
+             want: window.__test.cfg.actorHeight };
+  });
+  const thin = r.joints.filter((j) => j.overlap === null || j.overlap < 0.02);
+  assert(thin.length === 0,
+    'these joints meet instead of overlapping (lesson 7): '
+    + thin.map((j) => `${j.lo}->${j.hi} ${j.overlap}m`).join(', '));
+
+  /* And it must still be a HUMAN, not a totem. */
+  const tall = r.height;
+  assert(Math.abs(tall - r.want) < r.want * 0.06,
+    `a crawler is ${tall.toFixed(2)}m; the sheet says ${r.want}m`);
+  assert(r.head / tall > 0.11 && r.head / tall < 0.17,
+    `the head is ${(r.head / tall * 100).toFixed(0)}% of height (a person is about 13%)`);
+  assert(r.shoulders / tall > 0.17 && r.shoulders / tall < 0.27,
+    `the shoulders are ${(r.shoulders / tall * 100).toFixed(0)}% of height `
+    + '(a person is about 23%)');
+});
+
 await test('the page raised no errors while all that happened', async () => {
   assert(errors.length === 0, errors.join(' | '));
 });
