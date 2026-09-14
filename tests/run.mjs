@@ -1755,6 +1755,143 @@ await test('every part of a crawler overlaps the part it hangs from', async () =
     + '(a person is about 23%)');
 });
 
+/* ---- v0.15.0: walls somebody built ------------------------------------- */
+
+await test('a stone block wall is stone, constructed, solid and opaque', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    const t = window.__test.data.tiles.stone_wall;
+    return { tile: t, tagNames: t.tags.map((q) => window.__test.data.tags[q].name) };
+  });
+  assert(r.tile, 'there is no stone_wall tile at all');
+  for (const want of ['stone', 'constructed']) {
+    assert(r.tile.tags.indexOf(want) >= 0, `a wall is not tagged "${want}"`);
+  }
+  /* These two are not decoration. Without them a wall would not fill its metre
+     and firelight would pour straight through the masonry. */
+  assert(r.tile.tags.indexOf('solid') >= 0, 'a wall does not fill its metre');
+  assert(r.tile.tags.indexOf('blocks-sight') >= 0, 'you can see through the wall');
+  assert(r.tile.footing === 'block', `a wall has footing ${r.tile.footing}`);
+  assert(r.tile.pattern === 'masonry', 'the wall carries no masonry pattern');
+});
+
+await test('rooms somebody BUILT are faced with laid stone; holes are not', async () => {
+  const r = await page.evaluate(() => {
+    let faced = 0, rawWalled = 0, wallCells = 0, worked = 0, dug = 0;
+    const missed = [];
+    for (let seed = 1; seed <= 20; seed++) {
+      window.__test.seed(seed);
+      const w = Game.state.world;
+      for (const room of w.rooms) {
+        if (!room.place) continue;
+        const built = room.place.tags.indexOf('worked') >= 0;
+        let laid = 0, raw = 0;
+        for (let y = room.y - 1; y <= room.y + room.h; y++) {
+          for (let x = room.x - 1; x <= room.x + room.w; x++) {
+            const c = w.at(x, y);
+            if (!c || c.room >= 0 || TILE(c.tile).footing !== 'block') continue;
+            let touches = false;
+            for (const [dx, dy] of STEPS) {
+              const n = w.at(x + dx, y + dy);
+              if (n && n.room === room.index) { touches = true; break; }
+            }
+            if (!touches) continue;
+            if (c.tile === 'stone_wall') laid++; else raw++;
+          }
+        }
+        wallCells += laid;
+        if (built) { worked++; if (laid > 0) faced++;
+                     else if (missed.length < 4) missed.push(room.place.title); }
+        else { dug++; if (laid > 0) rawWalled++; }
+      }
+    }
+    return { worked, faced, dug, rawWalled, wallCells, missed };
+  });
+  assert(r.wallCells > 100, `only ${r.wallCells} wall cells in twenty worlds`);
+  assert(r.faced > r.worked * 0.9,
+    `${r.faced} of ${r.worked} built rooms were faced: ${r.missed.join(', ')}`);
+  /* A mine is a hole. Its walls are the rock it was hacked out of. */
+  assert(r.rawWalled === 0,
+    `${r.rawWalled} of ${r.dug} dug-out places were given built walls`);
+});
+
+await test('the stonework is mapped ONTO the wall, not pasted across the screen',
+  async () => {
+    const r = await page.evaluate(() => {
+      const out = [];
+      window.__test.seed(1);
+      const s = Game.state;
+      /* Stand in a built room, or there may be no wall in shot to measure. */
+      const room = s.world.rooms.find((q) => q.place
+        && q.place.tags.indexOf('worked') >= 0);
+      for (let q = 0; q < 4; q++) {
+        s.cam.quarter = q; s.cam.yaw = s.cam.yawTarget = q * Math.PI / 2;
+        if (room) {
+          s.cam.fx = room.x + room.w / 2; s.cam.fy = room.y + room.h / 2;
+          s.cam.fh = room.elev;
+        }
+        camRefresh(s);
+        const m = window.__test.wallFaceMap();
+        if (m) out.push(Object.assign({ turn: q }, m));
+      }
+      return out;
+    });
+    assert(r.length === 4, `only ${r.length} of 4 turns found a wall to measure`);
+    for (const f of r) {
+      /* One tile of texture must be exactly one metre along the wall, and the
+         texture's own down-axis must run exactly down the face. If the pattern
+         were pasted in screen space these would not line up at any turn, and at
+         three of four turns they would be wildly out. */
+      const dbx = Math.hypot(f.mappedB.x - f.b.x, f.mappedB.y - f.b.y);
+      const ddx = Math.hypot(f.mappedD.x - f.d.x, f.mappedD.y - f.d.y);
+      assert(dbx < 0.01,
+        `turn ${f.turn}: a metre of stonework lands ${dbx.toFixed(2)}px from the `
+        + 'far end of the wall it is on');
+      assert(ddx < 0.01,
+        `turn ${f.turn}: the courses run ${ddx.toFixed(2)}px off the face's own drop`);
+    }
+    /* And the map must differ between turns -- if it did not, it would be
+       screen-space after all. */
+    const same = r.every((f) => Math.abs(f.mappedB.x - r[0].mappedB.x) < 0.01
+                             && Math.abs(f.mappedB.y - r[0].mappedB.y) < 0.01);
+    assert(!same, 'the stonework lands identically at every camera turn');
+  });
+
+await test('the masonry actually reaches the screen', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    const s = Game.state;
+    /* Point the camera at a built room so its walls are in shot. */
+    const room = s.world.rooms.find((q) => q.place
+      && q.place.tags.indexOf('worked') >= 0);
+    if (!room) return { found: false };
+    s.cam.fx = room.x + room.w / 2; s.cam.fy = room.y + room.h / 2;
+    s.cam.fh = room.elev; camRefresh(s);
+    const shot = () => {
+      s.geomDirty = true; s.viewDirty = true;
+      Render.build(s); Render.draw(s);
+      return Render.bctx.getImageData(0, 0, Render.w, Render.h).data.slice();
+    };
+    const laid = shot();
+    window.__test.data.tiles.stone_wall.pattern = '';      /* take the stones off */
+    Render.patCache = {};
+    const plain = shot();
+    window.__test.data.tiles.stone_wall.pattern = 'masonry';
+    Render.patCache = {};
+    let differ = 0, lit = 0;
+    for (let i = 0; i < laid.length; i += 4) {
+      if (laid[i] > 18 || laid[i + 1] > 18 || laid[i + 2] > 22) lit++;
+      if (laid[i] !== plain[i] || laid[i + 1] !== plain[i + 1]
+        || laid[i + 2] !== plain[i + 2]) differ++;
+    }
+    return { found: true, differ, lit, room: room.place.title };
+  });
+  assert(r.found, 'no built room to look at');
+  assert(r.differ > 200,
+    `taking the stonework off changed only ${r.differ} pixels, so it was never `
+    + 'on the screen to begin with');
+});
+
 await test('the page raised no errors while all that happened', async () => {
   assert(errors.length === 0, errors.join(' | '));
 });

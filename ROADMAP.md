@@ -76,7 +76,8 @@ Rule 2 says ask and wait. These have been asked and are still open.
 
 ## Parked: smaller things, offered and measured
 
-- **Grain on the rock walls.** The grit reaches 78% of ground and rock pixels,
+- **Grain on the raw rock walls.** (Built walls now carry masonry, which is a
+  different thing; this is about the rock that was only dug through.) The grit reaches 78% of ground and rock pixels,
   95% of a crawler, 95% of anything built. The missing fifth is the vertical rock
   faces, left smooth because they are the most expensive surface to texture.
   Measured cost of adding it: **7.6 ms → 10.7 ms of drawing per frame**. Offered;

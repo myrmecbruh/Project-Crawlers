@@ -472,3 +472,40 @@ function roomWhole(world, r, box) {
   }
   return true;
 }
+
+/* ---- the walls of a built place ----------------------------------------- */
+
+/* Rock that was DUG stays raw rock. Rock that closes in a room somebody made --
+ * a chapel, a cistern, a gaol -- is faced with the blocks they laid, so you can
+ * see at a glance which of these spaces was built and which was only found.
+ *
+ * Run last, after the halls are cut, so a doorway punched through the ring is
+ * left as a doorway rather than being walled up again.
+ */
+function lineRoomWalls(world) {
+  const at = function (x, y) { return world.at(x, y); };
+  const faced = [];
+  for (let i = 0; i < world.rooms.length; i++) {
+    const r = world.rooms[i];
+    /* Only places that were MADE. A mine or a quarry is a hole, not a room, and
+       its walls should stay the rock they were hacked out of. */
+    if (!r.place || r.place.tags.indexOf('worked') < 0) continue;
+    for (let y = r.y - 1; y <= r.y + r.h; y++) {
+      for (let x = r.x - 1; x <= r.x + r.w; x++) {
+        const c = at(x, y);
+        if (!c || c.room >= 0) continue;
+        if (TILE(c.tile).footing !== 'block') continue;   /* a doorway stays open */
+        /* Only the rock actually facing the room: the ring one metre out. */
+        let touches = false;
+        for (let s = 0; s < STEPS.length; s++) {
+          const n = at(x + STEPS[s][0], y + STEPS[s][1]);
+          if (n && n.room === r.index) { touches = true; break; }
+        }
+        if (!touches) continue;
+        c.tile = 'stone_wall';
+        faced.push(c);
+      }
+    }
+  }
+  return faced.length;
+}

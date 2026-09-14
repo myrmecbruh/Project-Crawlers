@@ -20,7 +20,8 @@ SECTIONS = {
     "geometry": ("key", ["value", "unit", "note"], True),
     "names":    ("key", ["text"], False),
     "tags":     ("id",  ["name", "note"], False),
-    "tiles":    ("id",  ["name", "tags", "top", "side", "footing", "cross", "clear", "note"], False),
+    "tiles":    ("id",  ["name", "tags", "top", "side", "pattern", "footing",
+                         "cross", "clear", "note"], False),
     "attributes": ("id", ["name", "abbrev", "note"], False),
     "skills":   ("id",  ["name", "derives", "needs_tag", "without", "note"], False),
     "bones":    ("id",  ["name", "parent", "x", "y", "z", "note"], False),
@@ -71,7 +72,7 @@ def norm(col, v):
             return int(f) if f == int(f) else round(f, 10)
         except (TypeError, ValueError):
             return str(v).strip()
-    if col in ("shape", "floor", "speckle"):
+    if col in ("shape", "floor", "speckle", "pattern"):
         return str(v).strip().lower()
     if col in ("footing", "slot", "item", "bone", "parent", "needs_tag"):
         return str(v).strip().lower()
@@ -143,6 +144,7 @@ def for_game(merged):
             "tags": [t for t in norm("tags", r["tags"]).split(",") if t],
             "top": str(r["top"]).strip(),
             "side": str(r["side"]).strip(),
+            "pattern": norm("pattern", r.get("pattern")),
             "footing": norm("footing", r["footing"]),
             "cross": norm("cross", r["cross"]),
             "clear": norm("clear", r["clear"]),
@@ -266,6 +268,10 @@ def check_vocabulary(game):
             if tag not in known:
                 errors.append("tiles: '%s' claims the tag '%s', which is not in "
                               "the tags sheet" % (tid, tag))
+        if t.get("pattern") and t["pattern"] not in ("masonry",):
+            errors.append("tiles: '%s' asks for the pattern '%s'; the renderer "
+                          "only knows 'masonry' (blank means plain)"
+                          % (tid, t["pattern"]))
         if t["footing"] not in ("walk", "ramp", "block"):
             errors.append("tiles: '%s' has footing '%s'; expected walk, ramp or "
                           "block" % (tid, t["footing"]))

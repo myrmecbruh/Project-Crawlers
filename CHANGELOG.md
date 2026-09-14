@@ -7,6 +7,55 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.15.0 — walls somebody built
+
+A new tile, **Stone Block Wall**, tagged `stone` and `constructed` as they asked.
+Two more tags come with it and are not decoration: `solid`, so it fills its
+metre, and `blocks-sight`, without which firelight would pour straight through
+the masonry.
+
+**The stonework is generated, not painted.** Irregular blocks, big ones packed
+among small, laid in courses that stagger, with the joints showing dark — built
+to match the photo they sent. It tiles seamlessly by construction: course
+heights are chosen to sum exactly to the tile height and each course's stones to
+sum exactly to its width, so there is no seam to find. Every stone takes its own
+shade, and roughly one in five spans two courses at once, which is most of what
+stops it reading as brickwork. Seven knobs shape it, so it can be pushed from
+neat ashlar to rough rubble without touching code.
+
+The first version walked its randomness twice — once to shade the stones, once
+to place the joints — and the two walks drifted apart, so the joints did not land
+on the stones. It now builds the wall as a model and draws from that, which
+cannot disagree with itself.
+
+**The texture is MAPPED ONTO THE WALL, not pasted across the screen.** This was
+their correction and it was the right one. The grain gets away with being pinned
+to the world in screen space because it is isotropic noise — turn it and nothing
+looks wrong. Masonry is directional: pasted flat it sheared with the isometric
+projection and slid across the wall as the camera moved. Each face is now given
+its own affine map, one tile of texture to one metre of wall, built from the
+face's own corners. Under an isometric projection a planar quad's map is exactly
+affine, so no perspective term is needed and none is missing. The courses run
+along the wall, the stones sit on its surface, and the whole thing turns with the
+geometry.
+
+A test states that precisely rather than describing it: it takes the transform
+the renderer actually used, applies it to the texture's own corners, and fails
+unless one tile of stonework lands within a hundredth of a pixel of the far end
+of the wall it is on — at all four camera turns, and differently at each, since
+identical results at every turn would mean it was screen-space after all.
+
+**Where the walls appear:** rock that closes in a room somebody MADE — a chapel,
+a cistern, a gaol — is faced with the blocks they laid. Rock that was merely dug
+through stays raw rock, so a mine and a quarry keep the stone they were hacked
+out of. Done last in generation, after the halls are cut, so a doorway punched
+through the ring is left as a doorway rather than walled up again.
+
+**It costs almost nothing**: 7.6 ms → 8.0 ms of drawing. Graining *every* rock
+wall was measured at 10.7 ms and rejected for that reason; this is cheap because
+only about a hundred cells in a world are built walls, and only the ones in shot
+are drawn.
+
 ## v0.14.0 — the crawlers are one person, not a pile of parts
 
 They asked for better human models. What the measurement found was worse than

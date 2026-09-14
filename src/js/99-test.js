@@ -205,6 +205,35 @@ window.__test = {
   },
   rolls() { return Game.state.rolls; },
 
+  /* Find a built wall on screen and report BOTH its face in the world and the
+     transform the renderer used to lay stonework on it, so a test can say the
+     texture is mapped onto the model rather than pasted across the screen. */
+  wallFaceMap() {
+    const s = Game.state;
+    s.geomDirty = true; s.viewDirty = true;
+    Render.build(s);
+    const it = Render.batch.find(function (z) {
+      return z.kind === 'cell' && z.solid && z.wallM > 0
+          && TILE(z.cell.tile).pattern === 'masonry';
+    });
+    if (!it) return null;
+    Render.draw(s);
+    const def = TILE(it.cell.tile);
+    const pat = Render.masonryPattern(litShade(def.side, CFG.shadeLeft, it.light));
+    Render.faceFill(pat, it.left[0], it.left[1], it.left[3], 1, it.wallM);
+    const px = Render.masonry.width;
+    /* Where the texture's own corners land once the map is applied. */
+    const m = pat._lastMatrix;
+    const put = function (tx, ty) {
+      return { x: m[0] * tx + m[2] * ty + m[4], y: m[1] * tx + m[3] * ty + m[5] };
+    };
+    return { tile: it.cell.tile, wallM: it.wallM, masonryPx: px,
+             a: { x: it.left[0].x, y: it.left[0].y },
+             b: { x: it.left[1].x, y: it.left[1].y },
+             d: { x: it.left[3].x, y: it.left[3].y },
+             mappedB: put(px, 0), mappedD: put(0, px * it.wallM) };
+  },
+
   /* ---- the figure, measured rather than admired ------------------------- */
 
   /* Draw ONE crawler alone and count how many pixels of them land on each row

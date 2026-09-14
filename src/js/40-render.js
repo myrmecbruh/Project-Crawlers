@@ -37,6 +37,7 @@ const Render = {
   ensure() {
     if (!this.buf) this.resize(CFG.maxBufW, CFG.maxBufH);
     if (!this.grainCoarse) this.makeGrain();
+    if (!this.masonry) this.makeMasonry();
   },
 
   /* ---- the grain ---------------------------------------------------------
@@ -97,6 +98,137 @@ const Render = {
     this.grainOn = CFG.texStrength > 0;
   },
 
+  /* ---- masonry -----------------------------------------------------------
+   * A wall somebody BUILT, as opposed to rock somebody dug through: irregular
+   * blocks, big ones packed among small ones, with the joints between them
+   * showing dark.
+   *
+   * Like the grain it is an OVERLAY -- dark lines along the joints and a small
+   * shade delta per stone -- so it works over any colour at any light level and
+   * goes through the same cached-pattern path. It is generated, not painted,
+   * and seeded, so the same wall comes back every time.
+   *
+   * It TILES: course heights are chosen to sum exactly to the tile height and
+   * each course's stones to sum exactly to its width, so there is no seam to
+   * find. A wall is a metre of pattern repeated, and a metre is 32 pixels.
+   */
+  makeMasonry() {
+    const px = Math.max(8, Math.round(CFG.masonryPx));
+    const rand = makeRand(CFG.texSeed + 4099);
+    const pick = (lo, hi) => lo + Math.floor(rand() * (hi - lo + 1));
+
+    /* Build the wall as a MODEL first, then draw it. The first version walked
+       the randomness twice -- once to shade the stones, once to place the
+       joints -- and the two walks drifted apart, so the joints did not land on
+       the stones. One model, drawn once, cannot disagree with itself. */
+    const courses = [];
+    let left = px;
+    while (left > 0) {
+      let h = pick(CFG.masonryCourseMin, CFG.masonryCourseMax);
+      if (left - h < CFG.masonryCourseMin) h = left;   /* swallow the remainder */
+      courses.push({ h: h, y: px - left, stones: [] });
+      left -= h;
+    }
+    for (let r = 0; r < courses.length; r++) {
+      const co = courses[r];
+      let x = -pick(0, px - 1);          /* a random start, so joints stagger */
+      let w = px;
+      while (w > 0) {
+        let sw = pick(CFG.masonryStoneMin, CFG.masonryStoneMax);
+        if (w - sw < CFG.masonryStoneMin) sw = w;
+        co.stones.push({ x: x, w: sw, shade: (rand() - 0.5) * 2, tall: false });
+        x += sw; w -= sw;
+      }
+    }
+
+    /* Real rubble is not courses of equal blocks: every so often a big stone
+       takes up two courses at once, and that is most of what stops this reading
+       as brickwork. A tall stone SWALLOWS the ground it stands over -- the
+       stones of the course below, their head joints and the bed joint between
+       -- or the course below simply paints back over it and leaves stray marks
+       down the middle of the big block. */
+    for (const co of courses) co.covered = new Uint8Array(px);
+    for (let r = 0; r + 1 < courses.length; r++) {
+      for (const st of courses[r].stones) {
+        if (rand() > 0.22) continue;
+        st.tall = true;
+        st.h = courses[r].h + courses[r + 1].h;
+        const below = courses[r + 1].covered;
+        for (let x = st.x; x < st.x + st.w; x++) below[((x % px) + px) % px] = 1;
+      }
+    }
+    const buried = (co, st) => co.covered[((Math.floor(st.x + st.w / 2) % px) + px) % px];
+
+    const c = document.createElement('canvas');
+    c.width = px; c.height = px;
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, px, px);
+
+    /* Each stone takes its own shade, drawn three times a tile apart so a stone
+       crossing the seam is the same stone on both sides of it. */
+    for (const co of courses) {
+      for (const st of co.stones) {
+        if (buried(co, st)) continue;
+        const v = st.shade * CFG.masonryVariation;
+        const dark = v < 0;
+        const h = (st.tall ? st.h : co.h) - 1;
+        g.fillStyle = 'rgba(' + (dark ? '18,15,12' : '255,250,238')
+                    + ',' + Math.abs(v).toFixed(3) + ')';
+        for (let k = -1; k <= 1; k++) {
+          g.fillRect(st.x + 1 + k * px, co.y + 1, st.w - 1, h);
+        }
+      }
+    }
+
+    /* Then the joints, straight off the same model. A bed joint is drawn in
+       segments so it can be left out under a stone that spans two courses. */
+    g.fillStyle = 'rgba(14,11,9,' + Math.min(1, CFG.masonryMortar).toFixed(3) + ')';
+    for (let r = 0; r < courses.length; r++) {
+      const co = courses[r];
+      for (const st of co.stones) {
+        if (buried(co, st)) continue;
+        for (let k = -1; k <= 1; k++) {
+          g.fillRect(st.x + k * px, co.y, 1, st.tall ? st.h : co.h);  /* head joint */
+        }
+      }
+      /* The bed joint along the top of this course, broken wherever a stone
+         from the course above reaches down through it. */
+      for (let x = 0; x < px; x++) {
+        if (!co.covered[x]) g.fillRect(x, co.y, 1, 1);
+      }
+    }
+
+    this.masonry = c;
+    this.patCache = {};
+  },
+
+  /* A surface colour with the masonry and the grain baked into it, cached the
+     same way and by the same rules. */
+  masonryPattern(colour) {
+    const key = 'm|' + colour;
+    let pat = this.patCache[key];
+    if (pat) return pat;
+    const px = this.masonry.width;
+    const c = document.createElement('canvas');
+    c.width = px; c.height = px;
+    const g = c.getContext('2d');
+    g.fillStyle = colour;
+    g.fillRect(0, 0, px, px);
+    g.drawImage(this.masonry, 0, 0);
+    /* the stones keep their grit: the coarse tile is 16px into a 32px wall */
+    if (this.grainOn) {
+      for (let oy = 0; oy < px; oy += this.grainCoarse.height) {
+        for (let ox = 0; ox < px; ox += this.grainCoarse.width) {
+          g.drawImage(this.grainCoarse, ox, oy);
+        }
+      }
+    }
+    pat = this.bctx.createPattern(c, 'repeat');
+    pat._pinned = '';
+    this.patCache[key] = pat;
+    return pat;
+  },
+
   /* A surface colour with the grain already baked into it, cached.
    *
    * Filling every face twice -- once for colour, once for grain -- cost eight
@@ -119,6 +251,31 @@ const Render = {
     pat = this.bctx.createPattern(c, 'repeat');
     pat._pinned = '';
     this.patCache[key] = pat;
+    return pat;
+  },
+
+  /* Map a repeating pattern onto ONE FACE, in that face's own space, rather
+     than pasting it flat across the screen.
+     
+     `a` is the face's top corner, `b` the far end of its top edge (wM metres
+     along), `d` the corner straight down from `a` (hM metres). Both edges are
+     straight lines under an isometric projection and the face is a
+     parallelogram, so the map from texture space to the screen is exactly
+     affine -- no perspective term is needed and none is missing.
+     
+     One metre of wall is one tile of texture, so the courses run along the
+     wall, the stones sit on its surface, and the whole thing turns with the
+     wall when the view swings. Pasted in screen space it sheared instead, and
+     the stonework slid across the wall as the camera moved. */
+  faceFill(pat, a, b, d, wM, hM) {
+    if (!pat || !pat.setTransform) return pat;
+    const px = this.masonry.width;
+    const su = wM * px, sv = hM * px;
+    const m = [(b.x - a.x) / su, (b.y - a.y) / su,
+               (d.x - a.x) / sv, (d.y - a.y) / sv, a.x, a.y];
+    pat.setTransform(new DOMMatrix(m));
+    pat._lastMatrix = m;       /* kept so a test can check where it landed */
+    pat._pinned = '';          /* per face now: never reuse a stale transform */
     return pat;
   },
 
@@ -325,6 +482,7 @@ const Render = {
         left: [top[near], top[left], bases[left], bases[near]],
         right: [top[near], top[right], bases[right], bases[near]],
         solid: cell.h > 0,
+        wallM: cell.h,              /* how far the faces drop, in metres */
         cutaway: cell.cutaway === true,
         minX: box[0], minY: box[1], maxX: box[2], maxY: box[3],
         cx: (top[0].x + top[2].x) / 2, cy: (top[0].y + top[2].y) / 2
@@ -557,13 +715,28 @@ const Render = {
          anything that stands on it. The two side walls of a block are in shadow
          and edge-on; grain there costs a third of the frame and reads as almost
          nothing, so they stay flat. */
+      const laid = def.pattern === 'masonry' && it.wallM > 0;
       if (it.solid) {
-        this.poly(ctx, it.left, litShade(def.side, CFG.shadeLeft * lift, it.light));
-        this.poly(ctx, it.right, litShade(def.side, CFG.shadeRight * lift, it.light));
+        /* Raw rock keeps its flat sides -- grain there costs a third of the
+           frame and reads as almost nothing. A wall somebody BUILT is the
+           exception: its whole point is that you can see it was laid by hand,
+           so a tile carrying a pattern pays for its faces, and the stonework is
+           mapped ONTO each face rather than pasted over it. */
+        const lf = litShade(def.side, CFG.shadeLeft * lift, it.light);
+        const rf = litShade(def.side, CFG.shadeRight * lift, it.light);
+        this.poly(ctx, it.left, laid
+          ? this.faceFill(this.masonryPattern(lf),
+                          it.left[0], it.left[1], it.left[3], 1, it.wallM)
+          : lf);
+        this.poly(ctx, it.right, laid
+          ? this.faceFill(this.masonryPattern(rf),
+                          it.right[0], it.right[1], it.right[3], 1, it.wallM)
+          : rf);
       }
-      this.poly(ctx, it.top,
-        this.surface(litShade(def.top, lift, it.light), false,
-                     -s.cam.ox, -s.cam.oy, worldStamp));
+      const tf = litShade(def.top, lift, it.light);
+      this.poly(ctx, it.top, laid
+        ? this.faceFill(this.masonryPattern(tf), it.top[0], it.top[1], it.top[3], 1, 1)
+        : this.surface(tf, false, -s.cam.ox, -s.cam.oy, worldStamp));
 
       kinds[it.cell.tile] = (kinds[it.cell.tile] || 0) + 1;
       drawn++;

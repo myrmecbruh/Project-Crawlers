@@ -508,6 +508,30 @@ back every time.
   their own floors -- it was 80 before the `words` tab existed).
 - The grain is **pinned**: the world's to the world, a crawler's to the crawler,
   so it does not swim as things move.
+### Masonry, and mapping a texture onto the model
+
+A tile may name a `pattern` in the `tiles` tab; blank means plain, and the build
+refuses any pattern the renderer does not know. `masonry` is the first one, worn
+by **Stone Block Wall** (`stone`, `constructed`, `solid`, `blocks-sight`).
+
+- **A directional texture must be MAPPED ONTO THE FACE, never pinned to the
+  screen.** The grain gets away with screen-space pinning because it is isotropic
+  noise. Masonry is not: pasted flat it sheared with the projection and slid
+  across the wall as the camera moved. `faceFill()` gives each face its own
+  affine map -- one tile of texture to one metre of wall -- built from that
+  face's own corners. A planar quad under an isometric projection maps exactly
+  affinely, so there is no perspective term to miss.
+- **Generate from a model, then draw it.** The first masonry walked its
+  randomness twice, once for the stone shades and once for the joints, and the
+  two walks drifted apart so the joints missed the stones.
+- It tiles by construction: courses sum to the tile height, stones to its width.
+  About one stone in five spans two courses and SWALLOWS what is under it --
+  stones, head joints and bed joint -- or the course below paints back over it.
+- Only rock facing a room somebody MADE is faced (`worked` in the room's tags);
+  a mine or a quarry keeps the rock it was hacked out of. Done after the halls
+  are cut, so doorways stay doorways.
+- Cost: 7.6 ms -> 8.0 ms of drawing, because only ~100 cells a world are walls.
+
 - **Side walls of blocks are left flat.** The ground is what you look at. Measured
   on v0.14.0 by switching the grain off and diffing the picture: grain reaches
   **78% of ground and rock pixels, 95% of a crawler's and 95% of a structure's**
@@ -634,7 +658,9 @@ ruler is worse than no ruler.
 
 `docs/crawlers.xlsx` holds every number and every piece of wording, across fourteen
 tabs: `knobs`, `geometry` (read only), `names`, `tags`, `tiles`, `attributes`,
-`skills`, `figure`, `structures`, `bones`, `slots`, `gear`, `speeds`, `words`. `src/defaults.json` carries the same values so a fresh
+`skills`, `figure`, `structures`, `bones`, `slots`, `gear`, `speeds`, `words`.
+The `tiles` tab carries a `pattern` column: blank for plain, `masonry` for laid
+stone. `src/defaults.json` carries the same values so a fresh
 checkout still builds. The build reconciles the two and inlines the result.
 
 1. **Change a number in the sheet, not in the code.** If the code default must

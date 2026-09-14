@@ -400,6 +400,41 @@
    "value": 45,
    "unit": "ticks",
    "note": "How long a crawler spends looking at a room between attempts to read it."
+  },
+  "texture.masonry_px": {
+   "value": 32,
+   "unit": "pixels",
+   "note": "The size of the repeating masonry tile. At 32 pixels to the metre, 32 means the pattern repeats every square metre of wall."
+  },
+  "texture.masonry_mortar": {
+   "value": 0.38,
+   "unit": "0 to 1",
+   "note": "How dark the joints between the stones are. 0 loses the joints and the wall goes smooth; 1 is a wall of black lines."
+  },
+  "texture.masonry_variation": {
+   "value": 0.3,
+   "unit": "0 to 1",
+   "note": "How much one stone differs in shade from the next. 0 is a wall of identical blocks; high values look like patchwork."
+  },
+  "texture.masonry_course_min": {
+   "value": 3,
+   "unit": "pixels",
+   "note": "The shortest a course of stones may be, about 9cm."
+  },
+  "texture.masonry_course_max": {
+   "value": 7,
+   "unit": "pixels",
+   "note": "The tallest a course of stones may be, about 22cm. Widen the gap between this and the minimum for rubble; narrow it for neat ashlar courses."
+  },
+  "texture.masonry_stone_min": {
+   "value": 3,
+   "unit": "pixels",
+   "note": "The narrowest a single stone may be."
+  },
+  "texture.masonry_stone_max": {
+   "value": 11,
+   "unit": "pixels",
+   "note": "The widest a single stone may be. Big blocks packed among small ones is what makes it read as hand-laid rather than as brick."
   }
  },
  "geometry": {
@@ -772,6 +807,10 @@
   "room": {
    "name": "room",
    "note": "A place in the labyrinth large enough to have been something."
+  },
+  "constructed": {
+   "name": "constructed",
+   "note": "Built by hand out of separate pieces -- laid, fitted and mortared, rather than cut out of the living rock."
   }
  },
  "tiles": {
@@ -780,6 +819,7 @@
    "tags": "floor,stone,dry",
    "top": "#6e7278",
    "side": "#585c61",
+   "pattern": "",
    "footing": "walk",
    "cross": 7,
    "clear": 11,
@@ -790,6 +830,7 @@
    "tags": "floor,earth,dry",
    "top": "#7d6c54",
    "side": "#63553f",
+   "pattern": "",
    "footing": "walk",
    "cross": 8,
    "clear": 12,
@@ -800,6 +841,7 @@
    "tags": "floor,stone,damp,organic",
    "top": "#5f7557",
    "side": "#4a5c45",
+   "pattern": "",
    "footing": "walk",
    "cross": 10,
    "clear": 14,
@@ -810,6 +852,7 @@
    "tags": "floor,water,damp",
    "top": "#3f6b7d",
    "side": "#335667",
+   "pattern": "",
    "footing": "walk",
    "cross": 13,
    "clear": 18,
@@ -820,6 +863,7 @@
    "tags": "floor,stone,unstable,dry",
    "top": "#6d6860",
    "side": "#57534c",
+   "pattern": "",
    "footing": "walk",
    "cross": 14,
    "clear": 17,
@@ -830,6 +874,7 @@
    "tags": "floor,organic,grim,dry",
    "top": "#8d8672",
    "side": "#6f6959",
+   "pattern": "",
    "footing": "walk",
    "cross": 9,
    "clear": 13,
@@ -840,6 +885,7 @@
    "tags": "ramp,stone,dry",
    "top": "#73777d",
    "side": "#5b5f64",
+   "pattern": "",
    "footing": "ramp",
    "cross": 11,
    "clear": 15,
@@ -850,10 +896,22 @@
    "tags": "solid,stone,blocks-sight",
    "top": "#5a5d62",
    "side": "#46494d",
+   "pattern": "",
    "footing": "block",
    "cross": 99,
    "clear": 99,
    "note": "A full cubic metre of rock."
+  },
+  "stone_wall": {
+   "name": "Stone Block Wall",
+   "tags": "stone,constructed,solid,blocks-sight",
+   "top": "#b9b2a1",
+   "side": "#a79e8c",
+   "pattern": "masonry",
+   "footing": "block",
+   "cross": 99,
+   "clear": 99,
+   "note": "Rough limestone blocks laid and fitted by somebody's hands, big ones and small ones packed together. Somebody built this."
   }
  },
  "attributes": {

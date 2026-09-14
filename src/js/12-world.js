@@ -251,6 +251,10 @@ function generateChunk(seed) {
     for (const r of kept) rooms.push(r);
   }
 
+  /* Last of all, once the halls are cut and the doorways with them, face the
+     rock around every room somebody BUILT with the blocks they built it from. */
+  lineRoomWalls(world);
+
   return world;
 }
 
