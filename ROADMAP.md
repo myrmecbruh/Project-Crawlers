@@ -11,7 +11,8 @@ When something here gets built, it moves out of this file and into `CLAUDE.md`
 
 ## Where the game actually is, measured
 
-Taken from a real match on v0.14.0, not from memory:
+Taken from a real match on v0.14.0, not from memory, with what has changed since
+noted against each line:
 
 - **Four of the fifteen skills are used by anything.** Clambering (walking),
   Labouring (clearing ground), Building (raising a camp), Studying (reading a
@@ -19,8 +20,23 @@ Taken from a real match on v0.14.0, not from memory:
   Wrangling, Fighting, Ranging, Performing, Crafting, Tinkering, Tending,
   Foraging, Enduring, Bargaining, Leading.
 - **There are no creatures at all.** Rule 6 is entirely unbuilt.
-- **The labyrinth is one fixed patch**, 56×56 metres, nine rooms. You can walk to
-  the edge of the world.
+- **The labyrinth used to be one fixed patch**, 56×56 metres, nine rooms, with a
+  rock wall at the edge of the world. **As of v0.20.0 the world underneath goes
+  on in every direction**: it is built from pieces, a piece is worked out from the
+  match seed and its address alone, and neighbours are joined by doorways, so
+  there is no edge to find. **What is not built yet is the part that fetches
+  pieces as the crawlers walk to them** — a match still starts by making the one
+  piece the camp is in, and until the windowed builder lands the picture would
+  visit every piece a match had made. Those are todos 4 and 5 of the job.
+- **Seven ramps in a piece lean at a wall instead of at ground a metre higher.**
+  Found in v0.20.0 while checking the doorways' ramps: seed 2 at (18,28) and
+  (18,30), seed 3 at (42,9), seed 7 at (47,4), seed 8 at (30,29) and (31,29), seed
+  777 at (37,25). They are older than the doorways — identical squares appear with
+  the doorways switched off, in both the old and the new build — so the room and
+  hall shaping is the source. Cosmetic, and left alone because fixing them moves
+  room shapes, which would break the "same seed, same labyrinth" promise v0.20.0
+  proves. The suite cannot see them: its ramp test only ever checks seed 1. Fixing
+  them and widening that test belong together, in their own job.
 - **Nobody arrives or leaves.** Six crawlers spawn and that is the population.
 - **Crawlers need nothing.** No hunger, no sleep, no warmth, no mood. The fire is
   decoration; the bedrolls are scenery.
@@ -30,27 +46,22 @@ Taken from a real match on v0.14.0, not from memory:
 ## Parked: what to build next
 
 Offered as four options in September 2026. **They chose "the labyrinth goes on
-forever", then asked for it to be saved for later in the roadmap rather than
-built now.** So it is the front-runner, not the current job.
+forever"**; it was built in v0.20.0 (see `CHANGELOG.md` for the reasoning and
+`CLAUDE.md` for how it now works), and the three below are what is left of that
+offer.
 
-### 1. The labyrinth goes on forever  ← their pick, deferred
-It branches and extends as the crawlers explore, so there is always somewhere
-further in. Gives Ranging and Mapmaking a job and turns the game into an
-expedition. Caveat raised at the time: without needs or creatures, walking
-further is not yet dangerous, so this may want one of the others underneath it.
-
-### 2. Hunger, tiredness, warmth
+### 1. Hunger, tiredness, warmth
 Crawlers start needing things. The fire stops being decoration and becomes the
 reason they survive the night; someone has to forage, cook and tend the sick.
 Puts five or six dead skills to work at once and makes failure cost something
 other than time.
 
-### 3. Things that live down there
+### 2. Things that live down there
 Creatures, generated from tags rather than hand-authored (rule 6). Brings danger,
 makes carrying a light a real decision, gives Fighting and Wrangling a job. But
 it is the combat fifth of the game, and rule 3 caps that at 20%.
 
-### 4. Hands and work — crafting, cooking, repair
+### 3. Hands and work — crafting, cooking, repair
 Gather materials, cook a meal, sew a coat, mend a broken spade. Puts Crafting,
 Foraging and Tinkering to work and makes gear something you maintain. Depends on
 the gear-wears-out question below.

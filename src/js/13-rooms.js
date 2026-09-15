@@ -279,22 +279,21 @@ function shapeRoom(world, r, rand, place) {
    round a ledge to get up rather than stepping up anywhere. */
 function rampRoom(world, r, box, rand) {
   const at = function (x, y) { return world.at(x, y); };
-  const key = function (x, y) { return y * world.n + x; };
 
   /* Label the shelves: each connected run of equal-height floor is one region.
      Ramps are then placed per PAIR of touching regions, which is the only way
      to be sure every shelf can be reached -- grouping by row put a ramp in
      every row and turned each ledge into an open slope. */
-  const region = {};
+  const region = new Map();        /* square -> which shelf it belongs to */
   let next = 0;
   for (let y = box.y0; y <= box.y1; y++) {
     for (let x = box.x0; x <= box.x1; x++) {
       const c = at(x, y);
-      if (!c || region[key(x, y)] !== undefined) continue;
+      if (!c || region.has(c)) continue;
       if (TILE(c.tile).footing === 'block') continue;
       const id = next++;
       const queue = [c];
-      region[key(x, y)] = id;
+      region.set(c, id);
       let head = 0;
       while (head < queue.length) {
         const q = queue[head++];
@@ -302,9 +301,9 @@ function rampRoom(world, r, box, rand) {
           const nx = q.x + STEPS[s][0], ny = q.y + STEPS[s][1];
           if (nx < box.x0 || nx > box.x1 || ny < box.y0 || ny > box.y1) continue;
           const nb = at(nx, ny);
-          if (!nb || nb.h !== c.h || region[key(nx, ny)] !== undefined) continue;
+          if (!nb || nb.h !== c.h || region.has(nb)) continue;
           if (TILE(nb.tile).footing === 'block') continue;
-          region[key(nx, ny)] = id;
+          region.set(nb, id);
           queue.push(nb);
         }
       }
@@ -323,15 +322,14 @@ function rampRoom(world, r, box, rand) {
         const dx = STEPS[s][0], dy = STEPS[s][1];
         const nb = at(x + dx, y + dy);
         if (!nb || nb.h !== c.h + 1 || TILE(nb.tile).footing === 'block') continue;
-        const hi = region[key(x + dx, y + dy)];
-        const id = (region[key(x, y)] === undefined ? 'edge' : region[key(x, y)])
-                 + '>' + (hi === undefined ? 'edge' : hi);
+        const hi = region.has(nb) ? region.get(nb) : 'edge';
+        const id = (region.has(c) ? region.get(c) : 'edge') + '>' + hi;
         (pairs[id] || (pairs[id] = [])).push([x, y, dx, dy]);
       }
     }
   }
 
-  const taken = {};
+  const taken = new Set();         /* squares that are already a way up */
   const ids = Object.keys(pairs);
   for (let k = 0; k < ids.length; k++) {
     const list = pairs[ids[k]];
@@ -341,12 +339,11 @@ function rampRoom(world, r, box, rand) {
       /* Spread the ways up along the boundary rather than bunching them. */
       const pick = list[Math.floor((made + 0.5) * list.length / want)] || list[w];
       const x = pick[0], y = pick[1];
-      if (taken[key(x, y)]) continue;
       const c = at(x, y);
-      if (!c || c.slope) continue;
+      if (!c || c.slope || taken.has(c)) continue;
       c.slope = slopeFor(pick[2], pick[3]);
       c.tile = 'stone_ramp';
-      taken[key(x, y)] = 1;
+      taken.add(c);
       made++;
     }
     /* If the spread picks all landed on cells already used as ramps for another
@@ -355,12 +352,11 @@ function rampRoom(world, r, box, rand) {
     if (!made) {
       for (let w = 0; w < list.length; w++) {
         const x = list[w][0], y = list[w][1];
-        if (taken[key(x, y)]) continue;
         const c = at(x, y);
-        if (!c || c.slope) continue;
+        if (!c || c.slope || taken.has(c)) continue;
         c.slope = slopeFor(list[w][2], list[w][3]);
         c.tile = 'stone_ramp';
-        taken[key(x, y)] = 1;
+        taken.add(c);
         break;
       }
     }
@@ -446,9 +442,8 @@ function roomWhole(world, r, box) {
   }
   if (!start) return false;
 
-  const seen = {};
+  const seen = new Set([start]);
   const queue = [start];
-  seen[start.y * world.n + start.x] = 1;
   let head = 0;
   while (head < queue.length) {
     const c = queue[head++];
@@ -456,10 +451,9 @@ function roomWhole(world, r, box) {
       const dx = STEPS[s][0], dy = STEPS[s][1];
       const n = at(c.x + dx, c.y + dy);
       if (!n || n.room !== r.index) continue;
-      const key = n.y * world.n + n.x;
-      if (seen[key]) continue;
+      if (seen.has(n)) continue;
       if (!canStep(c, n, dx, dy)) continue;
-      seen[key] = 1;
+      seen.add(n);
       queue.push(n);
     }
   }
@@ -467,7 +461,7 @@ function roomWhole(world, r, box) {
     for (let x = r.x; x < r.x + r.w; x++) {
       const c = at(x, y);
       if (!c || TILE(c.tile).footing === 'block') continue;
-      if (!seen[y * world.n + x]) return false;
+      if (!seen.has(c)) return false;
     }
   }
   return true;

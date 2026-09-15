@@ -63,14 +63,12 @@ function campPlan(world, room) {
    "Reachable" is not an assumption anywhere in this game -- it is measured. */
 function chooseCampRoom(world, actors) {
   const fields = actors.map(function (a) { return reachableFrom(world, a.x, a.y); });
-  const n = world.n;
   let best = null;
   for (const room of world.rooms) {
-    const cx = room.x + (room.w >> 1), cy = room.y + (room.h >> 1);
-    const i = cy * n + cx;
-    if (TILE(world.cells[i].tile).footing === 'block') continue;
+    const mid = world.at(room.cx, room.cy);
+    if (!mid || TILE(mid.tile).footing === 'block') continue;
     let everyone = true;
-    for (const f of fields) if (f[i] < 0) { everyone = false; break; }
+    for (const f of fields) if (f.at(mid) < 0) { everyone = false; break; }
     if (!everyone) continue;
     if (!best || room.area > best.area) best = room;
   }
@@ -104,12 +102,12 @@ function campSummary(camp) {
 function claimSite(state, actor) {
   const camp = state.camp;
   if (!camp) return -1;
-  const n = state.world.n;
+  const here = state.world.at(actor.x, actor.y);
   let best = -1, bestD = Infinity;
   for (const s of camp.sites) {
     if (s.built) continue;
     if (s.workers >= 2 && s.index !== actor.site) continue;
-    const d = s.field[actor.y * n + actor.x];
+    const d = s.field.at(here);
     if (d < 0 || d >= bestD) continue;
     bestD = d; best = s.index;
   }

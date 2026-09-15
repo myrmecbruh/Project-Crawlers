@@ -156,6 +156,21 @@
       "unit": "m",
       "note": "How far the solid rock rises above the floor beside it. This is what makes a wall a wall. Tall rock hides more of what is behind it, so this and the cutaway settings work against each other."
     },
+    "world.join_min": {
+      "value": 1,
+      "unit": "doorways",
+      "note": "The fewest ways out of a piece into the piece next door. One is the smallest number that keeps the promise that you can always walk onward, so this dial must never be set below 1."
+    },
+    "world.join_max": {
+      "value": 3,
+      "unit": "doorways",
+      "note": "The most ways out of a piece into the piece next door. Every doorway is dug from the edge of the piece to one of its rooms, so more doorways means more corridors, more ways round, and fewer rooms left sealed off."
+    },
+    "world.join_margin": {
+      "value": 3,
+      "unit": "tiles",
+      "note": "How far a doorway keeps from the corner of a piece. Doorways from all four neighbouring pieces crowd into a corner, so this is what stops the four corners of the world meeting in one heap."
+    },
     "camp.bedrolls": {
       "value": 4,
       "unit": "beds",

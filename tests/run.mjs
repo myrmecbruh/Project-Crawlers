@@ -1780,7 +1780,8 @@ await test('a place keeps its name secret until a crawler reads it', async () =>
       const s = Game.state;
       if (!s.camp || !s.camp.room.place) continue;
       const room = s.camp.room;
-      const idx = room.y * s.world.n + room.x;   /* a square of that room */
+      /* A square of that room, named the way the tooltip names squares. */
+      const idx = s.world.cells.indexOf(s.world.at(room.x, room.y));
       const before = Tooltip.describe(s, idx);
       const studyBefore = s.actors.reduce((n, a) => n + (a.skills.studying || 0), 0);
 

@@ -107,14 +107,14 @@ window.__test = {
   },
   lightAt(x, y) {
     const s = Game.state;
-    return lightAt(s, y * s.world.n + x);
+    return lightAt(s, s.world.at(x, y));
   },
   lightSources() { return lightSourcesIn(Game.state); },
   litCells() {
     const s = Game.state;
     let lit = 0, dark = 0;
-    for (let i = 0; i < s.world.cells.length; i++) {
-      if (lightAt(s, i) > 0.15) lit++; else dark++;
+    for (const cell of s.world.cells) {
+      if (lightAt(s, cell) > 0.15) lit++; else dark++;
     }
     return { lit: lit, dark: dark, total: s.world.cells.length };
   },
@@ -127,13 +127,13 @@ window.__test = {
   },
   /* Can every room be walked to from this one? Measured, never assumed. */
   connectivity() {
-    const w = Game.state.world, n = w.n;
+    const w = Game.state.world;
     const start = w.rooms[0];
     const field = reachableFrom(w, start.x + (start.w >> 1), start.y + (start.h >> 1));
     const out = [];
     for (const r of w.rooms) {
-      const i = (r.y + (r.h >> 1)) * n + (r.x + (r.w >> 1));
-      out.push({ room: r.index, elev: r.elev, steps: field[i] });
+      const mid = w.at(r.x + (r.w >> 1), r.y + (r.h >> 1));
+      out.push({ room: r.index, elev: r.elev, steps: field.at(mid) });
     }
     return out;
   },
@@ -628,9 +628,9 @@ window.__test = {
     return { seed: w.seed, n: w.n, cells: w.cells.length };
   },
   cell(x, y) {
-    const c = Game.state.world.at(x, y);
+    const w = Game.state.world, c = w.at(x, y);
     return c ? { x: c.x, y: c.y, h: c.h, tile: c.tile, slope: c.slope,
-                 footing: TILE(c.tile).footing, index: c.y * Game.state.world.n + c.x } : null;
+                 footing: TILE(c.tile).footing, index: w.cells.indexOf(c) } : null;
   },
   project(x, y, h) { return Render.project(Game.state, x, y, h); },
   describe(i) { return Inspector.describe(Game.state, i); },
@@ -815,7 +815,8 @@ window.__test = {
       const field = reachableFrom(a.world, start.x + (start.w >> 1), start.y + (start.h >> 1));
       let unreached = 0;
       for (const r of a.world.rooms) {
-        if (field[(r.y + (r.h >> 1)) * a.world.n + (r.x + (r.w >> 1))] < 0) unreached++;
+        const mid = a.world.at(r.x + (r.w >> 1), r.y + (r.h >> 1));
+        if (field.at(mid) < 0) unreached++;
       }
       add('every room can be walked to from every other',
           unreached === 0, unreached + ' rooms cut off');
@@ -853,7 +854,7 @@ window.__test = {
       let cannotReach = 0;
       if (a.camp) {
         for (const act of a.actors) {
-          if (a.camp.sites[0].field[act.y * a.world.n + act.x] < 0) cannotReach++;
+          if (a.camp.sites[0].field.at(a.world.at(act.x, act.y)) < 0) cannotReach++;
         }
       }
       add('every crawler can actually walk to the camp',

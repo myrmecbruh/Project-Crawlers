@@ -7,6 +7,173 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.20.0 — the labyrinth goes on forever
+
+Chosen in September 2026 ahead of hunger, creatures and the cave below. **The
+world used to be one fixed patch of 56 × 56 metres with a rock wall at the edge of
+it, and asking what lay past the wall had exactly one answer: nothing.** Now the
+ground is a plain of pieces, each 56 m on a side, and every piece is worked out
+from **the match seed and its address alone** — which column it is in and which
+row. Nothing keeps a list of pieces, no piece is fetched or asked about, and the
+piece four kilometres away is exactly as real this instant as the one underfoot.
+Throw one away and make it again from the same two numbers and it comes back
+identical, which is the whole of rule 5. The piece at address 0,0 keeps the plain
+seed, so the ground under the camp is the ground a seed has always named and every
+test quoting "seed 23" or "seed 777" still means the same world.
+
+**Pieces are filed by column and then by row** — two plain numbers, so finding one
+costs no more than filing it did, and the plane never runs out of addresses
+however far it is walked. Squares are handed out by `world.at(x, y)`, which
+**makes nothing**; only `ensure(x, y)` makes a piece, so no stray lookup can
+quietly generate an endless maze. `at` remembers the piece the last lookup landed
+in — squares get asked for in bursts, this one and then the one beside it — so
+nearly every lookup is two subtractions and a compare, and only a square outside
+that piece pays for an address. That is not a detail: worked out on every single
+lookup it cost three times as much (the light 13.5 → 34 µs, the fading of the near
+walls 98.5 → 298 µs, boot 2.8 → 8.1 ms). Remembering turned it back into 14.5 µs,
+159 µs and 4.0 ms.
+
+**Two pieces either side of a seam never talk to each other, and they still open
+their doorways in the same places at the same heights.** A join belongs to the
+piece with the smaller column for a join that runs up a column of pieces, and to
+the piece with the smaller row for one that runs along a row, so both sides name
+the join identically. `joinSeed` mixes the match seed with that one address, and
+`joinOpenings` reads the single stream it makes for **how many doorways the join
+gets, where along the rim each lands, and how high it is**. Two pieces that rolled
+their own doorways would put them in different places and the two sides would not
+meet; agreeing the height the same way is what makes walking out of one piece
+walking into the next **at the same level**.
+
+**A doorway is a rim square opened at the agreed height with a corridor dug inward
+to ground the piece already had, and it only ever cuts rock.** It runs along the
+rim until it finds a row with room to climb — it cannot climb faster than a metre
+per square, and a doorway that would have to is simply **not dug** — then goes
+straight in until it meets ground this piece could already walk to: the flood
+taken *before* any doorway was dug, or a corridor dug a moment ago. Coming out
+into a pocket nobody can reach is refused, because that is a doorway into nowhere.
+A doorway that is not dug leaves the rim looking exactly as it would have without
+any of this, and the piece counts it as sealed rather than pretending.
+
+**So joining two pieces cannot take ground away from either, and that is proved
+rather than hoped.** The rule the proofs hold to is that no square a crawler could
+stand on may ever change: same height, same tile, same room, still walkable. The
+only squares allowed to differ are the ones **the old build's own flood could not
+reach**, because those were never anywhere a crawler could go — bare rock, or the
+floor of a room the old build wrote down but had cut off — and the count of them
+may not exceed the ground that sat in rooms the old build could not walk to.
+
+| proof | seeds | pieces | squares of rock dug into corridor | old-unreachable squares redone | squares moved | squares of walkable ground lost |
+|---|---|---|---|---|---|---|
+| a whole 3 × 3 block of pieces, against the same build with its doorways switched off | 70–110 | **369** | 32,873 | 305 | **0** | **0** |
+| the one piece the camp is in, against the same build with its doorways switched off | 1–120 | **120** | 11,164 | 0 | **0** | **0** |
+
+All 305 of the redone squares were ground the old build had written into rooms it
+could not walk to — measured exactly equal to that area, 305 to 305 — and no piece
+changed its list of rooms. In the second proof the two builds also agree on the
+rooms, the camp, and where six crawlers stand and what they are doing after two
+hundred frames: **959 doorways agreed, 1 refused**. Same promise, checked the other
+way round: the grid proof saw **2,905 doorways agreed and 11 refused**.
+
+**The joins themselves**, across 26 seeds and 234 pieces, nine pieces per seed:
+**2,068 rooms and none that nobody can walk to, 1,889 doorways dug and 3 refused,
+260 joins and 0 with no doorway open on both sides.** Mouths pair up at equal
+heights, and wherever both sides are open `canStep` works both ways. One doorway
+is open on one side only — a corridor that dead-ends against the neighbour's rock
+— which is the allowed case (the neighbour refused that one) and is counted and
+reported rather than swallowed.
+
+**Two bugs turned up on the way, and both were fixed.**
+
+- **Rooms cut off from the rest of their own piece.** The old generator dug its
+  halls, measured once, and filled back in whatever that one measurement found cut
+  off — but filling a room back in takes its floor away, and that floor can be the
+  only way through to somewhere else. Measured over 2,250 pieces (250 seeds, each
+  made at nine addresses across a 3 × 3 block), the one-shot version left **16
+  rooms in 8 pieces** cut off from the rest of their own piece. It now measures,
+  fills, and **measures again until a measurement turns up nothing new**, which
+  always ends because every round that changes anything leaves one fewer room to
+  measure. The same 2,250 pieces now have none. That was a bug in the generator,
+  not in the test, and it was not caused by this version.
+- **A ramp that climbed into a wall.** Every ramp must climb exactly one metre
+  toward ground exactly one metre higher, and the suite checks that on seed 1. It
+  reported **1 of 30 ramps climbing to nowhere**: a square on a piece's rim,
+  leaning *inward* at a rock wall **7 m taller than itself**. A doorway's corridor
+  runs sideways along the rim before it turns inward, and the code leaned a ramp
+  inward whenever the next square along the corridor was higher — which is simply
+  wrong when that next square is a *sideways* one. It now leans at the square that
+  really is higher, which is the whole of what a ramp means. Zero after the fix on
+  seed 1, and the doorways contribute **0** wrong ramps across twelve seeds
+  measured (seed 1, 2, 3, 4, 5, 6, 7, 8, 23, 72, 101, 777).
+
+**Seven crooked ramps on five of those seeds are older than this version and are
+left alone.** Seed 2 at (18,28) and (18,30), seed 3 at (42,9), seed 7 at (47,4),
+seed 8 at (30,29) and (31,29), seed 777 at (37,25): ramps leaning at a wall two
+metres taller than themselves. They are identical with the doorways switched off
+in both the old and the new build, so the room and hall shaping is the source, not
+the joins — and fixing them would move room shapes, which is exactly the promise
+proved above. They are cosmetic (a ramp tile drawn against a cliff), they are
+parked in `ROADMAP.md` with their seeds, and the suite cannot see them because it
+only ever checks seed 1.
+
+**What it costs**, one instrument run over three builds in the same sitting — the
+last shipped build, this build with its doorways switched off (the pieces alone)
+and this build — viewport 1280×800, zoom 2, the game paused:
+
+| what | v0.19.0 | v0.20.0, pieces only | v0.20.0, shipped |
+|---|---|---|---|
+| shape work (`Render.build`) | 1.5 ms | 1.4 ms | **1.5 ms** |
+| a whole frame (`Game.render`) | 1.2 ms | 1.2 ms | **1.2 ms** |
+| making one piece | 1.0 ms | 1.6 ms | **1.4 ms** |
+| making the world around one piece | 1.0 ms | 1.2 ms | **1.4 ms** |
+| a whole boot (`newState`) | 2.4 ms | 4.2 ms | **4.6 ms** |
+| fading the near walls, whole grid | 92 µs | 144.5 µs | **170.5 µs** |
+| one walk-to-somewhere flood | 0.085 ms | 0.18 ms | **0.195 ms** |
+| light, whole grid, 2 sources | 11.5 µs | 20 µs | **16 µs** |
+| one piece in memory | 111,659 B | 176,796 B | **171,896 B** |
+
+So the doorways' own price is **+0.1 ms to make a piece** (inside the run-to-run
+spread), **+0.4 ms to a whole boot** once per match, **+26 µs on the wall fading**
+and **+15 µs on the flood** per frame — and **nothing at all to the picture's shape
+work or to a frame**. What is left over is the honest price of not knowing the
+world's size: a walk-to-somewhere now collects the squares it actually reaches
+instead of allocating an array as big as the whole patch, which is ~2.2× its old
+self and is exactly the shape bounded pathing needs.
+
+**Two numbers in the plan were wrong, and are corrected.** Pieces do not need to
+shrink: one costs 1.4 ms, well inside the plan's 4 ms line, so they stay 56 m. And
+a piece weighs **a few hundred kilobytes, not the third of a megabyte the plan
+guessed** — two readings of one build, 100 pieces apart inside the same run, came
+out 100 kB apart (226,756 B and 126,836 B), so the order of magnitude is the
+honest statement. Sixteen live pieces is a couple of megabytes and a walk of two
+hundred pieces is a few tens of megabytes: keeping pieces is cheap, and forgetting
+them (todo 9) is worth having but is not the emergency the plan implied.
+
+**One more instrument bug, caught by the instrument.** `state.light` became
+`state.lit` (it now names the squares the last pass lit rather than the light
+itself) and one line of the picture's own bookkeeping was still reading the old
+name, so it reported zero light sources reaching the screen. Nothing looked wrong
+and no test failed; the measuring tool said 0 and that is how it was found.
+
+**What this version does NOT do.** Nothing in the game fetches pieces as the
+crawlers walk to them yet: a match still starts by making the one piece the camp
+is in, so walking to the edge still arrives at rock — just rock with doorways in
+it. The part that makes pieces as they are needed, and the builder that visits only
+the ground on screen (393 of 3,136 squares matter), are the next two pieces of work
+and they are where the frame cost stops depending on how big the world is. The test
+suite is otherwise unchanged: it works on squares rather than array positions now,
+and durable tests for the endless world are still to come — the proofs above are
+session instruments (`compare-worlds.mjs`, `probe-seams.mjs`).
+
+Three new knobs, so the sheet now carries **88 rows and the build refuses to run if
+the sheet and the code disagree**: `world.join_min` (1, the fewest ways out of a
+piece — never below 1, or the promise that you can always walk onward is not kept),
+`world.join_max` (3) and `world.join_margin` (3 tiles, how far a doorway keeps from
+the corner, so the four corners of the world do not meet in one heap).
+
+Lessons 20, 21 and 22 in `CLAUDE.md`.
+
+---
+
 ## v0.19.0 — a walking crawler is never painted under the ground they walk on
 
 **Reported as: "units moving clip behind the ground they are walking on".** They

@@ -6,6 +6,9 @@
  * Rooms sit at different levels and the halls between them step up and down a
  * metre at a time, with a ramp at every step, so the whole place is walkable
  * without anything ever climbing more than a metre.
+ *
+ * The maze is a plain of these pieces, addressed and made on demand: see
+ * makeWorld() and makePiece() below.
  */
 
 const SLOPE_FLAT = '';
@@ -55,9 +58,192 @@ const ROOM_FLOORS = ['stone_floor', 'packed_earth', 'moss_stone', 'stone_floor',
 const ROOM_SPECKLE = ['rubble', 'bone_litter', 'moss_stone', 'shallow_water'];
 const HALL_FLOORS = ['stone_floor', 'packed_earth'];
 
-function generateChunk(seed) {
+/* ---- where a piece is worked out from -----------------------------------
+ * A piece has an ADDRESS: which column and which row of the plane it sits in.
+ * Its contents come from the match seed and that address alone, so the same
+ * address always gives the same piece -- throw one away and make it again and
+ * nobody can tell (rule 5, "the labyrinth goes on forever").
+ *
+ * The untangling is what makes the address matter: without it every piece
+ * would be the same piece.
+ */
+function pieceSeed(seed, cx, cy) {
+  /* The piece the match starts in keeps the plain seed, so a seed still names
+     the labyrinth it always named -- a test that quotes "seed 23" or "seed 777"
+     goes on meaning the same world, and the ground under the camp is the ground
+     it would have been before there was more than one piece. */
+  if (cx === 0 && cy === 0) return seed >>> 0;
+  let h = (seed >>> 0) ^ 0x9e3779b9;
+  h = Math.imul(h ^ (cx | 0), 0x85ebca6b) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  h = Math.imul(h ^ (cy | 0), 0xc2b2ae35) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/* Which piece lives at an address, or nothing. Pieces are filed by column and
+   then by row -- two plain numbers, so finding one costs no more than filing it
+   did, and the plane never runs out of addresses however far it is walked. */
+function pieceAt(world, cx, cy) {
+  const column = world.pieces.get(cx);
+  return column ? (column.get(cy) || null) : null;
+}
+
+function fileIn(world, piece) {
+  let column = world.pieces.get(piece.cx);
+  if (!column) { column = new Map(); world.pieces.set(piece.cx, column); }
+  column.set(piece.cy, piece);
+}
+
+/* ---- and where the pieces join up ---------------------------------------
+ * A piece on its own is a sealed box, and a labyrinth that stops at the edge of
+ * a piece is not one that goes on forever. Every join between two pieces has a
+ * handful of DOORWAYS: squares on the rim of each piece, at an agreed height,
+ * with a corridor dug inward to a room.
+ *
+ * A join belongs to the piece with the smaller column (for the joins that run
+ * along a column of pieces) or the smaller row (for those that run along a row),
+ * so both pieces either side name the join the same way and read the same
+ * stream. That is the whole trick: two pieces that rolled their own doorway
+ * would put them in different places and the two sides would not meet.
+ */
+const JOIN_ALONG_X = 0;   /* the pieces stand side by side in x */
+const JOIN_ALONG_Y = 1;
+
+function joinSeed(seed, ownerCx, ownerCy, axis) {
+  let h = (seed >>> 0) ^ (axis ? 0x7feb352d : 0x846ca68b);
+  h = Math.imul(h ^ (ownerCx | 0), 0x9e3779b1) >>> 0;
+  h = (h ^ (h >>> 15)) >>> 0;
+  h = Math.imul(h ^ (ownerCy | 0), 0x85ebca77) >>> 0;
+  return (h ^ (h >>> 13)) >>> 0;
+}
+
+/* The doorways of one join, from the join's own stream: how many, where along
+   the rim, and how high. `along` counts up the shared coordinate -- the row
+   number for a join that runs up a column of pieces, the column number for one
+   that runs along a row -- and both pieces count the same squares, so a doorway
+   here is the same doorway there. */
+function joinOpenings(seed, ownerCx, ownerCy, axis) {
   const n = CFG.chunkTiles;
-  const rand = makeRand(seed);
+  const rand = makeRand(joinSeed(seed, ownerCx, ownerCy, axis));
+  const lo = CFG.joinMargin, hi = n - 1 - CFG.joinMargin;
+  let count = CFG.joinMin
+            + Math.floor(rand() * (Math.max(0, CFG.joinMax - CFG.joinMin) + 1));
+  count = Math.max(1, Math.min(count, hi - lo + 1));
+  const out = [];
+  const share = (hi - lo + 1) / count;
+  for (let i = 0; i < count; i++) {
+    /* Each doorway owns an equal share of the join and lands somewhere inside
+       its own share, so two of them never crowd into the same corner. */
+    const along = Math.min(hi, lo + Math.floor(i * share + rand() * share));
+    const elev = Math.floor(rand() * (CFG.maxElev + 1));
+    out.push({ along: along, elev: elev });
+  }
+  return out;
+}
+
+/* This piece's four joins, each giving its doorways as LOCAL squares with the
+   direction the doorway faces (the way the corridor leaves the rim, inward).
+   Naming: east is the neighbour at cx+1, north the neighbour at cy-1, so the
+   square x=0 is the piece's west rim and y=n-1 its south rim. */
+function joinMouths(seed, cx, cy) {
+  const n = CFG.chunkTiles;
+  const out = [];
+  /* East and west doorways slide up the rim, north and south ones slide along
+     it, because the shared coordinate is the row for one pair and the column for
+     the other. */
+  for (const o of joinOpenings(seed, cx, cy, JOIN_ALONG_X))
+    out.push({ x: n - 1, y: o.along, elev: o.elev, dx: -1, dy: 0, join: 'east' });
+  for (const o of joinOpenings(seed, cx - 1, cy, JOIN_ALONG_X))
+    out.push({ x: 0, y: o.along, elev: o.elev, dx: 1, dy: 0, join: 'west' });
+  for (const o of joinOpenings(seed, cx, cy, JOIN_ALONG_Y))
+    out.push({ x: o.along, y: n - 1, elev: o.elev, dx: 0, dy: -1, join: 'south' });
+  for (const o of joinOpenings(seed, cx, cy - 1, JOIN_ALONG_Y))
+    out.push({ x: o.along, y: 0, elev: o.elev, dx: 0, dy: 1, join: 'north' });
+  for (const m of out) m.open = false;
+  return out;
+}
+
+/* ---- the world, which is made of pieces ---------------------------------
+ * This is the front door to the ground. `at()` hands back the square that is
+ * THERE, and makes nothing: a lookup can never quietly change the world, which
+ * is what stops a stray call from generating an endless maze. `ensure()` makes
+ * the piece first and then hands the square over. Both take world squares.
+ *
+ * `hot` is the piece the last lookup landed in. Squares get asked for in
+ * bursts -- this one, then the one beside it -- so remembering the last piece
+ * turns almost every lookup into two subtractions and a compare, and the
+ * picture does not pay for the addresses at all.
+ */
+function makeWorld(seed) {
+  const n = CFG.chunkTiles;
+  const world = {
+    seed: seed >>> 0,
+    n: n,
+    /* Where the view looks when there is no camp to sit on. */
+    home: { x: n / 2, y: n / 2 },
+    pieces: new Map(),        /* column -> row -> piece */
+    live: [],                 /* the pieces that are made, in the order made */
+    cells: [],                /* every square of every live piece */
+    rooms: [],                /* every room of every live piece */
+    hot: null,                /* the piece the last lookup landed in */
+
+    at(x, y) {
+      const p = this.hot;
+      if (p) {
+        const lx = x - p.ox, ly = y - p.oy;
+        if (lx >= 0 && ly >= 0 && lx < n && ly < n) return p.cells[ly * n + lx];
+      }
+      return this.atAddress(Math.floor(x / n), Math.floor(y / n), x, y);
+    },
+
+    /* The slower half of at(), kept out of the way so the common case above
+       stays three lines. It works out the address, remembers what lives there
+       and hands the square back -- and if no piece lives there, that is the
+       answer: nothing. */
+    atAddress(cx, cy, x, y) {
+      const p = pieceAt(this, cx, cy);
+      this.hot = p;
+      return p ? p.cells[(y - p.oy) * n + (x - p.ox)] : null;
+    },
+
+    ensure(x, y) {
+      const cx = Math.floor(x / n), cy = Math.floor(y / n);
+      const p = pieceAt(this, cx, cy)
+             || addPiece(this, generatePiece(this.seed, cx, cy));
+      return p.cells[(y - p.oy) * n + (x - p.ox)];
+    }
+  };
+  addPiece(world, generatePiece(world.seed, 0, 0));
+  return world;
+}
+
+/* Take a piece into the world: its squares join the list the picture is drawn
+   from, its rooms join the list everything looks rooms up in, and the squares
+   are told which room of THAT list they belong to -- room numbers run across
+   the whole live world, so a square's number always names a room that exists. */
+function addPiece(world, piece) {
+  if (piece.live) return piece;
+  piece.live = true;
+  fileIn(world, piece);
+  world.live.push(piece);
+  world.hot = piece;        /* the square just asked for is in this piece now */
+  for (const r of piece.rooms) {
+    r.piece = piece;
+    r.local = r.index;
+    r.index = world.rooms.length;
+    world.rooms.push(r);
+  }
+  for (const c of piece.cells) {
+    if (c.room >= 0) c.room = piece.rooms[c.room].index;
+    world.cells.push(c);
+  }
+  return piece;
+}
+
+function generatePiece(seed, cx, cy) {
+  const n = CFG.chunkTiles;
+  const ox = cx * n, oy = cy * n;          /* where this piece belongs */
+  const rand = makeRand(pieceSeed(seed, cx, cy));
   const rockTop = CFG.maxElev + CFG.rockHeight;
 
   const cells = new Array(n * n);
@@ -67,10 +253,13 @@ function generateChunk(seed) {
                            slope: SLOPE_FLAT, room: -1 };
     }
   }
+  /* Everything below works in LOCAL squares, 0 .. n-1, exactly as the whole
+     world used to. `at` is swapped for the world-square one at the end. */
   const at = (x, y) => (x < 0 || y < 0 || x >= n || y >= n) ? null : cells[y * n + x];
   const rooms = [];
   const world = { seed: seed, n: n, cells: cells, rooms: rooms, rockTop: rockTop,
-                  at: at };
+                  at: at, cx: cx, cy: cy, ox: ox, oy: oy,
+                  live: false };
 
   /* ---- rooms ----------------------------------------------------------- */
   const span = CFG.roomMax - CFG.roomMin;
@@ -137,10 +326,14 @@ function generateChunk(seed) {
   }
 
   /* ---- halls ------------------------------------------------------------ */
-  function pathBetween(a, b) {
+  function pathBetween(a, b, horiz) {
     const pts = [];
     let x = a.cx, y = a.cy;
-    const horizFirst = rand() < 0.5;
+    /* A hall dug from a doorway leaves the rim straight in and not sideways: it
+       steps inward first. Without that, a corridor could run ALONG the rim it
+       was dug from and flatten the ground under another doorway's square, whose
+       height the piece next door has already agreed to. */
+    const horizFirst = horiz === undefined ? rand() < 0.5 : horiz;
     const stepTo = (tx, ty) => {
       while (x !== tx) { x += Math.sign(tx - x); pts.push([x, y]); }
       while (y !== ty) { y += Math.sign(ty - y); pts.push([x, y]); }
@@ -153,9 +346,10 @@ function generateChunk(seed) {
 
   /* A hall takes its level from every room it passes through, and does all its
      climbing in the rock between them. That is why a hall can cross a third
-     room without cutting it in half: the room is an anchor, not an obstacle. */
-  function digHall(a, b) {
-    const pts = pathBetween(a, b);
+     room without cutting it in half: the room is an anchor, not an obstacle.
+     `width` is only ever 1, for the narrow corridors behind a doorway. */
+  function digHall(a, b, width) {
+    const pts = pathBetween(a, b, a.mouth ? (a.dx !== 0) : undefined);
     if (pts.length < 3) return false;
 
     const anchor = new Array(pts.length).fill(-1);
@@ -201,7 +395,8 @@ function generateChunk(seed) {
       }
       const dx = k + 1 < pts.length ? pts[k + 1][0] - x : (k > 0 ? x - pts[k - 1][0] : 1);
       const px = dx !== 0 ? 0 : 1, py = dx !== 0 ? 1 : 0;
-      for (let wdt = 0; wdt < CFG.hallWidth; wdt++) {
+      const wide = width || CFG.hallWidth;
+      for (let wdt = 0; wdt < wide; wdt++) {
         carve(x + px * wdt, y + py * wdt, elev[k], slope);
       }
     }
@@ -217,12 +412,12 @@ function generateChunk(seed) {
      Halls cross each other and the last one dug wins, so a room can end up
      sealed off. Rather than hope, measure: flood the place, find what is cut
      off, and dig to it. */
-  const centreIndex = (r) => r.cy * n + r.cx;
+  const centreCell = (r) => at(r.cx, r.cy);
   for (let pass = 0; pass < 24; pass++) {
     const main = reachableFrom(world, chain[0].cx, chain[0].cy);
-    const orphans = rooms.filter(function (r) { return main[centreIndex(r)] < 0; });
+    const orphans = rooms.filter(function (r) { return main.at(centreCell(r)) < 0; });
     if (!orphans.length) break;
-    const joined = rooms.filter(function (r) { return main[centreIndex(r)] >= 0; });
+    const joined = rooms.filter(function (r) { return main.at(centreCell(r)) >= 0; });
     const orphan = orphans[0];
     joined.sort(function (p, q) {
       return (Math.abs(p.cx - orphan.cx) + Math.abs(p.cy - orphan.cy))
@@ -243,23 +438,41 @@ function generateChunk(seed) {
 
   /* Whatever still cannot be reached is filled back in. A room nobody can walk
      to is not a room, it is a rumour -- and leaving one in the list would make
-     "every room is reachable" a hope instead of a fact. */
-  const finalField = reachableFrom(world, chain[0].cx, chain[0].cy);
-  const kept = [];
-  for (const r of rooms) {
-    if (finalField[r.cy * n + r.cx] >= 0) { kept.push(r); continue; }
-    for (let y = r.y; y < r.y + r.h; y++) {
-      for (let x = r.x; x < r.x + r.w; x++) {
-        const c = at(x, y);
-        c.h = rockTop; c.tile = 'stone_block'; c.slope = SLOPE_FLAT; c.room = -1;
+     "every room is reachable" a hope instead of a fact.
+   *
+   * Filling one back in takes its floor away, though, and that floor can be the
+   * only way through to somewhere else -- so one measurement is not enough.
+   * This measures, fills whatever the measurement found cut off, and measures
+   * AGAIN, until a measurement turns up nothing new. It always ends: every
+   * round that changes anything leaves one fewer room to measure.
+   *
+   * So there are two facts to rely on afterwards, not hopes. The last
+   * measurement taken is the flood from the first room, and it saw every room
+   * still in the list. */
+  for (;;) {
+    const field = reachableFrom(world, rooms[0].cx, rooms[0].cy);
+    const kept = [];
+    for (const r of rooms) {
+      if (field.at(at(r.cx, r.cy)) >= 0) { kept.push(r); continue; }
+      for (let y = r.y; y < r.y + r.h; y++) {
+        for (let x = r.x; x < r.x + r.w; x++) {
+          const c = at(x, y);
+          c.h = rockTop; c.tile = 'stone_block'; c.slope = SLOPE_FLAT; c.room = -1;
+        }
       }
     }
-  }
-  if (kept.length !== rooms.length) {
-    /* Renumber, so a cell's room number always points at a room that exists. */
+    if (kept.length === rooms.length) break;
+    /* Renumber, so a cell's room number always points at a room that exists. A
+       cell whose room was filled back in above has already been told it belongs
+       to no room; one that was not covered by that fill loses its room here
+       rather than keeping a number that leads nowhere. */
     const remap = {};
     for (let i = 0; i < kept.length; i++) { remap[kept[i].index] = i; }
-    for (const c of cells) if (c.room >= 0) c.room = remap[c.room];
+    for (const c of cells) {
+      if (c.room < 0) continue;
+      const to = remap[c.room];
+      c.room = (to === undefined) ? -1 : to;
+    }
     for (let i = 0; i < kept.length; i++) kept[i].index = i;
     rooms.length = 0;
     for (const r of kept) rooms.push(r);
@@ -268,6 +481,144 @@ function generateChunk(seed) {
   /* Last of all, once the halls are cut and the doorways with them, face the
      rock around every room somebody BUILT with the blocks they built it from. */
   lineRoomWalls(world);
+
+  /* ---- and then the ways OUT ---------------------------------------------
+   * A piece on its own is a sealed box, and a labyrinth that stops at the edge
+   * of a piece is not one that goes on forever. Every join this piece shares
+   * with a neighbour has a handful of DOORWAYS on the rim, at a height the two
+   * pieces agreed on, with a corridor dug inward to ground this piece already
+   * had.
+   *
+   * Everything here happens AFTER the halls and the walls, and it only ever
+   * cuts ROCK. That is what keeps the promise that a seed names the labyrinth
+   * you already know: the piece's own rooms and halls were all chosen before a
+   * single doorway was dug, so nothing about them can have moved. A doorway can
+   * only turn rock into corridor -- never corridor into rock, never one room
+   * into another.
+   */
+  const mouths = joinMouths(seed, cx, cy);
+  world.mouths = mouths;
+  world.sealed = 0;
+  const isRock = (x, y) => {
+    const c = at(x, y);
+    return !!c && TILE(c.tile).footing === 'block';
+  };
+  const isMouth = (x, y, me) => mouths.some(m => m !== me && m.x === x && m.y === y);
+
+  /* Where the piece could be walked BEFORE any doorway was dug: every room,
+     every hall, the lot. A corridor is only ever allowed to come out into this
+     -- ground that was already reachable -- which is what makes "every doorway
+     leads somewhere" true by construction rather than by hope. One flood for
+     the whole piece rather than one per doorway: a flood costs a fifth of a
+     millisecond and there are never more than a handful of doorways. */
+  const inside = reachableFrom(world, rooms[0].cx, rooms[0].cy);
+  const joined = new Set();          /* squares dug into by a doorway already */
+
+  /* Dig one doorway. The rim square is opened at the agreed height and the
+     corridor runs from it along the rim until it finds a row with room to
+     climb, then straight in until it meets ground this piece already had.
+     The square it meets is left exactly as it is: the corridor pulls up beside
+     it, at whatever height that square meets its neighbour -- so a corridor can
+     arrive at a hall, at a ramp or at a room and the joint is right either way.
+     A doorway that cannot find such a row is not dug at all. */
+  const digDoorway = (m) => {
+    const n = CFG.chunkTiles;
+    const px = -m.dy, py = m.dx;              /* sideways, along the rim */
+    if (!isRock(m.x, m.y)) return false;
+    for (let step = 0; step < n; step++) {
+      const sides = step ? [1, -1] : [1];
+      for (const side of sides) {
+        const o = step * side;
+        const pts = [[m.x, m.y]];
+        let clear = true;
+        for (let k = 1; k <= Math.abs(o); k++) {
+          const x = m.x + px * k * side, y = m.y + py * k * side;
+          if (!isRock(x, y) || isMouth(x, y, m)) { clear = false; break; }
+          pts.push([x, y]);
+        }
+        if (!clear) continue;
+        const tx = m.x + px * o, ty = m.y + py * o;    /* where it turns inward */
+        /* Inward, until the ground runs out. */
+        let end = null;
+        for (let k = 1; k < n; k++) {
+          const x = tx + m.dx * k, y = ty + m.dy * k;
+          if (x < 0 || y < 0 || x >= n || y >= n) break;
+          if (isRock(x, y)) { pts.push([x, y]); continue; }
+          if (isMouth(x, y, m)) break;
+          end = at(x, y);
+          break;
+        }
+        if (!end) continue;
+        /* Coming out into a pocket nobody can reach would be a doorway into
+           nowhere. Ground the piece could already walk to is fine, and so is a
+           corridor dug a moment ago -- that is not a pocket, that is this
+           corridor joining one that brushed past it. */
+        if (inside.at(end) < 0 && !joined.has(end)) continue;
+        const target = meetHeight(end, -m.dx, -m.dy);
+        const climb = target - m.elev;
+        const room = pts.length - 1;           /* steps from the rim to the joint */
+        if (Math.abs(climb) > room) continue;  /* cannot climb that fast */
+        /* Now lay it. The rim square stays at the agreed height -- the piece
+           next door is standing at that height too -- and the climb happens
+           over the last squares of the corridor, in one unbroken ramp, so the
+           corridor's flat stretch needs at least as many squares as the climb
+           is metres. */
+        const up = climb > 0 ? 1 : -1;
+        const h = pts.map((p, j) => m.elev
+          + up * Math.max(0, j - (room - Math.abs(climb))));
+        const floor = HALL_FLOORS[Math.floor(rand() * HALL_FLOORS.length)];
+        for (let j = 0; j < pts.length; j++) {
+          const [x, y] = pts[j];
+          const next = j + 1 < pts.length ? h[j + 1] : target;
+          const prev = j > 0 ? h[j - 1] : null;
+          /* Which way this square leans. It leans up to the NEXT square along
+             the corridor -- or, there being none, to the ground it has come out
+             at, which is inward. Leaning it inward on the strength of "the next
+             square is higher" is wrong wherever the corridor's climb starts
+             during its sideways stretch along the rim, and a rim ramp leaning
+             inward there has a wall several metres taller than itself on the
+             side it climbs toward. Lean it at the square that really is higher:
+             that is the whole of what a ramp means. */
+          const ahead = j + 1 < pts.length ? pts[j + 1] : [x + m.dx, y + m.dy];
+          let slope = SLOPE_FLAT;
+          if (next === h[j] + 1) {
+            slope = slopeFor(ahead[0] - x, ahead[1] - y);
+          } else if (prev === h[j] + 1) {
+            const p = pts[j - 1];
+            slope = slopeFor(p[0] - x, p[1] - y);
+          }
+          const c = at(x, y);
+          c.h = h[j]; c.slope = slope;
+          c.tile = slope ? 'stone_ramp' : floor;
+          c.room = -1;
+          joined.add(c);
+        }
+        m.open = true;
+        return true;
+      }
+    }
+    return false;
+  };
+
+  /* Then, with the whole piece standing, dig the doorways. Nothing here can
+     take anything away from the piece: every square a corridor touches was
+     solid rock when the piece was finished, and the square it comes out into is
+     left exactly as it was. A doorway that cannot be dug is simply not dug --
+     the rim goes on looking precisely as it would have without any of this --
+     and the piece counts it as sealed. */
+  for (const m of mouths) if (!digDoorway(m)) world.sealed++;
+
+  /* Every rule above has been applied in local squares, so the piece is now
+     moved to where it belongs: its address times its size is added onto every
+     square, every room, and every doorway. From here on `at()` speaks world
+     squares. */
+  for (const c of cells) { c.x += ox; c.y += oy; }
+  for (const r of rooms) { r.x += ox; r.y += oy; r.cx += ox; r.cy += oy; }
+  for (const m of mouths) { m.x += ox; m.y += oy; }
+  world.at = function (x, y) {
+    const lx = x - ox, ly = y - oy;
+    return (lx < 0 || ly < 0 || lx >= n || ly >= n) ? null : cells[ly * n + lx];
+  };
 
   return world;
 }
@@ -329,45 +680,51 @@ function hidesFloorBehind(world, cell, back, tileH) {
 }
 
 /* Breadth-first over the connection rule above. Used by crawlers to get
-   somewhere, and by the tests to prove the whole labyrinth is walkable. */
+   somewhere, and by the tests to prove the whole labyrinth is walkable.
+ *
+ * The answer is a FIELD: something you can ask "how many steps from the start
+ * to this square?" -- and it is keyed by the square itself rather than by a
+ * number worked out from its position. That is what lets a flood grow across
+ * pieces, and what stops it from having to know the size of the world. */
 function reachableFrom(world, sx, sy) {
-  const n = world.n;
-  const seen = new Int32Array(n * n).fill(-1);
+  const dist = new Map();
   const start = world.at(sx, sy);
-  if (!start || TILE(start.tile).footing === 'block') return seen;
-  const queue = [sy * n + sx];
-  seen[sy * n + sx] = 0;
+  const field = {
+    start: start,
+    dist: dist,
+    /* Steps from the start, or -1 for a square that cannot be got to. */
+    at: function (cell) { return (cell && dist.has(cell)) ? dist.get(cell) : -1; }
+  };
+  if (!start || TILE(start.tile).footing === 'block') return field;
+  dist.set(start, 0);
+  const queue = [start];
   for (let head = 0; head < queue.length; head++) {
-    const i = queue[head];
-    const c = world.cells[i];
+    const c = queue[head], d = dist.get(c);
     for (let s = 0; s < STEPS.length; s++) {
-      const d = STEPS[s];
-      const to = world.at(c.x + d[0], c.y + d[1]);
-      if (!to) continue;
-      const j = to.y * n + to.x;
-      if (seen[j] >= 0) continue;
-      if (!canStep(c, to, d[0], d[1])) continue;
-      seen[j] = seen[i] + 1;
-      queue.push(j);
+      const step = STEPS[s];
+      const to = world.at(c.x + step[0], c.y + step[1]);
+      if (!to || dist.has(to)) continue;
+      if (!canStep(c, to, step[0], step[1])) continue;
+      dist.set(to, d + 1);
+      queue.push(to);
     }
   }
-  return seen;
+  return field;
 }
 
 /* One step of the walk toward a target, using the distances from a flood fill
    rooted at that target. Returns the neighbour that gets closer, or null. */
 function stepToward(world, from, field) {
-  const n = world.n;
-  let best = null, bestD = field[from.y * n + from.x];
+  let best = null, bestD = field.at(from);
   if (bestD < 0) return null;
   for (let s = 0; s < STEPS.length; s++) {
     const d = STEPS[s];
     const to = world.at(from.x + d[0], from.y + d[1]);
     if (!to) continue;
-    const j = to.y * n + to.x;
-    if (field[j] < 0 || field[j] >= bestD) continue;
+    const j = field.at(to);
+    if (j < 0 || j >= bestD) continue;
     if (!canStep(from, to, d[0], d[1])) continue;
-    bestD = field[j];
+    bestD = j;
     best = { cell: to, dx: d[0], dy: d[1] };
   }
   return best;
@@ -404,36 +761,38 @@ function lightSourcesIn(state) {
 }
 
 function computeLight(state) {
-  const w = state.world, n = w.n;
-  if (!state.light || state.light.length !== n * n) state.light = new Float32Array(n * n);
-  state.light.fill(0);
+  const w = state.world;
+  /* What the last pass lit, so this one can put it out again without walking
+     the whole world. Only ever touches squares that were lit, which keeps a
+     recompute as cheap as the pool of light is small. */
+  if (!state.lit) state.lit = [];
+  for (const c of state.lit) c.light = 0;
+  state.lit.length = 0;
 
   const sources = lightSourcesIn(state);
-  const dist = new Int16Array(n * n);
+  const dist = new Map();
   for (let si = 0; si < sources.length; si++) {
     const src = sources[si];
     const reach = Math.ceil(src.r);
-    dist.fill(-1);
-    const start = src.y * n + src.x;
-    if (start < 0 || start >= dist.length) continue;
-    dist[start] = 0;
+    dist.clear();
+    const start = w.at(src.x, src.y);
+    if (!start) continue;
+    dist.set(start, 0);
     const queue = [start];
     for (let head = 0; head < queue.length; head++) {
-      const i = queue[head];
-      const c = w.cells[i];
-      const d = dist[i];
+      const c = queue[head];
+      const d = dist.get(c);
       const fall = Math.max(0, 1 - Math.pow(d / src.r, CFG.falloff));
-      if (fall > state.light[i]) state.light[i] = fall;
+      if (!(c.light > 0)) state.lit.push(c);
+      if (fall > (c.light || 0)) c.light = fall;
       if (d >= reach) continue;
       /* Rock catches the light but does not pass it on. */
       if (TILE(c.tile).tags.indexOf('blocks-sight') >= 0 && d > 0) continue;
       for (let k = 0; k < STEPS.length; k++) {
         const to = w.at(c.x + STEPS[k][0], c.y + STEPS[k][1]);
-        if (!to) continue;
-        const j = to.y * n + to.x;
-        if (dist[j] >= 0) continue;
-        dist[j] = d + 1;
-        queue.push(j);
+        if (!to || dist.has(to)) continue;
+        dist.set(to, d + 1);
+        queue.push(to);
       }
     }
   }
@@ -444,9 +803,12 @@ function computeLight(state) {
 }
 
 /* Stepped, so the picture reads as painted pools rather than a smooth gradient
-   -- and so the pattern cache underneath it stays small. */
-function lightAt(state, index) {
-  if (!state.light) return 1;
-  const raw = state.light[index] || 0;
+   -- and so the pattern cache underneath it stays small.
+   The light of a square is kept ON the square, so nothing here needs to know
+   where in the world that square happens to be. */
+function lightAt(state, cell) {
+  if (!state.lit) return 1;        /* nothing worked out yet: daylight */
+  if (!cell) return 0;
+  const raw = cell.light || 0;
   return Math.round(raw * CFG.lightSteps) / CFG.lightSteps;
 }

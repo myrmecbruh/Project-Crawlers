@@ -258,12 +258,108 @@ perfectly flat, which is the only way to prove no curve was smuggled in.
   floods the place, digs again to whatever is cut off, and finally **fills in
   any room it still cannot reach**. So "every room is walkable from every other"
   is true by construction, and a test checks it across many seeds.
+- **One measurement is not enough for that, and the difference is not a rounding
+  error.** Filling a room back in takes its floor away, and that floor can be the
+  only way through to somewhere else, so the fill can cut off a room that was
+  fine a moment ago. The cull therefore measures, fills whatever it found, and
+  **measures again, until a measurement turns up nothing new** -- it always ends,
+  because every round that changes anything leaves one fewer room to measure.
+  Measured over 2,250 pieces (250 seeds, each of them made at nine addresses
+  across a 3 × 3 block), the one-shot version left 16 rooms in 8 pieces cut off
+  from the rest of their own piece; the loop leaves none. That was a bug in the
+  generator, not in the test.
 - `16-camp.js`: the crawlers pick the largest room they can *all* reach, walk to
   it, clear the ground (Labouring against the floor's `clear` difficulty) and
   raise the camp (Building against each structure's difficulty). Nobody is told
   to; the player is a head coach.
 - A structure grows to its real height as it is built, so how far the camp has
   got is something you can see rather than read.
+
+### The world is a plain of pieces, and a piece has an address (`12-world.js`)
+
+The labyrinth is no longer one 56 × 56 m patch. It is a plain of pieces that goes
+on in every direction, and every piece has an **address**: which column and which
+row it sits in.
+
+- **A piece is worked out from the match seed and its address alone**
+  (`pieceSeed`). Throw one away, ask for it again, and it comes back the same --
+  which is what makes forgetting a piece possible at all.
+- **The piece the match starts in keeps the plain seed.** So a seed still names
+  the labyrinth it always named: seed 23 is the world it was before there was
+  more than one piece, the camp lands where it landed, and every test that quotes
+  a seed goes on meaning something. `files/compare-worlds.mjs` (session
+  instrument) proves it: eight seeds, and the ground, the rooms, the camp and the
+  crawlers come out identical to v0.19.0.
+- **Generation still happens in LOCAL squares**, 0 .. n-1, exactly as it did when
+  the whole world was one patch: every room rule, hall rule and repair rule is
+  untouched. The piece is moved to where it belongs -- the address times the size
+  is added to every square and every room -- as the very last step, after
+  `lineRoomWalls`.
+- **`world.at(x, y)` hands back the square that is there and makes nothing**, so
+  a stray lookup can never quietly build an endless maze; `world.ensure(x, y)`
+  makes the piece first and then hands the square over. That split is the safety
+  of the whole arrangement.
+- **Room numbers run across the whole live world.** `addPiece` renumbers each
+  room and rewrites its squares' pointers, because a square's `room` is used as
+  `world.rooms[cell.room]` all over the code.
+- **Pieces are filed by column and then by row**, and the world remembers the
+  last piece a lookup landed in (`world.hot`). Squares get asked for in bursts,
+  so that memory is what stops the picture paying for addresses at all -- doing
+  it the obvious way cost 3× (see the session's `measurements.md`).
+- **A walk-to-somewhere collects the squares it actually reaches**: `reachableFrom`
+  hands back a field keyed by the square (`field.at(square)`), instead of
+  allocating an array as big as the patch. Light is kept the same way: **light
+  lives on the square** (`cell.light`, cleared through `state.lit`), so a piece
+  can be forgotten without leaving a light burning in a table nobody owns.
+
+### Every piece has a way out into its neighbours (`12-world.js`)
+
+A piece on its own is a sealed box -- the rim is rock on all four sides -- and a
+labyrinth that stops at the edge of a piece is not one that goes on forever. So
+the last thing generation does is give the piece a handful of **doorways**: a gap
+in the rim at a height the two pieces agreed on, with a corridor dug inward to
+ground this piece already had.
+
+- **The two pieces either side of a seam work the join out from the same two
+  addresses, and never have to talk to each other.** `joinSeed` mixes the match
+  seed with the address of the piece that owns the join -- the smaller column for
+  a join that runs up a column of pieces, the smaller row for one that runs along
+  a row -- and `joinOpenings` reads that one number for how many doorways the
+  join gets, where along the rim each lands, and how high it is. Two pieces that
+  rolled their own doorways would put them in different places and the two sides
+  would not meet. That is the whole trick, and it is why a piece never has to
+  know anything about its neighbour.
+- **A doorway is open on a side only if that side digs it.** `joinMouths` hands
+  each piece its own four joins as anchors inside and outside the piece, paired
+  one to one along the seam **at the same height**, so a crawler who walks out of
+  one piece walks in next door at the same level. Each mouth remembers whether
+  the corridor was actually dug (`m.open`), and `world.sealed` counts the ones
+  that were not.
+- **`digDoorway` only ever cuts rock, and it will not come out into a pocket
+  nobody can reach.** It opens the rim square at the agreed height, runs along
+  the rim until it finds a row with room to climb, then goes straight in until it
+  meets ground the piece could already walk to -- the flood taken **before** any
+  doorway was dug, or a corridor dug a moment ago. A doorway that cannot find a
+  row like that is simply **not dug**: the rim goes on looking exactly as it
+  would have, and nothing at all is written.
+- **So joining two pieces can never take ground away from either.** Everything
+  the piece already had was chosen before a single doorway was dug: a corridor
+  turns rock into corridor and nothing else -- never corridor into rock, never
+  one room into another. `files/compare-worlds.mjs` (session instrument) proves
+  it against the same build with the doorways switched off: 120 seeds, 11,164
+  squares of rock dug into corridor, and **0 squares of walkable ground moved or
+  lost**.
+- **How often the maze joins up is a feel decision, so it is dialled**: three
+  `world.join_*` rows in `docs/crawlers.xlsx` -- how far in from the corners a
+  doorway may land, the fewest and the most ways out of a piece.
+- `files/probe-seams.mjs` (session instrument) checks the promise across 26 seeds
+  and 234 pieces: **260 joins, 0 without a doorway open on both sides**, 1,889
+  doorways dug and 3 refused, mouths paired at equal heights, and wherever both
+  sides are open `canStep` works both ways.
+
+The price, measured (the session's `measurements.md`): making a piece 1.3 → 1.4
+ms, making the world around one 1.0 → 1.4 ms, a whole boot 4.2 → 4.6 ms, the wall
+fading +26 µs and the walk flood +15 µs -- and **nothing at all to a frame**.
 
 ### Rooms are places, and places are built out of words (`13-rooms.js`)
 
@@ -905,6 +1001,57 @@ checkout still builds. The build reconciles the two and inlines the result.
     be moved by something you are not measuring is not a measurement until you
     say which cases you refused to judge -- and a ruler that cannot fail is worth
     less than no ruler.
+
+20. **Two things that must agree should work it out from the same words, not by
+    talking to each other.** The joins between pieces, v0.20.0. Two pieces either
+    side of a seam must open their doorways in the same places at the same
+    heights, and they are made independently, one after the other, with no
+    knowledge of each other and possibly a long walk apart. The trick is to give
+    the join a name both sides compute identically: a join belongs to the piece
+    with the smaller column when the two pieces are side by side (the seam runs
+    north to south between them) or to the piece with the smaller row when they are
+    stacked (the seam runs east to west), so `joinSeed(seed, ownerCx,
+    ownerCy, axis)` is the same two inputs from both sides, and the one stream it
+    makes settles everything that must match -- how many doorways, where along the
+    rim, and how high. Measured: 26 seeds, 234 pieces, **260 joins and 0 with no
+    doorway open on both sides**. Generalised: when two things that never meet
+    must line up, they must each be able to DERIVE the shared answer from
+    something they both already have. Anything one of them knows and the other
+    cannot see (a roll of its own dice, a list of what it dug last time) is a
+    doorway on one side and a wall on the other.
+
+21. **A change that may only ADD is proved against the same build with the
+    addition switched off.** v0.20.0, the doorways. The old promise -- "same seed,
+    same labyrinth" -- cannot survive a change that digs the rim, so it is
+    replaced by the promise underneath it: no square a crawler could stand on ever
+    changes height, tile, room or walkability. The proof loads two builds, walks
+    the same seeds through both, and compares square by square; there is exactly
+    one allowed difference, and it is **measured rather than argued**: a square may
+    differ only if the OLD build's own flood -- `reachableFrom` from that piece's
+    first room, taken before any doorway existed -- could not reach it, because
+    such a square was bare rock or the floor of a room the old build had written
+    down and could not walk to. The count of those is printed and may not exceed
+    the ground that sat in rooms the old build could not reach. It came out 305 to
+    305 over 41 seeds and 369 pieces, with 32,873 squares of rock dug, **0 squares
+    moved and 0 lost**, and 11,164 dug with 0 and 0 over 120 seeds of the single
+    piece the camp is in. Generalised: never say "this only adds" -- say what the
+    old build could not do, make the difference fit inside it, and let the numbers
+    match exactly.
+
+22. **A test that only ever looks at one sample is a claim about that sample.** The
+    suite's ramp test checks one seed -- thirty-odd ramps out of the 3,136 squares
+    of the one piece it looks at -- and it is what caught the crooked doorway
+    ramp in v0.20.0 ("1 of 30 ramps climb to nowhere", a rim ramp leaning inward
+    at a wall 7 m
+    taller than itself). The same check run over twelve seeds by a session
+    instrument then turned up **seven more ramps leaning at a wall two metres
+    taller than themselves, on five different seeds** -- all of them older than the
+    doorways, all invisible to the suite because it never looks anywhere else, and
+    none of them fixable without moving room shapes and breaking promise 21 above.
+    Generalised: run the range, not the sample; when the range cannot be run yet,
+    write the failing seeds down (they are in `ROADMAP.md`) so the next session
+    starts from a list instead of a guess. A passing test is evidence only about
+    the seeds it names.
 
 ---
 

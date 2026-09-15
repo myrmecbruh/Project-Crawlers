@@ -343,8 +343,8 @@ function actorStep(state, actor) {
   /* Work from ALONGSIDE the site, not on top of it. Nobody builds a fire while
      standing in it, and a crawler drawn on the same square as a half-built
      store looks like they are standing on a crate. */
-  const n = state.world.n;
-  const away = site.field[actor.y * n + actor.x];
+  const here = state.world.at(actor.x, actor.y);
+  const away = site.field.at(here);
   if (away >= 0 && away <= 1) {
     actor.cooldown = CFG.campWorkTicks;
     actor.doing = site.cleared ? 'building' : 'clearing';
@@ -361,7 +361,6 @@ function actorStep(state, actor) {
 
   actor.cooldown = CFG.stepTicks;
   actor.doing = 'walking';
-  const here = state.world.at(actor.x, actor.y);
   const move = stepToward(state.world, here, site.field);
   if (!move) return wander(state, actor);
   return tryStep(state, actor, move.cell, move.dx, move.dy);

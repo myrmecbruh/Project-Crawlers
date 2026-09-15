@@ -26,7 +26,7 @@ const Render = {
      only by the test that walks one stride both ways and counts how many of the
      crawler's own pixels the ground covers. */
   stepGround: true,
-  cellAt: null,                /* world square -> its place in the batch      */
+  cellAt: null,                /* world square -> its place in the batch (Map) */
   alphaPlan: null,             /* how strong each thing painted, this frame   */
 
   resize(w, h) {
@@ -585,20 +585,27 @@ const Render = {
      one list with its depth and the list is sorted. Crawlers and structures sit
      a hair in front of the ground they stand on, so they paint after it. */
   build(s) {
-    const w = s.world, n = w.n, b = this.batch;
+    const w = s.world, b = this.batch;
     this.ensure();
     if (s.lightDirty) computeLight(s);
     b.length = 0;
 
-    const standing = {}, sited = {};
+    /* What is standing on which square, keyed by the square itself rather than
+       by a number worked out from where it is -- which is also what keeps two
+       pieces from ever colliding in the same key. */
+    const standing = new Map(), sited = new Map();
     for (let i = 0; i < s.actors.length; i++) {
-      const a = s.actors[i], key = a.y * n + a.x;
-      (standing[key] || (standing[key] = [])).push(i);
+      const a = s.actors[i], cell = w.at(a.x, a.y);
+      if (!cell) continue;
+      const list = standing.get(cell);
+      if (list) list.push(i); else standing.set(cell, [i]);
     }
     if (s.camp) {
       for (let i = 0; i < s.camp.sites.length; i++) {
-        const st = s.camp.sites[i], key = st.y * n + st.x;
-        (sited[key] || (sited[key] = [])).push(i);
+        const st = s.camp.sites[i], cell = w.at(st.x, st.y);
+        if (!cell) continue;
+        const list = sited.get(cell);
+        if (list) list.push(i); else sited.set(cell, [i]);
       }
     }
 
@@ -626,7 +633,7 @@ const Render = {
       if (box[3] < 0) continue;
 
       const depth = this.depth(s, x + 0.5, y + 0.5);
-      const light = lightAt(s, i);
+      const light = lightAt(s, cell);
 
       /* Which two walls of the block face the camera changes as the view
          swings, so pick the pair by which corners are lowest on screen. */
@@ -652,7 +659,7 @@ const Render = {
 
       const ground = surfaceHeight(cell);
 
-      const here = sited[i];
+      const here = sited.get(cell);
       if (here) {
         for (let q = 0; q < here.length; q++) {
           const site = s.camp.sites[here[q]];
@@ -671,7 +678,7 @@ const Render = {
         }
       }
 
-      const people = standing[i];
+      const people = standing.get(cell);
       if (!people) continue;
       for (let q = 0; q < people.length; q++) {
         const actor = s.actors[people[q]];
@@ -716,9 +723,9 @@ const Render = {
        faces is painted after it, and that is not known until the whole list is
        in painter's order. */
     let at = this.cellAt;
-    if (!at || at.length !== w.cells.length) at = this.cellAt = new Int32Array(w.cells.length);
-    at.fill(-1);
-    for (let k = 0; k < b.length; k++) if (b[k].kind === 'cell') at[b[k].i] = k;
+    if (!at) at = this.cellAt = new Map();
+    at.clear();
+    for (let k = 0; k < b.length; k++) if (b[k].kind === 'cell') at.set(b[k].cell, k);
     for (let k = 0; k < b.length - 1; k++) {
       const it = b[k];
       if (it.kind !== 'cell' || !it.solid) continue;
@@ -755,19 +762,18 @@ const Render = {
      * behind it, and the whole face has to come back or the fade would open a
      * hole. So both shapes are worked out here and draw() picks between them. */
   clipFaces(w, it, k, at) {
-    const cell = it.cell, x = cell.x, y = cell.y, n = w.n;
+    const cell = it.cell, x = cell.x, y = cell.y;
     for (let f = 0; f < 2; f++) {
       const other = f === 0 ? it.cornerL : it.cornerR;
       /* Which of the four edges the face stands on, named by the corner it runs
          from: one of the two corners it hangs between is the near corner. */
       const e = other === (it.near + 1) % 4 ? it.near : other;
-      const nx = x + EDGE_STEP[e][0], ny = y + EDGE_STEP[e][1];
-      if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;   /* off the edge of the world */
-      const j = ny * n + nx, nk = at[j];
+      const nbr = w.at(x + EDGE_STEP[e][0], y + EDGE_STEP[e][1]);
+      if (!nbr) continue;      /* nothing there: no piece, so no block in front */
+      const nk = at.get(nbr);
       /* Not on screen, or painted before this face: either way there is nothing
          standing in front of it to hide it. */
-      if (nk <= k) continue;
-      const nbr = w.cells[j];
+      if (nk === undefined || nk <= k) continue;
       if (nbr.slope !== SLOPE_FLAT || nbr.h <= 0) continue;
       /* Where the two blocks meet, and never longer than our own wall: a cut
          that ended up above it would paint outside the block. */
@@ -1068,7 +1074,7 @@ const Render = {
       /* Side walls only: how many were painted, how much picture they covered,
          and how many were buried in the block in front and not painted at all. */
       walls: walls, wallPx: Math.round(wallPx), buried: buried,
-      lights: s.light ? lightSourcesIn(s).length : 0,
+      lights: s.lit ? lightSourcesIn(s).length : 0,
       focus: focusIdx, zoom: s.cam.zoom,
       bufW: this.w, bufH: this.h
     };

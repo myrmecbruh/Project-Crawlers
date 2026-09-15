@@ -17,7 +17,7 @@ const QUARTER = Math.PI / 2;
 const BEHIND = [[-1, -1], [-1, 1], [1, 1], [1, -1]];
 
 function newState(seed) {
-  const world = generateChunk(seed);
+  const world = makeWorld(seed);
   const s = {
     seed: seed >>> 0,
     rand: makeRand(seed),
@@ -26,14 +26,14 @@ function newState(seed) {
     actors: [],
     camp: null,
     rolls: 0,
-    light: null,
+    lit: null,           /* the squares the last light touched */
     lightDirty: true,
     /* The player's own clock. Paused stops the world; speed multiplies it.
        Neither touches the camera, which always moves on real time. */
     paused: false,
     speed: 0,
     cam: {
-      fx: world.n / 2, fy: world.n / 2, fh: 0,   /* what stays in the middle */
+      fx: world.home.x, fy: world.home.y, fh: 0,   /* what stays in the middle */
       yaw: 0, yawTarget: 0, quarter: 0,
       pitch: 0, pitchTarget: 0,                  /* 0 normal angle, 1 raised  */
       zoom: CFG.zoomStart,
@@ -99,8 +99,8 @@ function camRefresh(s) {
 
 function centreCamera(s) {
   const room = s.camp ? s.camp.room : null;
-  s.cam.fx = room ? room.x + room.w / 2 : s.world.n / 2;
-  s.cam.fy = room ? room.y + room.h / 2 : s.world.n / 2;
+  s.cam.fx = room ? room.x + room.w / 2 : s.world.home.x;
+  s.cam.fy = room ? room.y + room.h / 2 : s.world.home.y;
   s.cam.fh = room ? room.elev : 0;
   camRefresh(s);
 }
