@@ -1,9 +1,42 @@
 # Project Crawlers — changelog
 
-**The permanent playable link: https://claude.ai/code/artifact/4938012a-682f-46b7-8ca3-41ecef8219b6**
+**The permanent playable link: https://myrmecbruh.github.io/Project-Crawlers/**
 
-Publish to that address every time. It never changes, so the link the person
-holds always works. A new address would silently strand them on an old build.
+`python3 publish.py` builds the game and puts it there. The address never changes,
+so the link the person holds always works. A new address would silently strand
+them on an old build.
+
+---
+
+## The link moved, and publishing is now something I can do (no game change)
+
+The permanent link used to be a Claude artifact:
+`https://claude.ai/code/artifact/4938012a-682f-46b7-8ca3-41ecef8219b6`. That
+address belongs to the tool in the chat where the game was first built, and a
+session working in VS Code with Copilot **cannot publish to it**. The rule at the
+top of this file said "publish to that address every time, forever", so for as long
+as that was impossible the link and the game came apart: the game kept moving, the
+link did not. Asked for a publishing tool, this is one:
+
+- **`publish.py`** — one command that builds the game and puts the build on the
+  web. It pushes the freshly built page to a `gh-pages` branch of the project's own
+  GitHub repo, as `index.html` and under its version number, and GitHub serves that
+  branch as an ordinary web page. The project's own account holds it, so there is
+  no third party in the way, no account to keep alive and nothing to install.
+- **The address is worked out, not typed in** — from the repo the tool is sitting
+  in — so it cannot drift out of step with where the game actually lives.
+- **Publishing always builds first**, so the page on the web can never be a build
+  behind the source it came from, which is the failure this note is about. Every
+  earlier publish stays on the branch, so a version that misbehaves can still be
+  opened by name.
+- **Nothing in the working tree is touched.** The published copy is assembled in
+  git's own store, from the file the build just wrote, so a half-finished edit in
+  the source cannot end up published.
+
+**The game did not change, which is why no new version sits above this note.** The
+picture on the web is still v0.22.0 and the tests are untouched; what changed is
+that there is now somewhere to put it, and a command that puts it there. The old
+artifact link still opens, holding whatever was last published through it.
 
 ---
 

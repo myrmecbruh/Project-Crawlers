@@ -6,7 +6,11 @@
 Writes two files from the same source:
 
     dist/crawlers-v<VERSION>.html   the standalone playable file (doctype and all)
-    dist/artifact.html              the same page as a body fragment, for publishing
+    dist/artifact.html              the same page as a body fragment, for a viewer
+                                    that wraps one (the Claude artifact address)
+
+To put the standalone file on the permanent web address, run `python3 publish.py`:
+it calls this first, then pushes what this wrote.
 
 No engine, no framework, no package manager at runtime. Everything the game
 needs is inlined here, so the output plays from a file on a phone with no
@@ -202,9 +206,11 @@ def main():
         print("  %-18s %4d lines" % (m.name, len(m.read_text().splitlines())))
     print("  %-18s %4d lines" % ("style.css", len(style.splitlines())))
     print("  script syntax      %s" % syntax)
-    print("  %-18s %6.1f KB   <- play this" % (versioned.name, len(standalone) / 1024))
+    print("  %-18s %6.1f KB   <- play this, and publish this"
+          % (versioned.name, len(standalone) / 1024))
     if not out_override:
-        print("  %-18s %6.1f KB   <- publish this" % ("artifact.html", len(fragment) / 1024))
+        print("  %-18s %6.1f KB   <- a body fragment, for a viewer that wraps one"
+              % ("artifact.html", len(fragment) / 1024))
 
 
 if __name__ == "__main__":

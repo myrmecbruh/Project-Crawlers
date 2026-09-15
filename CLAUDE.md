@@ -3,7 +3,10 @@
 Read this first, every session. It is the only memory that survives.
 
 **The permanent playable link — publish here every time, forever:**
-https://claude.ai/code/artifact/4938012a-682f-46b7-8ca3-41ecef8219b6
+https://myrmecbruh.github.io/Project-Crawlers/
+
+`python3 publish.py` builds the game and puts it there. The address never changes,
+so the link they hold always works.
 
 **`ROADMAP.md` is the queue** — what has been offered, measured or asked and is
 waiting, including the questions they have not answered yet. Read it before
@@ -159,6 +162,7 @@ is written here now.
 ```
 python3 build.py       # assemble the whole game into one playable file
 node tests/run.mjs     # run the headless tests against that built file
+python3 publish.py     # build, then put that file on the link at the top of this file
 ```
 
 **Run the build after every change, and the tests before every reply.** The
@@ -175,6 +179,7 @@ needs before work begins, so the first build never fails on a missing tool.
 ```
 build.py              one command, one playable file
                       (--sheet / --out build a variant without touching docs/)
+publish.py            build, then push the built page to the permanent link
 src/defaults.json     every knob and name, as the code default
 src/shell.html        the page; build.py fills in {{STYLE}} and {{CODE}}
 src/style.css         all of the page styling
@@ -932,7 +937,10 @@ one artifact and played on a phone with no install.
 
 It writes two files from the same source: `dist/crawlers-v<VERSION>.html` (the
 standalone playable file) and `dist/artifact.html` (the same page as a fragment,
-which is what gets published).
+for a viewer that wraps it — the shape the Claude artifact address wanted, when
+that was where the link lived). **The published page is the standalone one**,
+because an address of our own needs a whole page: `publish.py` pushes it to the
+`gh-pages` branch, and GitHub serves that branch as a web page.
 
 ### The test harness, and tests that use it
 
@@ -967,10 +975,15 @@ ruler is worse than no ruler.
 - Every release gets a `CHANGELOG.md` entry, written as prose about what changed
   and **why**, including the mistake it fixed. The changelog is where the
   reasoning lives that the reply leaves out.
-- Publish to the **same** artifact address every time, forever. It is recorded at
-  the top of this file and of `CHANGELOG.md`. Publish `dist/artifact.html` to it;
-  a session that did not publish it must pass that address explicitly, or it will
-  create a second link and strand them on the old one.
+- **Publish with `python3 publish.py`**, and only that. It builds first, then
+  pushes the built page to the `gh-pages` branch as `index.html` (and under its
+  version number, so an older build can still be opened by name). GitHub serves
+  that branch at the address recorded at the top of this file and of
+  `CHANGELOG.md`, and **that address must not change** — they hold it, and a
+  second one would silently strand them on an old build. Until v0.22.0 the address
+  was a Claude artifact link; a session working in VS Code with Copilot has no way
+  to publish to one, so the link moved to the project's own GitHub address. See
+  the note under the banner in `CHANGELOG.md`.
 
 ### The master spreadsheet, which is the authority
 
