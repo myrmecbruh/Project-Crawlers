@@ -440,6 +440,16 @@
       "value": 0.28,
       "unit": "0 to 1",
       "note": "How far a shaded face shifts towards cold blue instead of just going darker. Hue-shifted shadows are what stop a dark picture reading as grey mud. 0 is a flat multiply."
+    },
+    "world.chunks_per_frame": {
+      "value": 2,
+      "unit": "pieces",
+      "note": "How many new pieces of labyrinth the game may cut in one frame of the picture (60 frames a second). A piece is real work to make, so they arrive a few at a time rather than all at once, and the picture stays smooth. Raise it to lay ground down faster; lower it if walking into new ground ever stutters."
+    },
+    "world.live_ring": {
+      "value": 1,
+      "unit": "pieces",
+      "note": "How many pieces of ground are kept ready BEYOND what you can see, and beyond every crawler and every camp site. This ring is what stops a crawler reaching ground that has not been made yet. Every piece kept is a piece's worth of rooms held in memory and walked over by the picture, so a bigger ring is heavier: raise it only if new ground ever appears too late."
     }
   },
   "geometry": {

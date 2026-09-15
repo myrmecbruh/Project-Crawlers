@@ -361,6 +361,57 @@ The price, measured (the session's `measurements.md`): making a piece 1.3 → 1.
 ms, making the world around one 1.0 → 1.4 ms, a whole boot 4.2 → 4.6 ms, the wall
 fading +26 µs and the walk flood +15 µs -- and **nothing at all to a frame**.
 
+### The picture fetches the ground it can see, and pays only for that (`12-world.js`, `40-render.js`)
+
+v0.20.0 made the world endless. It did not make the game behave as if it were.
+The ground was endlessly *available* and finitely *held*: a match opened holding
+the one piece the camp stood in, and the picture walked every piece it held.
+
+- **`updateLiveWorld` runs on every frame of the PICTURE, not every step of the
+  game.** Dragging the view by hand therefore fetches ground exactly as walking
+  does, and there is one place that decides when ground is made instead of two
+  that could disagree.
+- **What it wants is `wantedPieces`: the pieces the view reaches, plus
+  `CFG.liveRing` rings of pieces round every crawler and every camp site.**
+  `screenReach` turns the size of the buffer into a distance in squares, asked in
+  the two directions the picture is drawn in (`u - v` and `u + v`) and built on
+  the taller camera angle and the full rock height -- so the answer cannot come up
+  short and survives a quarter-turn. Ground seven metres up is drawn that much
+  higher, which is why height has to be counted as well as width.
+- **The asks are de-duplicated and the urgent mark is carried over.** The camera's
+  box is the wider ask, so it can want a piece a crawler is standing in before
+  that crawler asks; `urgent` is kept if EITHER asker marked it. A piece made
+  twice would be a piece made once and remembered wrong.
+- **Urgent pieces are made this frame whatever the budget says; the rest wait
+  their turn, nearest the middle of the picture first, `CFG.chunksPerFrame` a
+  frame.** Making one is real work, so they arrive a few at a time -- but
+  whatever else is late, **the ground underfoot is not**, and a crawler or the
+  camp or the middle of the view standing in a hole for one frame is the thing
+  the rule exists to stop. Measured: 1,800 checks of the square a crawler stood
+  on while walking, **0 holes**.
+- **`Render.pieceOnScreen` skips a whole piece with eight points instead of
+  3,136 squares**: the piece's four corners at ground level and at the tallest a
+  square can stand fence it in, because a straight-edged change of coordinates
+  keeps a shape inside its box. A piece that misses the screen is never walked.
+  **This decides nothing about how anything looks** -- a piece that is walked
+  goes through exactly the loop it always did, and a piece that is not walked had
+  every one of its squares culled a moment later anyway. It is `this.project`
+  that does the work, so it must be called as a method.
+- **`world.liveRing` and `world.chunksPerFrame` are dials in `docs/crawlers.xlsx`
+  (rows 90-91)**, not constants: how far ahead the ground is made is a feel
+  decision, and rule 9 says the sheet owns it.
+- **Nothing is forgotten yet.** The window fetches and never throws away, so what
+  a match holds only grows with the walking. `forget-and-remake` is a separate
+  promise: no piece may be thrown away that the picture or a crawler still needs,
+  and no crawler may walk into ground that has to be made again before they can
+  stand on it.
+- **Square numbers are positions in a list that grows, so they have a lifetime.**
+  `updateLiveWorld` slides `state.selected` and `state.hover` past the new ground
+  so the panel and the outline go on naming the same crawler. A match that walks
+  far enough runs those numbers past what one colour can carry; that limit is
+  written down in `ROADMAP.md` (the pick table) and is the next thing this job
+  needs.
+
 ### Rooms are places, and places are built out of words (`13-rooms.js`)
 
 A room used to be one flat sheet of floor -- 90 of 90 dead flat, with 69% of all
@@ -696,6 +747,37 @@ See the v0.18.0 entry in `CHANGELOG.md` for the seam it leaves, and `tests/run.m
 for the bounds that keep it honest -- **the picture is not byte-identical and
 cannot be**: 2.6-4.8% of the picture moves by a shade or two at overlapping soft
 edges (worst 20/255), while nothing that was visible moves at all.
+
+**As of v0.21.0 what a frame costs has stopped being a question about how much
+ground exists.** The picture skips a piece that is not on the screen (eight
+points instead of 3,136 squares), so the ground nowhere near the view is never
+walked. Measured in ONE build with the skip switched off and on -- lesson 21
+applies to a change that only SAVES as much as to one that only adds -- seed 1,
+900x700, best of three alternating passes of 30 frames each:
+
+| the world holds | every piece walked | off-screen pieces skipped |
+|---|---|---|
+| 1 piece, 3,136 squares | 4.20 ms | **4.19** |
+| 9 pieces, 28,224 squares | 7.53 ms | **4.39** |
+| 25 pieces, 78,400 squares | 13.95 ms | **4.37** |
+
+That is about **0.41 ms for every extra piece the match holds**, and now no trend
+at all. The first row is the same either way because there is nothing to skip
+when the world holds one piece -- which is the check that the instrument is not
+just measuring itself. These numbers are their own protocol and do not belong in
+the v0.17.0 table above.
+
+**Skipping a piece is only allowed to be a SUBSET of what the per-square test
+did, and that is proved, not argued.** 240 cases (3 rings x 5 seeds x 2 zooms x
+4 turns x 2 raised angles), both ways in one build: **the identical picture every
+time** -- 50,520 squares kept and 53,040 things drawn either way, **0 missing and
+0 extra in any case** -- with **75.9% of the square measurements no longer
+happening** (28,478,880 -> 6,873,120).
+
+One more number belongs here because forgetting is the next job: **nothing is
+thrown away yet**, so the ground held only grows with the walking. The window
+fetched its way from the camp to (169, 46) in twelve drags and went 9 pieces /
+28,224 squares -> 22 / 68,992. Bounding that is `forget-and-remake`.
 
 ---
 
@@ -1052,6 +1134,46 @@ checkout still builds. The build reconciles the two and inlines the result.
     write the failing seeds down (they are in `ROADMAP.md`) so the next session
     starts from a list instead of a guess. A passing test is evidence only about
     the seeds it names.
+
+23. **A cull must be PROVED a superset, not argued to be one.** v0.21.0, the
+    picture skipping whole pieces. "A piece that is off the screen had all its
+    squares thrown away a moment later anyway" is a good argument, and good
+    arguments are how pictures end up with holes in them. So the proof runs both
+    ways inside ONE build -- `Render.pieceOnScreen` told to say yes to everything
+    is exactly what v0.20.0 did -- over 3 rings x 5 seeds x 2 zooms x 4 turns x 2
+    raised angles, and compares what was kept and what was painted: **240 cases,
+    the identical picture every time, 0 squares missing and 0 extra things
+    painted**. Generalised: when you take work away, say exactly what the work
+    you removed was doing, then show the answer is the same with it removed --
+    because "it could not have mattered" is the sentence that precedes every
+    missing polygon. (And measure the right thing: the first version of that
+    proof counted KEPT SQUARES, which are identical either way, and so reported
+    that the cull saved nothing. What a removed piece actually saves is the
+    measuring of its squares -- 75.9% of them, once counted.)
+
+24. **A test written for a fixed world is not a test of the endless one.** Four
+    of the suite's tests went on passing when v0.21.0 landed, and three of them
+    had stopped meaning anything: one expected a far side to the batch that no
+    longer exists; one took its "before" picture one frame after the seed, when
+    the world held one piece instead of nine, and so measured the view OPENING
+    and blamed it on the view turning; one walked one piece and claimed to be
+    walking twenty. None was a bug in the game. Generalised: when the thing a
+    test measures acquires a history, the test's setup becomes a claim about that
+    history -- so **settle the world before looking at it**, and if a test's
+    subject is "nothing changed", be exact about changed since WHEN.
+
+25. **A number that indexes a list is a value with a lifetime.** Pick numbers run
+    the live squares, then the crawlers, then the camp sites, so making one piece
+    of ground slides every crawler's number and every site's number up by 3,136.
+    Two tests hunted a crawler by a number worked out BEFORE the frame that
+    painted it, and looked for a value that had already moved; whatever is picked
+    or hovered has to be slid forward by the same amount (`updateLiveWorld`), and
+    a test has to work the number out in the same breath as the list it counts.
+    Generalised: any position in a collection that grows is true only until the
+    next thing is added. Either re-derive it, or move it when the collection
+    moves -- and if the number can run past what the thing reading it can hold (a
+    colour channel, a fixed-width id), write that down before it is reached, not
+    after.
 
 ---
 

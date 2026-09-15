@@ -126,6 +126,8 @@ const CFG = {
   joinMin:     K('world.join_min'),
   joinMax:     K('world.join_max'),
   joinMargin:  K('world.join_margin'),
+  chunksPerFrame: K('world.chunks_per_frame'),
+  liveRing:    K('world.live_ring'),
   campBedrolls: K('camp.bedrolls'),
   campStores:  K('camp.stores'),
   campWindbreaks: K('camp.windbreaks'),

@@ -579,11 +579,50 @@ const Render = {
     return Math.abs(sum) / 2;
   },
 
+  /* Could any of a piece's ground reach the picture?
+   *
+   * The world the game HOLDS is a window of pieces (see 12-world.js), and the
+   * window is far bigger than the screen -- a ring of ground kept ready either
+   * side of it -- so asking 3136 squares of every live piece whether they show
+   * is most of the work of a frame, and almost all of the answer is no.
+   *
+   * A piece is one box of ground seen through the same projection its squares
+   * are, so its four corners at ground level and at the tallest a square can
+   * stand fence it in: every square of the piece lies inside that shape, which
+   * is what the camera can see pulled back through a straight-edged change of
+   * coordinates. So it is eight points to ask about instead of 3136, and a piece
+   * that misses the screen simply is not walked.
+   *
+   * This decides nothing about how anything LOOKS: a piece that is walked goes
+   * through exactly the loop it always did, and a piece that is not walked had
+   * every one of its squares culled a moment later anyway. */
+  pieceOnScreen(s, p) {
+    const tall = CFG.maxElev + CFG.rockHeight;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let c = 0; c < 4; c++) {
+      const x = p.ox + CORNERS[c][0] * p.n, y = p.oy + CORNERS[c][1] * p.n;
+      for (let k = 0; k < 2; k++) {
+        const q = this.project(s, x, y, k ? tall : 0);
+        if (q.x < minX) minX = q.x;
+        if (q.y < minY) minY = q.y;
+        if (q.x > maxX) maxX = q.x;
+        if (q.y > maxY) maxY = q.y;
+      }
+    }
+    return !(maxX < 0 || minX > this.w || maxY < 0 || minY > this.h);
+  },
+
   /* Painter's order is back to front, which is ascending depth along whatever
      direction the camera is looking. With the view able to swing, that is no
      longer the order the cells are stored in, so everything visible goes into
      one list with its depth and the list is sorted. Crawlers and structures sit
-     a hair in front of the ground they stand on, so they paint after it. */
+     a hair in front of the ground they stand on, so they paint after it.
+
+     The ground is walked a PIECE at a time rather than a square at a time, so
+     the pieces nowhere near the screen are skipped without their squares ever
+     being projected (see pieceOnScreen). Each square still carries the number
+     of its place in the list of every live square, because that number is what
+     the pointer reads back off the pick buffer. */
   build(s) {
     const w = s.world, b = this.batch;
     this.ensure();
@@ -611,109 +650,116 @@ const Render = {
 
     const scale = CFG.actorHeight / CFG.figureNominal;
 
-    for (let i = 0; i < w.cells.length; i++) {
-      const cell = w.cells[i];
-      const x = cell.x, y = cell.y;
+    for (let pi = 0; pi < w.live.length; pi++) {
+      const piece = w.live[pi];
+      if (!this.pieceOnScreen(s, piece)) continue;
+      const first = piece.firstCell;
+      const cells = piece.cells;
+      for (let li = 0; li < cells.length; li++) {
+        const cell = cells[li];
+        const i = first + li;
+        const x = cell.x, y = cell.y;
 
-      const top = new Array(4);
-      const box = [Infinity, Infinity, -Infinity, -Infinity];
-      for (let c = 0; c < 4; c++) {
-        top[c] = this.project(s, x + CORNERS[c][0], y + CORNERS[c][1],
-                              cornerHeight(cell, c));
-      }
-      this.bounds(top, box);
-      if (box[2] < 0 || box[0] > this.w || box[1] > this.h) continue;
+        const top = new Array(4);
+        const box = [Infinity, Infinity, -Infinity, -Infinity];
+        for (let c = 0; c < 4; c++) {
+          top[c] = this.project(s, x + CORNERS[c][0], y + CORNERS[c][1],
+                                cornerHeight(cell, c));
+        }
+        this.bounds(top, box);
+        if (box[2] < 0 || box[0] > this.w || box[1] > this.h) continue;
 
-      const baseB = this.project(s, x + 1, y, 0);
-      const baseC = this.project(s, x + 1, y + 1, 0);
-      const baseD = this.project(s, x, y + 1, 0);
-      const baseA = this.project(s, x, y, 0);
-      let low = Math.max(baseA.y, baseB.y, baseC.y, baseD.y);
-      if (low > box[3]) box[3] = low;
-      if (box[3] < 0) continue;
+        const baseB = this.project(s, x + 1, y, 0);
+        const baseC = this.project(s, x + 1, y + 1, 0);
+        const baseD = this.project(s, x, y + 1, 0);
+        const baseA = this.project(s, x, y, 0);
+        let low = Math.max(baseA.y, baseB.y, baseC.y, baseD.y);
+        if (low > box[3]) box[3] = low;
+        if (box[3] < 0) continue;
 
-      const depth = this.depth(s, x + 0.5, y + 0.5);
-      const light = lightAt(s, cell);
+        const depth = this.depth(s, x + 0.5, y + 0.5);
+        const light = lightAt(s, cell);
 
-      /* Which two walls of the block face the camera changes as the view
-         swings, so pick the pair by which corners are lowest on screen. */
-      const order = [0, 1, 2, 3].sort(function (p, q) { return top[p].y - top[q].y; });
-      const near = order[3], left = order[2], right = order[1];
-      const bases = [baseA, baseB, baseC, baseD];
+        /* Which two walls of the block face the camera changes as the view
+           swings, so pick the pair by which corners are lowest on screen. */
+        const order = [0, 1, 2, 3].sort(function (p, q) { return top[p].y - top[q].y; });
+        const near = order[3], left = order[2], right = order[1];
+        const bases = [baseA, baseB, baseC, baseD];
 
-      b.push({
-        kind: 'cell', i: i, cell: cell, top: top, depth: depth, light: light,
-        left: [top[near], top[left], bases[left], bases[near]],
-        right: [top[near], top[right], bases[right], bases[near]],
-        solid: cell.h > 0,
-        wallM: cell.h,              /* how far the faces drop, in metres */
-        /* The corner both faces hang from, and the far corner of each face, so
-           the clip below can tell which of the four edges a face stands on.
-           Then the wall cut down to the block in front: see clipFaces(). */
-        near: near, cornerL: left, cornerR: right,
-        nbrL: -1, nbrR: -1, cutL: null, cutR: null, cutML: 0, cutMR: 0,
-        cutaway: cell.cutaway === true,
-        minX: box[0], minY: box[1], maxX: box[2], maxY: box[3],
-        cx: (top[0].x + top[2].x) / 2, cy: (top[0].y + top[2].y) / 2
-      });
+        b.push({
+          kind: 'cell', i: i, cell: cell, top: top, depth: depth, light: light,
+          left: [top[near], top[left], bases[left], bases[near]],
+          right: [top[near], top[right], bases[right], bases[near]],
+          solid: cell.h > 0,
+          wallM: cell.h,              /* how far the faces drop, in metres */
+          /* The corner both faces hang from, and the far corner of each face, so
+             the clip below can tell which of the four edges a face stands on.
+             Then the wall cut down to the block in front: see clipFaces(). */
+          near: near, cornerL: left, cornerR: right,
+          nbrL: -1, nbrR: -1, cutL: null, cutR: null, cutML: 0, cutMR: 0,
+          cutaway: cell.cutaway === true,
+          minX: box[0], minY: box[1], maxX: box[2], maxY: box[3],
+          cx: (top[0].x + top[2].x) / 2, cy: (top[0].y + top[2].y) / 2
+        });
 
-      const ground = surfaceHeight(cell);
+        const ground = surfaceHeight(cell);
 
-      const here = sited.get(cell);
-      if (here) {
-        for (let q = 0; q < here.length; q++) {
-          const site = s.camp.sites[here[q]];
-          const def = STRUCT(site.structure);
-          const frac = site.built ? 1 : site.progress / 100;
-          const fig = this.structure3d(s, site, def, x + 0.5, y + 0.5, ground, frac);
+        const here = sited.get(cell);
+        if (here) {
+          for (let q = 0; q < here.length; q++) {
+            const site = s.camp.sites[here[q]];
+            const def = STRUCT(site.structure);
+            const frac = site.built ? 1 : site.progress / 100;
+            const fig = this.structure3d(s, site, def, x + 0.5, y + 0.5, ground, frac);
+            if (!fig.parts.length) continue;
+            const sbox = fig.box;
+            if (sbox[2] < 0 || sbox[0] > this.w || sbox[3] < 0 || sbox[1] > this.h) continue;
+            b.push({
+              kind: 'site', i: w.cells.length + s.actors.length + here[q],
+              site: site, parts: fig.parts, solid: true, depth: depth + 0.01, light: light,
+              minX: sbox[0], minY: sbox[1], maxX: sbox[2], maxY: sbox[3],
+              cx: (sbox[0] + sbox[2]) / 2, cy: sbox[1] + (sbox[3] - sbox[1]) * 0.4
+            });
+          }
+        }
+
+        const people = standing.get(cell);
+        if (!people) continue;
+        for (let q = 0; q < people.length; q++) {
+          const actor = s.actors[people[q]];
+          /* Mid-stride a crawler is between two squares, so where they are drawn
+             -- and how far back they paint -- comes from actorPos(), not from the
+             square they are filed under. */
+          const at = actorPos(s, actor);
+          const fig = this.figure3d(s, actor, at.gx, at.gy, at.h, scale);
+          const abox = fig.box;
           if (!fig.parts.length) continue;
-          const sbox = fig.box;
-          if (sbox[2] < 0 || sbox[0] > this.w || sbox[3] < 0 || sbox[1] > this.h) continue;
+          if (abox[2] < 0 || abox[0] > this.w || abox[3] < 0 || abox[1] > this.h) continue;
+          /* HOW FAR BACK A WALKING CRAWLER PAINTS. Mid-stride the feet are
+             already inside the square ahead and already outside the square
+             behind, so ordering by the feet alone hands the step to whichever of
+             those two squares is the nearer one, and it paints over their legs
+             for half of every stride. A crawler therefore paints after the whole
+             of the ground their step covers -- the square they left, the square
+             they are arriving at, and the feet in between. Rock genuinely
+             standing in front is nearer than all three and still covers them.
+             Standing still, the feet are back on the middle of one square and
+             this changes nothing at all. */
+          let stride = this.depth(s, at.gx, at.gy);
+          if (this.stepGround && actor.moveT < 1) {
+            stride = Math.max(stride,
+                              this.depth(s, actor.fromX + 0.5, actor.fromY + 0.5),
+                              this.depth(s, actor.x + 0.5, actor.y + 0.5));
+          }
           b.push({
-            kind: 'site', i: w.cells.length + s.actors.length + here[q],
-            site: site, parts: fig.parts, solid: true, depth: depth + 0.01, light: light,
-            minX: sbox[0], minY: sbox[1], maxX: sbox[2], maxY: sbox[3],
-            cx: (sbox[0] + sbox[2]) / 2, cy: sbox[1] + (sbox[3] - sbox[1]) * 0.4
+            kind: 'actor', i: w.cells.length + people[q],
+            actor: actor, parts: fig.parts, solid: true,
+            gx: at.gx, gy: at.gy, gh: at.h,
+            depth: stride + 0.02, light: light, light: light,
+            minX: abox[0], minY: abox[1], maxX: abox[2], maxY: abox[3],
+            cx: (abox[0] + abox[2]) / 2, cy: abox[1] + (abox[3] - abox[1]) * 0.35
           });
         }
-      }
-
-      const people = standing.get(cell);
-      if (!people) continue;
-      for (let q = 0; q < people.length; q++) {
-        const actor = s.actors[people[q]];
-        /* Mid-stride a crawler is between two squares, so where they are drawn
-           -- and how far back they paint -- comes from actorPos(), not from the
-           square they are filed under. */
-        const at = actorPos(s, actor);
-        const fig = this.figure3d(s, actor, at.gx, at.gy, at.h, scale);
-        const abox = fig.box;
-        if (!fig.parts.length) continue;
-        if (abox[2] < 0 || abox[0] > this.w || abox[3] < 0 || abox[1] > this.h) continue;
-        /* HOW FAR BACK A WALKING CRAWLER PAINTS. Mid-stride the feet are
-           already inside the square ahead and already outside the square
-           behind, so ordering by the feet alone hands the step to whichever of
-           those two squares is the nearer one, and it paints over their legs
-           for half of every stride. A crawler therefore paints after the whole
-           of the ground their step covers -- the square they left, the square
-           they are arriving at, and the feet in between. Rock genuinely
-           standing in front is nearer than all three and still covers them.
-           Standing still, the feet are back on the middle of one square and
-           this changes nothing at all. */
-        let stride = this.depth(s, at.gx, at.gy);
-        if (this.stepGround && actor.moveT < 1) {
-          stride = Math.max(stride,
-                            this.depth(s, actor.fromX + 0.5, actor.fromY + 0.5),
-                            this.depth(s, actor.x + 0.5, actor.y + 0.5));
-        }
-        b.push({
-          kind: 'actor', i: w.cells.length + people[q],
-          actor: actor, parts: fig.parts, solid: true,
-          gx: at.gx, gy: at.gy, gh: at.h,
-          depth: stride + 0.02, light: light, light: light,
-          minX: abox[0], minY: abox[1], maxX: abox[2], maxY: abox[3],
-          cx: (abox[0] + abox[2]) / 2, cy: abox[1] + (abox[3] - abox[1]) * 0.35
-        });
       }
     }
 

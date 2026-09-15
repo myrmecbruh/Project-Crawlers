@@ -83,7 +83,10 @@ await test('the labyrinth reaches the screen, not just the batch', async () => {
     const drew = window.__test.frame(1);
     return { count: drew.count, kinds: drew.kinds, world: window.__test.world() };
   });
-  assert(r.world.cells === 56 * 56, `the world is ${r.world.cells} cells`);
+  assert(r.world.cells === r.world.pieces * 56 * 56,
+    `the world holds ${r.world.cells} squares in ${r.world.pieces} pieces, `
+    + 'which is not a whole number of pieces');
+  assert(r.world.pieces >= 1, 'the world is holding no ground at all');
   assert(r.count > 100, `only ${r.count} blocks reached the buffer`);
   assert(Object.keys(r.kinds).length >= 3,
     `only one kind of ground drawn: ${JSON.stringify(r.kinds)}`);
@@ -155,22 +158,30 @@ await test('hovering a block outlines it and names it on screen (rule 8)', async
   assert(r.panel === null, 'a panel appeared without anything being clicked');
 });
 
-await test('pointing away from the labyrinth shows nothing', async () => {
+await test('pointing at nothing at all names nothing, and there is no edge to walk off (v0.21.0)', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(1); window.__test.frame(1);
-    /* The chunk has edges. Slide right off it and there is nothing to point at. */
+    /* There used to be an edge of the world: slide off the batch and there was
+       nothing to point at. The world now lays ground wherever the view goes,
+       six thousand squares out as much as at the camp, so "nothing at all" is
+       the space outside the picture -- and what the world does out there is
+       what this test is really about. */
     window.__test.pan(6000, 6000);
-    const buf = window.__test.buffer();
-    window.__test.frame(1);
-    const hover = window.__test.point(buf.w / 2, buf.h / 2);
-    const a = { hover, tip: window.__test.tooltipOnScreen() };
+    window.__test.frame(2);
+    const s = window.__test.state;
+    const here = Math.floor(s.cam.fx), up = Math.floor(s.cam.fy);
+    const ground = s.world.at(here, up);
+    const off = window.__test.point(-5, -5);
+    const a = { off, tip: window.__test.tooltipOnScreen(),
+                outlined: window.__test.consumed().outlined };
     window.__test.unpoint();
-    return { a, b: window.__test.tooltipOnScreen(),
+    return { ground: !!ground, a, b: window.__test.tooltipOnScreen(),
              outlined: window.__test.consumed().outlined,
              drew: window.__test.consumed().count };
   });
-  assert(r.drew === 0, `${r.drew} blocks were still in view off the edge of the world`);
-  assert(r.a.hover === -1, `found block ${r.a.hover} in empty space`);
+  assert(r.ground, 'six thousand squares from the camp there was no ground at all');
+  assert(r.drew > 0, 'the ground out there was never painted');
+  assert(r.a.off === -1, `found block ${r.a.off} in empty space`);
   assert(r.a.tip === null, 'the panel stayed up over empty space');
   assert(r.b === null && !r.outlined, 'the highlight stayed after the pointer left');
 });
@@ -1156,16 +1167,47 @@ await test('the raised angle opens the ground out and leaves heights alone', asy
 await test('turning the view does not disturb the labyrinth or the camp', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(1);
-    const sig = () => window.__test.state.world.cells.map((c) => c.h + c.tile).join('|');
-    const before = { world: sig(), camp: window.__test.camp().summary, tick: window.__test.state.tick };
+    /* Eight frames of looking, so the window of ground is full before anything
+       is compared. A fresh match opens holding the one piece the camp stands
+       in and fetches the rest as it paints, and that first fetch is not the
+       view turning -- it is the view opening. */
+    window.__test.frame(8);
+    const squares = () => {
+      const w = window.__test.state.world, m = new Map();
+      /* Keyed by the WORLD square -- the address the ground sits at -- and not
+         by the square's place in the list of live squares. A piece made later
+         or made again pushes everything along, so its numbers would be new
+         numbers for ground that never moved, and the comparison would report a
+         change that is nothing but bookkeeping. The address is the thing rule 5
+         promises about. */
+      for (const p of w.live) {
+        for (const c of p.cells) m.set(c.x + ',' + c.y, c.h + ':' + c.tile);
+      }
+      return m;
+    };
+    const piecesOf = () => window.__test.world().pieces;
+    const before = squares();
+    const wasPieces = piecesOf();
+    const camp = window.__test.camp().summary.progress;
     window.__test.rotate(1); window.__test.tilt(true);
     window.__test.rotate(2); window.__test.tilt(false);
     window.__test.rotate(1);
-    return { before, after: { world: sig(), camp: window.__test.camp().summary,
-                              tick: window.__test.state.tick } };
+    const after = squares();
+    let changed = 0, gone = 0;
+    for (const [key, was] of before) {
+      const now = after.get(key);
+      if (now === undefined) gone++;
+      else if (now !== was) changed++;
+    }
+    return { changed, gone, wasPieces, nowPieces: piecesOf(),
+             camp, campNow: window.__test.camp().summary.progress };
   });
-  assert(r.before.world === r.after.world, 'turning the view changed the labyrinth');
-  assert(r.before.camp.progress === r.after.camp.progress, 'turning the view built the camp');
+  assert(r.changed === 0 && r.gone === 0,
+    `turning the view moved ${r.changed} squares of ground and lost ${r.gone}`);
+  assert(r.wasPieces === r.nowPieces,
+    `turning the view made ${r.nowPieces - r.wasPieces} pieces of new ground -- a turn ` +
+    'does not need ground the view could not already see');
+  assert(r.camp === r.campNow, 'turning the view built the camp');
 });
 
 
@@ -2259,6 +2301,124 @@ await test('a crawler walking is never painted under the ground they walk on (se
   assert(blind >= clean * 3 / 4,
     `painting a walking crawler by their feet alone swallowed part of them in only ${blind} `
     + `of ${clean} clean steps, so this ruler can no longer tell the two ways apart`);
+});
+
+/* ---- v0.21.0: the world lays its own ground down as the view travels ---- */
+
+await test('the game opens holding one piece of ground and nothing more (v0.21.0)', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(4);
+    return { world: window.__test.world(), books: window.__test.windowBooks() };
+  });
+  assert(r.world.pieces === 1,
+    `the world opened holding ${r.world.pieces} pieces, and making ground costs about `
+    + '1.4ms a piece, so booting should make exactly the one the camp stands on');
+  assert(r.books.reach > 0 && r.books.reach < r.world.n,
+    `the picture can reach ${r.books.reach} squares, so the window wants more than one `
+    + 'piece and this test is measuring nothing');
+});
+
+await test('ground appears as the view travels, and is never missing underfoot (v0.21.0)', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, n = t.cfg.chunkTiles;
+    t.seed(2);
+    t.frame(1);
+    const start = t.world(), from = t.camera();
+    let holes = 0;
+    for (let i = 0; i < 60; i++) {
+      t.pan(48, 32);
+      const s = t.state;
+      if (!s.world.at(Math.floor(s.cam.fx), Math.floor(s.cam.fy))) holes++;
+    }
+    const far = t.world(), at = t.camera();
+    t.frame(4);                                  /* let the window catch up */
+    return { start, far, holes, n, books: t.windowBooks(),
+             moved: Math.hypot(at.fx - from.fx, at.fy - from.fy) };
+  });
+  assert(r.moved > r.n,
+    `the view travelled only ${Math.round(r.moved)} squares, less than one piece `
+    + `(${r.n}), so it never needed new ground`);
+  assert(r.far.pieces > r.start.pieces,
+    `the world held ${r.start.pieces} piece(s) and still holds ${r.far.pieces} after `
+    + `travelling ${Math.round(r.moved)} squares`);
+  assert(r.holes === 0,
+    `the view was over ground that had never been made ${r.holes} times`);
+  assert(r.far.cells === r.far.pieces * r.n * r.n,
+    `${r.far.cells} squares do not add up to ${r.far.pieces} whole pieces`);
+  assert(r.books.wanted === 0,
+    `${r.books.wanted} pieces the window wanted were never made`);
+});
+
+await test('the same ground asked for later comes out the same (rule 5, v0.21.0)', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test;
+    t.seed(3);
+    for (let i = 0; i < 30; i++) t.frame(1);     /* the window fills its own way */
+    t.ensure(200, 120);                          /* then this piece is asked for */
+    const late = t.pieceSignature(3, 2);
+    t.seed(3);
+    t.ensure(200, 120);                          /* the same piece, asked for FIRST */
+    const early = t.pieceSignature(3, 2);
+    return { late, early };
+  });
+  assert(r.early && r.early.length > 0, 'the piece was not there even when asked for first');
+  assert(r.late && r.late === r.early,
+    'the piece made at the edge of the window differed from the one made at the start');
+  assert(r.late.split(';').length - 1 === 56 * 56,
+    `the piece is ${r.late.split(';').length - 1} squares, not a whole piece`);
+});
+
+await test('the window holds only ground somebody is near (v0.21.0)', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, n = t.cfg.chunkTiles;
+    const reach = t.windowBooks().reach, ring = t.cfg.liveRing;
+    t.seed(6);
+    t.frame(1);
+    for (let i = 0; i < 40; i++) { t.pan(40, 26); t.frame(1); }
+    const s = t.state;
+    const near = (x, y, box) => Math.hypot(x - s.cam.fx, y - s.cam.fy) <= box;
+    const slack = n / Math.SQRT2;                /* the far corner of a piece */
+    let loose = 0, worst = 0;
+    const ask = (x, y, box) => {
+      const cx = (Math.floor(x / n) + 0.5) * n, cy = (Math.floor(y / n) + 0.5) * n;
+      return Math.hypot(cx - s.cam.fx, cy - s.cam.fy) <= box;
+    };
+    for (const p of s.world.live) {
+      const cx = (p.cx + 0.5) * n, cy = (p.cy + 0.5) * n;
+      let allowed = ask(s.cam.fx, s.cam.fy, reach + ring * n + slack);
+      for (const a of s.actors) if (ask(a.x, a.y, ring * n + slack)) allowed = true;
+      for (const st of s.camp.sites) if (ask(st.x, st.y, ring * n + slack)) allowed = true;
+      if (!allowed) { loose++; }
+    }
+    return { loose, pieces: s.world.live.length, near: near, n };
+  });
+  assert(r.pieces > 2, `only ${r.pieces} pieces were held, which is too few to judge`);
+  assert(r.loose === 0,
+    `${r.loose} of ${r.pieces} pieces were ground nobody was near -- the window is `
+    + 'making ground further out than the ring it was asked for');
+});
+
+await test('no square of ground stands higher than the tallest the pieces may build (v0.21.0)', async () => {
+  const r = await page.evaluate(() => {
+    let most = -Infinity, seen = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      window.__test.seed(seed);
+      /* A fresh match opens holding only the piece the camp stands in, so look
+         at several: the test is about pieces made side by side, and one piece
+         on its own cannot show a seam. */
+      window.__test.frame(4);
+      for (const c of window.__test.state.world.cells) {
+        seen++;
+        if (c.h > most) most = c.h;
+      }
+    }
+    const t = window.__test.cfg;
+    return { most, seen, tallest: t.maxElev + t.rockHeight };
+  });
+  assert(r.seen > 20 * 3136, `only ${r.seen} squares were looked at`);
+  assert(r.most === r.tallest,
+    `the tallest square stood ${r.most} metres up, and the picture works out how far a `
+    + `piece can reach on the assumption that ${r.tallest} is the most it can be`);
 });
 
 await test('the page raised no errors while all that happened', async () => {

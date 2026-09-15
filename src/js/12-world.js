@@ -166,8 +166,9 @@ function joinMouths(seed, cx, cy) {
 /* ---- the world, which is made of pieces ---------------------------------
  * This is the front door to the ground. `at()` hands back the square that is
  * THERE, and makes nothing: a lookup can never quietly change the world, which
- * is what stops a stray call from generating an endless maze. `ensure()` makes
- * the piece first and then hands the square over. Both take world squares.
+ * is what stops a stray call from generating an endless maze. `makePiece()` is
+ * the one place a piece is made, and `ensure()` is the impatient version of it:
+ * make the piece, then hand the square over.
  *
  * `hot` is the piece the last lookup landed in. Squares get asked for in
  * bursts -- this one, then the one beside it -- so remembering the last piece
@@ -207,9 +208,7 @@ function makeWorld(seed) {
     },
 
     ensure(x, y) {
-      const cx = Math.floor(x / n), cy = Math.floor(y / n);
-      const p = pieceAt(this, cx, cy)
-             || addPiece(this, generatePiece(this.seed, cx, cy));
+      const p = makePiece(this, Math.floor(x / n), Math.floor(y / n));
       return p.cells[(y - p.oy) * n + (x - p.ox)];
     }
   };
@@ -233,11 +232,134 @@ function addPiece(world, piece) {
     r.index = world.rooms.length;
     world.rooms.push(r);
   }
+  piece.firstCell = world.cells.length;    /* where its squares start */
   for (const c of piece.cells) {
     if (c.room >= 0) c.room = piece.rooms[c.room].index;
     world.cells.push(c);
   }
   return piece;
+}
+
+/* Make the piece at an address, or hand back the one already there. This is the
+   one place ground is made: nothing else in the game calls generatePiece, so
+   "how often does the game build?" has a single answer to read. */
+function makePiece(world, cx, cy) {
+  const p = pieceAt(world, cx, cy);
+  return p || addPiece(world, generatePiece(world.seed, cx, cy));
+}
+
+/* ---- the live window -----------------------------------------------------
+ * The labyrinth goes on forever; the ground the game HOLDS cannot. Every live
+ * piece is a piece's worth of rooms to keep in memory and a piece's worth of
+ * squares for the picture to walk over, so a match keeps a WINDOW of them: the
+ * ground the picture can reach, a ring of pieces beyond that, and a ring round
+ * every crawler and every camp site.
+ *
+ * This decides WHEN a piece is made, never WHAT it is. A piece comes from the
+ * match seed and its address alone, so one that appears at the edge of the
+ * window is exactly the piece it would have been had it been made at the start
+ * (rule 5: throw one away and make it again and nobody can tell).
+ *
+ * Making one is real work -- rooms, halls, ramps, doorways -- so they arrive a
+ * few at a time, nearest the middle of the picture first. The pieces the
+ * camera, the crawlers and the camp are standing IN are the exception: those
+ * are made at once, because whatever else is late, the ground underfoot is not.
+ */
+
+/* How far the picture can reach from the middle of the screen, in squares. The
+   screen is a rectangle seen at an angle, so this is asked in the two
+   directions the picture is drawn in: across it (u - v in project()) and down
+   it (u + v). Ground inside this distance is on the screen whichever way the
+   view is turned, which is what makes the answer survive a quarter-turn.
+
+   Height counts as well as width: ground seven metres up is drawn that much
+   higher, so a square low on the screen can be taller than the screen is deep
+   and still show. tile_h_high is the taller of the two camera angles, so
+   building the sum on it cannot come up short. */
+function screenReach(viewW, viewH) {
+  const tall = (CFG.maxElev + CFG.rockHeight + 1) * CFG.rise;
+  const across = (viewW / 2) / (CFG.tileW / 2);
+  const down = (viewH / 2 + tall) / (CFG.tileHHigh / 2);
+  return (across + down) / 2;
+}
+
+/* Every address the window wants. `urgent` ones are made this very frame, the
+   rest wait their turn. The picture and whatever crawler is standing in it ask
+   for the same piece, so the answers are de-duplicated: the ground under
+   everybody's feet is one piece, made once. */
+function wantedPieces(state, reach, ring) {
+  const world = state.world, n = world.n, cam = state.cam;
+  const want = new Map();
+  const ask = function (x, y, box, urgent) {
+    const ownX = Math.floor(x / n), ownY = Math.floor(y / n);
+    const cx0 = Math.floor((x - box) / n), cx1 = Math.floor((x + box) / n);
+    const cy0 = Math.floor((y - box) / n), cy1 = Math.floor((y + box) / n);
+    for (let cy = cy0; cy <= cy1; cy++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        /* The piece this asker is standing in is wanted NOW however it got on
+           the list: the camera's box is the wider one, so it can reach a piece
+           a crawler is standing in before that crawler ever asks, and the
+           answer must still be "make it this frame". Somebody standing in a
+           hole for even one frame is what this whole rule exists to stop. */
+        const mine = urgent && cx === ownX && cy === ownY;
+        const key = cx + ':' + cy;
+        const had = want.get(key);
+        if (had) { if (mine) had.urgent = true; continue; }
+        want.set(key, {
+          cx: cx, cy: cy,
+          d: Math.hypot((cx + 0.5) * n - cam.fx, (cy + 0.5) * n - cam.fy),
+          urgent: mine
+        });
+      }
+    }
+  };
+  /* The picture first, so its piece is the one that is never missing. */
+  ask(cam.fx, cam.fy, reach + ring * n, true);
+  for (const a of state.actors) ask(a.x, a.y, ring * n, true);
+  if (state.camp) for (const site of state.camp.sites) ask(site.x, site.y, ring * n, true);
+
+  const out = [];
+  for (const p of want.values()) if (!pieceAt(world, p.cx, p.cy)) out.push(p);
+  return out;
+}
+
+/* Make the ground the window wants and say how many pieces were made, so the
+   caller knows whether the picture has to be built again. This runs on every
+   frame of the picture rather than every step of the game, so dragging the view
+   by hand fetches ground exactly as walking does. */
+function updateLiveWorld(state, viewW, viewH) {
+  const world = state.world;
+  const want = wantedPieces(state,
+      screenReach(viewW > 0 ? viewW : CFG.maxBufW,
+                  viewH > 0 ? viewH : CFG.maxBufH),
+      CFG.liveRing);
+  if (!want.length) return 0;
+
+  want.sort(function (p, q) { return p.d - q.d; });
+  const cellsBefore = world.cells.length;
+  let made = 0;
+  for (const p of want) {
+    if (p.urgent) { makePiece(world, p.cx, p.cy); made++; }
+  }
+  let left = CFG.chunksPerFrame;
+  for (const p of want) {
+    if (left <= 0) break;
+    if (p.urgent) continue;
+    makePiece(world, p.cx, p.cy);
+    left--; made++;
+  }
+  /* Pick numbers run cells, then crawlers, then camp sites, so new ground at
+     the end of the cell list slides every crawler's and every site's number
+     along. Whatever is pinned or hovered has to slide with them, or the panel
+     and the outline would start pointing at somebody else. (A match that walks
+     for hours would eventually run the cell numbers past what a colour can
+     carry; see the pick table note in ROADMAP.) */
+  const grew = world.cells.length - cellsBefore;
+  if (grew > 0) {
+    if (state.selected >= cellsBefore) state.selected += grew;
+    if (state.hover >= cellsBefore) state.hover += grew;
+  }
+  return made;
 }
 
 function generatePiece(seed, cx, cy) {

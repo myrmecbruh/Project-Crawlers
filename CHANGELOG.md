@@ -7,6 +7,123 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.21.0 — the ground arrives as you walk, and the picture only pays for what it can see
+
+v0.20.0 made the world underneath endless: a piece of ground is worked out from
+the match seed and its address alone, so the piece four kilometres away was
+already exactly as real as the one underfoot. What it did not do was **behave**
+like that. A match still made the one piece the camp stood in and stopped there,
+and the picture walked every piece the match had ever made, every frame, for as
+long as the match lasted. Both of those are now the other way round.
+
+**The ground is fetched as it is walked to.** Every frame, the picture asks which
+pieces it can reach, which pieces the crawlers are standing in, and which pieces
+the camp occupies — `world.liveRing` rings of pieces around each of them — and
+makes the ones that are not there yet, **nearest the middle of the picture first,
+two a frame** (`world.chunksPerFrame`). Both are dials in `docs/crawlers.xlsx`
+rather than numbers buried in the code, because how far ahead the ground should
+be made is a feel decision and not a fact.
+
+**The square underfoot is never late, and it beats the budget.** Whatever else is
+still waiting its turn, the piece a crawler is standing in, the piece the camp is
+standing in and the piece at the middle of the view are made **that very frame**,
+however many that turns out to be. The camera's reach is the wider ask, so it can
+want a piece somebody is standing in before that somebody asks for it; the two
+asks are de-duplicated and the *urgent* mark is carried over, so the answer is
+still "make it now". Somebody standing in a hole for even one frame is the thing
+this rule exists to stop. Measured: **1,800 checks of the square a crawler stood
+on while walking, and 0 holes**, plus the same again riding a crawler and letting
+it drag the camera with it.
+
+**A fresh match no longer opens onto one piece and a wall of nothing.** Seed 1
+from cold: **1 → 3, 5, 7, 9, 11, 12 pieces over seven frames**, settling at 12
+pieces and 37,632 squares, with the view reaching 13.02 squares and nothing left
+wanted. Dragging the view away instead of walking it fetches ground exactly the
+same way, because the ask runs on every frame of the picture rather than every
+step of the game: twelve long drags from the camp out to (169, 46), and the world
+held went 9 pieces and 28,224 squares, 12 and 37,632, 15 and 47,040, 20 and
+62,720, **22 and 68,992** — it grows with the walking and never with the time
+spent standing still.
+
+**A piece fetched late is the piece it would have been fetched first**, which is
+rule 5 and the only reason any of this is allowed: one piece, made on its own
+before anything else existed and made again after twenty-two pieces of ground had
+been built around it, **40,779 characters of ground both times**.
+
+**And the picture only pays for the ground it can see.** A piece standing
+off-screen is skipped whole — **eight points around its outside are asked about
+instead of all 3,136 of its squares** — so the squares of ground that are nowhere
+near the view are never measured at all. Measured in one build with the skip
+switched off and on, seed 1, 900 × 700 window, best of three alternating passes of
+30 frames each:
+
+| the world holds | every piece walked (v0.20.0) | off-screen pieces skipped (v0.21.0) |
+|---|---|---|
+| 1 piece, 3,136 squares | 4.20 ms | **4.19 ms** |
+| 9 pieces, 28,224 squares | 7.53 ms | **4.39 ms** |
+| 25 pieces, 78,400 squares | 13.95 ms | **4.37 ms** |
+
+About **0.41 ms for every extra piece the match is holding**, and now no trend at
+all — 4.19, 4.39, 4.37 — because what a frame costs has stopped being a question
+about how much ground exists and become a question about how much of it is on the
+screen. There is nothing to skip when the world holds one piece, so the first row
+is the same either way; that is the check that the measurement is not just
+measuring itself.
+
+**Skipping a piece is only allowed to be a SUBSET of the work the old per-square
+test did, and that is proved rather than argued.** The proof runs both ways in one
+build across 3 rings × 5 seeds × 2 zooms × 4 turns × 2 raised angles: 240 cases,
+**every one of them painting the identical picture** — 50,520 squares kept and
+53,040 things drawn, both ways, in all 240 — with **0 squares missing and 0 extra
+things painted in any case**, while **75.9% of the square measurements stopped
+happening** (28,478,880 → 6,873,120). Nothing a player can see moved; a fifth of
+the work did.
+
+**New ground arrives at the end of the list of live squares, and every number
+after it slides along.** Pick numbers run the squares, then the crawlers, then the
+camp sites, so making a piece pushes every crawler's number and every site's
+number up — and whatever is picked or hovered has to be told, or the panel and the
+outline would quietly start naming somebody else. `updateLiveWorld` slides them.
+This is a real limit and it is written down rather than hidden: **a match that
+walks for long enough runs the square numbers past what one colour can carry**
+(see the pick-table note in `ROADMAP.md`). It cannot bite yet — the window is 25
+pieces of the 16 million a colour can name — but the next piece of this job is
+forgetting ground as well as fetching it, and that is when it will.
+
+**Nothing is forgotten yet.** The window fetches; it never throws anything away,
+so the ground held only ever grows with the walking. That is the next job, and it
+is why the numbers above are quoted at 1, 9 and 25 pieces rather than at whatever
+a long match would hold. What is proved here is that the *fetching* works and that
+the picture has stopped paying for ground it cannot see; bounding what is held is
+a separate promise, made when forgetting exists to keep it.
+
+**Four tests were quietly claims about a world that no longer exists, and were
+restated.** None of them was a bug in the game — every one was a test that had
+been true when the world was one fixed patch and had gone on passing for the wrong
+reason afterwards.
+
+- **"Pointing away from the labyrinth shows nothing"** slid the view 6,000 squares
+  out and expected the far side of the batch. There is no far side now: the world
+  lays ground there as readily as at the camp. Restated as what it was really
+  about — **pointing at nothing at all names nothing, and there is no edge to walk
+  off**: the ground at the middle of the view exists, things are drawn, a point
+  outside the picture is −1 with no panel and no outline left behind.
+- **The two tests that point at a crawler** asked for its pick number *before*
+  painting, and the painting itself fetched ground, which moved the number they
+  were hunting by 3,136 — the size of one piece. The number is a value with a
+  lifetime now, and is worked out in the same breath as the list it counts.
+- **"Turning the view does not disturb the labyrinth or the camp"** took its
+  "before" picture immediately after the seed, when the world held one piece, and
+  then turned the view, which let the picture fill the window to nine. It was
+  measuring the view *opening* and blaming it on the view turning. It now fills
+  the window first and turns from there: **0 squares moved and 0 lost across a
+  turn, a tilt, a turn, a tilt and a turn, at nine pieces before and nine after**.
+- **The test that walks every square of the world** for the tallest ground was
+  making one piece and checking twenty of them; `frame()` after each seed is what
+  it meant. **564,480 squares now, and the tallest is 7 metres on the nose.**
+
+---
+
 ## v0.20.0 — the labyrinth goes on forever
 
 Chosen in September 2026 ahead of hunger, creatures and the cave below. **The

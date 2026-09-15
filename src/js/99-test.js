@@ -384,16 +384,23 @@ window.__test = {
      until the pick really is them. */
   pointAtActor(i) {
     this.centreOn(i);
-    const s = Game.state, want = Render.actorBase(s) + i;
+    const s = Game.state;
     Render.recordItems = true;
     s.geomDirty = true; s.viewDirty = true;
     Game.frame();
+    /* A crawler's pick number sits after every square of ground, and the ground
+       is now laid down as the view travels -- so the frame above may have made
+       more of it. The number has to be worked out AFTER that frame, and again
+       after every repaint below, or the search hunts for a number the paint
+       pass never used. */
+    const want = Render.actorBase(s) + i;
     const item = Render.consumed.items.find(function (q) { return q.i === want; });
     if (!item) return { found: false, why: 'not drawn' };
     for (let dy = 0; dy <= 24; dy += 2) {
       for (const dx of [0, -2, 2, -4, 4]) {
-        if (this.point(item.sx + dx, item.sy + dy) === want) {
-          return { found: true, pick: want, sx: item.sx + dx, sy: item.sy + dy,
+        this.point(item.sx + dx, item.sy + dy);
+        if (s.hover === Render.actorBase(s) + i) {
+          return { found: true, pick: s.hover, sx: item.sx + dx, sy: item.sy + dy,
                    name: item.name, parts: item.parts };
         }
       }
@@ -625,7 +632,36 @@ window.__test = {
 
   world() {
     const w = Game.state.world;
-    return { seed: w.seed, n: w.n, cells: w.cells.length };
+    return { seed: w.seed, n: w.n, cells: w.cells.length, pieces: w.live.length };
+  },
+  /* Make the ground at a world square by hand: what walking there does, only
+     without the walking. Tests use it to ask for the same ground in a
+     different ORDER and check it comes out the same, which is the promise the
+     whole endless labyrinth rests on. */
+  ensure(x, y) {
+    const cell = Game.state.world.ensure(x, y);
+    Game.state.geomDirty = true;
+    Game.render();
+    return cell ? { x: cell.x, y: cell.y, h: cell.h, tile: cell.tile } : null;
+  },
+  /* One live piece described in a fixed order, as a single string, so two
+     matches can be compared character for character. */
+  pieceSignature(cx, cy) {
+    const p = pieceAt(Game.state.world, cx, cy);
+    if (!p) return null;
+    let out = '';
+    for (const c of p.cells) out += c.h + c.tile + c.slope + ';';
+    return out;
+  },
+  /* How many pieces of ground are wanted right now, and how many of those are
+     live. The window's books, so a test can watch what it is holding. */
+  windowBooks() {
+    const s = Game.state;
+    const want = wantedPieces(s, screenReach(Render.w, Render.h), CFG.liveRing);
+    return { wanted: want.length, live: s.world.live.length,
+             urgent: want.filter(function (p) { return p.urgent; }).length,
+             reach: screenReach(Render.w, Render.h), ring: CFG.liveRing,
+             perFrame: CFG.chunksPerFrame };
   },
   cell(x, y) {
     const w = Game.state.world, c = w.at(x, y);

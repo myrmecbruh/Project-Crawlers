@@ -24,10 +24,14 @@ noted against each line:
   rock wall at the edge of the world. **As of v0.20.0 the world underneath goes
   on in every direction**: it is built from pieces, a piece is worked out from the
   match seed and its address alone, and neighbours are joined by doorways, so
-  there is no edge to find. **What is not built yet is the part that fetches
-  pieces as the crawlers walk to them** — a match still starts by making the one
-  piece the camp is in, and until the windowed builder lands the picture would
-  visit every piece a match had made. Those are todos 4 and 5 of the job.
+  there is no edge to find. **As of v0.21.0 the ground is fetched as it is walked
+  to**: the picture makes the pieces it can see, the pieces the crawlers stand in
+  and the pieces the camp occupies, two a frame, nearest the middle of the view
+  first, and the square underfoot is always made the very frame it is wanted. What
+  it does NOT do is throw anything away — **a match still holds every piece it has
+  ever fetched**, so the ground held grows with the walking. Bounding that
+  (`forget-and-remake`) and the pick table below are the rest of this job. The two
+  dials are rows 90 and 91 of `docs/crawlers.xlsx`.
 - **Seven ramps in a piece lean at a wall instead of at ground a metre higher.**
   Found in v0.20.0 while checking the doorways' ramps: seed 2 at (18,28) and
   (18,30), seed 3 at (42,9), seed 7 at (47,4), seed 8 at (30,29) and (31,29), seed
@@ -46,9 +50,12 @@ noted against each line:
 ## Parked: what to build next
 
 Offered as four options in September 2026. **They chose "the labyrinth goes on
-forever"**; it was built in v0.20.0 (see `CHANGELOG.md` for the reasoning and
-`CLAUDE.md` for how it now works), and the three below are what is left of that
-offer.
+forever"**: the endless ground was built in v0.20.0 and the fetching of it as the
+crawlers walk in v0.21.0 (see `CHANGELOG.md` for the reasoning and `CLAUDE.md`
+for how it now works). The three below are what is left of that offer. The one
+piece of the endless world still outstanding is **throwing ground away again**,
+which is what keeps a long match from growing forever — it is noted against the
+labyrinth line above and is not one of these three.
 
 ### 1. Hunger, tiredness, warmth
 Crawlers start needing things. The fire stops being decoration and becomes the
@@ -95,6 +102,17 @@ Rule 2 says ask and wait. These have been asked and are still open.
   v0.18.0 took the buried walls out of the picture it is now the biggest cost
   there is. Could be answered arithmetically (point-in-polygon, back to front)
   with no second picture at all.
+- **The numbers the pointer reads are running out of room, and it does not matter
+  yet.** Every square, crawler and camp site on screen is named by its position in
+  the list of live things, and the pointer reads that number back off a pixel
+  colour — `rgb` gives 16,777,215 of them, so the list can never be longer than
+  that. Since v0.21.0 **nothing is ever forgotten**, so a match that keeps walking
+  grows the list for as long as it lasts: 25 pieces is 78,400 squares, and
+  16,777,215 is about **5,350 pieces**. Past that the numbers wrap and two
+  different things would answer to the same colour, silently. Written down here
+  rather than left to be discovered. The fix is a pick table — a list of what is
+  in front of the pointer, rebuilt as the pointer moves — which also removes the
+  second painting of the whole scene that costs 4.8 ms (the bullet below).
 - **The camera snaps when you pick a crawler.** Clicking one locks the view onto
   them instantly rather than easing across. It was left as a snap because they
   asked for a lock; if the jump annoys, it is a few lines to glide instead.

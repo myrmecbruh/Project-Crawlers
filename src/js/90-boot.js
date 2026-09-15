@@ -106,6 +106,14 @@ const Game = {
     /* Riding a crawler happens here rather than in the loop, so the view keeps
        up however the frame was driven -- the game's own clock or a test's. */
     if (followCamera(s)) s.viewDirty = true;
+    /* The ground follows the picture, so this is here and not in the step:
+       walk the crawlers along and the window is dragged after them, drag the
+       view by hand and it is dragged just the same. New ground means the
+       picture has to be built again. */
+    if (updateLiveWorld(s, Render.w, Render.h)) {
+      s.geomDirty = true;
+      s.viewDirty = true;
+    }
     if (s.geomDirty) Render.build(s);   /* the pick pass waits until asked */
     if (s.pointer.over) {
       const hit = Render.pickAt(s, s.pointer.bx, s.pointer.by);
