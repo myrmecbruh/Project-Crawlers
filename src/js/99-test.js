@@ -186,6 +186,23 @@ window.__test = {
     return Render.clipWalls;
   },
 
+  /* Paint a crawler part way through a step after the whole of the ground that
+     step covers, so the ground can never paint over their legs. Turning this
+     off is the old way of painting a walking crawler -- ordering them by where
+     their feet are and nothing else -- which is how the ground came to paint
+     over their legs in the first place. Called with nothing it only reports
+     which way it is set, so a test can say which way the game ships. Where a
+     crawler lands in the painting order is worked out while the shapes are
+     built, so changing it has to ask for them to be built again. */
+  stepGround(on) {
+    if (on !== undefined) {
+      Render.stepGround = !!on;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.stepGround;
+  },
+
   /* Keep the picture as it is now. diff() then reports how the next one differs
      from it -- how many pixels, how far the worst of them moved, and the first
      one that moved, so a failure points at the spot. The pixels never leave
@@ -392,6 +409,132 @@ window.__test = {
       if (got.found) { got.index = i; return got; }
     }
     return { found: false, why: 'every crawler is out of sight' };
+  },
+
+  /* ---- walking, and what the picture shows of a crawler ------------------ */
+
+  /* Stand a crawler part way through one step, and put the camera on them.
+     "from" is the square the step starts on and "to" the square it arrives at;
+     "t" is how far along it is -- 0 standing on the starting square, 1 standing
+     on the arriving one, 0.85 nearly there. Both ends must be named, because
+     what is under the feet is ground at one end and ground at the other, and
+     telling those apart is the whole question. Returns legal:false rather than
+     freezing an illegal step, so no test can measure a step the game would
+     refuse to take. The camera is pinned by hand: it does not ride anything
+     until the next seed() or centreOn(). */
+  midStep(index, fromX, fromY, toX, toY, t) {
+    const s = Game.state, a = s.actors[index];
+    if (!a) return { legal: false, why: 'no such crawler' };
+    const here = s.world.at(fromX, fromY), there = s.world.at(toX, toY);
+    if (!here || !there) return { legal: false, why: 'off the map' };
+    const dx = toX - fromX, dy = toY - fromY;
+    if ((dx || dy) && !canStep(here, there, dx, dy)) {
+      return { legal: false, why: 'cannot step there' };
+    }
+    a.fromX = fromX; a.fromY = fromY;
+    a.x = toX; a.y = toY;
+    a.moveT = t === undefined ? 0.85 : t;
+    a.cooldown = 1e6;                 /* the clock must not walk them on */
+    if (dx || dy) a.face = a.faceTarget = facingFor(dx, dy);
+    const at = actorPos(s, a);
+    const cam = s.cam;
+    cam.follow = -1;
+    cam.fx = at.gx; cam.fy = at.gy; cam.fh = at.h;
+    camRefresh(s);
+    s.selected = -1; s.hover = -1; s.pointer.over = false;
+    s.geomDirty = true; s.viewDirty = true;
+    Render.build(s);
+    Render.draw(s);
+    return { legal: true, index: index, fromX: fromX, fromY: fromY,
+             toX: toX, toY: toY, t: a.moveT, gx: at.gx, gy: at.gy, gh: at.h,
+             face: a.face };
+  },
+
+  /* How much of a crawler the picture actually shows, and where it stops
+     showing them. Four pictures of one instant, all from the same camera:
+       alone   -- the crawler with everything else left out, which is their shape
+       blank   -- nothing at all, so the shape can be told from the background
+       scene   -- the world as it is, with the crawler in it
+       without -- the same world with that one crawler left out
+     and the world in both of those leaves out the OTHER crawlers: another
+     creature standing in the way genuinely hides part of this one, and it
+     moves as this one moves, so leaving it in would measure the crowd instead
+     of the ground. What is left to hide a crawler is the world it walks
+     through: ground, rock, and anything built on it.
+     A pixel of the shape is still theirs when the scene differs from the scene
+     without them, and is hidden when the two are identical -- something was
+     painted over them there. Hidden is what the ground a crawler is walking on
+     does to their feet, and also what a rock genuinely standing in front of
+     them does to the rest of them. Measuring one moment of a stride against
+     another is what tells those two apart, so this reports the number and
+     leaves that argument to a test.
+     The picture is rebuilt and repainted before returning. */
+  actorOwnPixels(index) {
+    const s = Game.state, i = index || 0, a = s.actors[i];
+    if (!a) return null;
+    const wasSel = s.selected, wasHover = s.hover, wasOver = s.pointer.over;
+    s.selected = -1; s.hover = -1; s.pointer.over = false;
+    s.geomDirty = true;
+    Render.build(s);
+    const want = Render.actorBase(s) + i;
+    const item = Render.batch.find(function (z) { return z.i === want; });
+    const all = Render.batch.slice();
+    const paint = function (what) {
+      Render.batch.length = 0;
+      for (let k = 0; k < all.length; k++) {
+        const z = all[k];
+        if (Render.isActorPick(s, z.i) && z !== item) continue;
+        if (what === 'alone' && z !== item) continue;
+        if (what === 'without' && z === item) continue;
+        if (what === 'blank') continue;
+        Render.batch.push(z);
+      }
+      Render.draw(s);
+      return Render.bctx.getImageData(0, 0, Render.w, Render.h).data;
+    };
+    if (!item) {
+      Render.batch.length = 0;
+      for (let k = 0; k < all.length; k++) Render.batch.push(all[k]);
+      s.selected = wasSel; s.hover = wasHover; s.pointer.over = wasOver;
+      s.geomDirty = true; s.viewDirty = true;
+      return null;
+    }
+    const alone = paint('alone');
+    const blank = paint('blank');
+    const scene = paint('scene');
+    const without = paint('without');
+    const x0 = Math.max(0, Math.floor(item.minX)), x1 = Math.min(Render.w - 1, Math.ceil(item.maxX));
+    const y0 = Math.max(0, Math.floor(item.minY)), y1 = Math.min(Render.h - 1, Math.ceil(item.maxY));
+    const w = Render.w;
+    const out = { index: i, name: a.name, shape: 0, hidden: 0,
+                  top: -1, bottom: -1, bottomShown: -1 };
+    const rows = [];
+    for (let y = y0; y <= y1; y++) {
+      let mine = 0, shown = 0;
+      for (let x = x0; x <= x1; x++) {
+        const q = (y * w + x) * 4;
+        if (alone[q] === blank[q] && alone[q + 1] === blank[q + 1]
+            && alone[q + 2] === blank[q + 2]) continue;
+        mine++;
+        if (scene[q] === without[q] && scene[q + 1] === without[q + 1]
+            && scene[q + 2] === without[q + 2]) out.hidden++;
+        else shown++;
+      }
+      rows.push({ y: y, mine: mine, shown: shown });
+      if (mine) { if (out.top < 0) out.top = y; out.bottom = y; }
+      if (shown) out.bottomShown = y;
+    }
+    out.rows = rows;
+    out.shape = rows.reduce(function (n, r) { return n + r.mine; }, 0);
+    out.shown = out.shape - out.hidden;
+    out.gap = out.bottomShown < 0 ? null : Math.round(item.maxY) - out.bottomShown;
+    out.box = { x0: item.minX, y0: item.minY, x1: item.maxX, y1: item.maxY };
+    out.pixels = Render.w * Render.h;
+    Render.batch.length = 0;
+    for (let k = 0; k < all.length; k++) Render.batch.push(all[k]);
+    s.selected = wasSel; s.hover = wasHover; s.pointer.over = wasOver;
+    s.geomDirty = true; s.viewDirty = true;
+    return out;
   },
 
   /* Rebuild the materials at a different strength, so a test can compare a

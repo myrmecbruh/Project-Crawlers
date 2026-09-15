@@ -21,6 +21,11 @@ const Render = {
      front of it. Flipped off only by the test that paints one frame both ways
      and compares the two pictures pixel for pixel. */
   clipWalls: true,
+  /* Paint a crawler part way through a step after the whole of the ground that
+     step covers, so the ground can never paint over their legs. Flipped off
+     only by the test that walks one stride both ways and counts how many of the
+     crawler's own pixels the ground covers. */
+  stepGround: true,
   cellAt: null,                /* world square -> its place in the batch      */
   alphaPlan: null,             /* how strong each thing painted, this frame   */
 
@@ -678,11 +683,27 @@ const Render = {
         const abox = fig.box;
         if (!fig.parts.length) continue;
         if (abox[2] < 0 || abox[0] > this.w || abox[3] < 0 || abox[1] > this.h) continue;
+        /* HOW FAR BACK A WALKING CRAWLER PAINTS. Mid-stride the feet are
+           already inside the square ahead and already outside the square
+           behind, so ordering by the feet alone hands the step to whichever of
+           those two squares is the nearer one, and it paints over their legs
+           for half of every stride. A crawler therefore paints after the whole
+           of the ground their step covers -- the square they left, the square
+           they are arriving at, and the feet in between. Rock genuinely
+           standing in front is nearer than all three and still covers them.
+           Standing still, the feet are back on the middle of one square and
+           this changes nothing at all. */
+        let stride = this.depth(s, at.gx, at.gy);
+        if (this.stepGround && actor.moveT < 1) {
+          stride = Math.max(stride,
+                            this.depth(s, actor.fromX + 0.5, actor.fromY + 0.5),
+                            this.depth(s, actor.x + 0.5, actor.y + 0.5));
+        }
         b.push({
           kind: 'actor', i: w.cells.length + people[q],
           actor: actor, parts: fig.parts, solid: true,
           gx: at.gx, gy: at.gy, gh: at.h,
-          depth: this.depth(s, at.gx, at.gy) + 0.02, light: light, light: light,
+          depth: stride + 0.02, light: light, light: light,
           minX: abox[0], minY: abox[1], maxX: abox[2], maxY: abox[3],
           cx: (abox[0] + abox[2]) / 2, cy: abox[1] + (abox[3] - abox[1]) * 0.35
         });

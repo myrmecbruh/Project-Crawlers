@@ -313,6 +313,17 @@ answer to "where is this crawler right now"; the renderer asks it both for where
 to draw the figure and for its depth, so someone mid-stride sorts against the
 world where they actually are, not where they are filed.
 
+**A crawler mid-step paints after every square that step covers.** Their own
+nearness number alone is not enough, and v0.19.0 was that bug (lesson 18): a
+ground square's nearness is its **centre**, and mid-step the feet are inside the
+square being entered, so that square used to paint over their legs. While
+`actor.moveT < 1`, the actor's depth is the largest of their own square, the one
+they left and the one they are entering, so no flat ground the step touches can
+paint over them. Rock in front still can and should -- rock has height. The three
+depths collapse to one the moment the step ends, which is why this is a no-op for
+a crawler standing still. `render.stepGround` (default `true`) flips the rule off
+for the one test that paints the same stride both ways and counts.
+
 ---
 
 ## The inspector (what the popups are called)
@@ -857,6 +868,43 @@ checkout still builds. The build reconciles the two and inlines the result.
     covering, expect a seam; measure the seam's EXTENT rather than arguing about
     its existence, and write the bound down where a later session can fail
     against it.
+
+18. **A paint order worked out per object is only correct while the object is
+    standing still.** Reported as "units moving clip behind the ground they are
+    walking on", v0.19.0. Every shape's nearness is a single number, and a ground
+    square's is worked out from its **centre**; a crawler part way through a step
+    is drawn at the point their feet are at, which is strictly inside the square
+    they are heading into -- or outside the one they left. Whichever of those two
+    is the nearer therefore painted after the figure and covered their legs:
+    **180-208 px of a ~700 px crawler, the bottom 14-16 rows, only in the middle
+    of a step**, worst at 0.7-0.85 through and zero at both ends. It had been
+    there since v0.12.0 invented the stride, and it survived a whole version that
+    re-measured the renderer in still frames. Generalised: when something moves
+    continuously, no single band of depth can be right for it for the whole of
+    the movement -- order it after **every** band it overlaps (here: their square,
+    the one they left, and the one they are entering), and gate that on the
+    movement being in progress so a settled object is provably untouched. The
+    tell for this family of bug is that it is invisible when nothing moves and
+    worst exactly halfway.
+
+19. **When a measurement cannot be exact, select the cases where it can, and
+    always measure the broken build too.** Counting "how many of a crawler's own
+    pixels the world covers" is trivially wrong at the ends: a rock in front of
+    them is *supposed* to cover them, and on the worst case measured -- one
+    crawler 750 of whose 776 pixels were behind rock -- the figure shifting one or
+    two pixels between two frames moved the count by **+-14 px** with nothing
+    having changed. So a step only counts as evidence when **both of its ends are
+    clean**, which is what makes the middle attributable to the floor; on seeds
+    1-8 that leaves 41 steps out of 161, and four of eight seeds contribute
+    nothing, which is the correct answer for a seed whose crawlers always stand
+    beside rock rather than a failure to measure. What makes those 41 steps mean
+    anything is that the **same 41** are then painted with the old rule, inside
+    one build, through a Render flag: 40 of them hide more than 20 px the old way
+    and none more than 3 px the new way. Without that negative control the test
+    would pass on a picture with no crawler in it. Generalised: a count that can
+    be moved by something you are not measuring is not a measurement until you
+    say which cases you refused to judge -- and a ruler that cannot fail is worth
+    less than no ruler.
 
 ---
 

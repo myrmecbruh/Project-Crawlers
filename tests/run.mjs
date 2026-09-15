@@ -2172,6 +2172,94 @@ await test('a fire only burns once it is finished, and the camp grows as it is b
       + `${r.halfTall.toFixed(1)}px -- the camp does not visibly grow`);
   });
 
+/* ---- ground a crawler is walking over -------------------------------------
+ *
+ * Part way through a step a crawler's feet are already inside the square ahead
+ * and already outside the square behind, so ordering them by their feet alone
+ * hands the step to whichever of those two squares is the nearer one. That
+ * square then paints AFTER them and eats their legs -- the bug where a crawler
+ * sinks into the ground they are walking on. v0.19.0 makes a walking crawler
+ * paint after the whole of the ground their step covers: the square they left,
+ * the square they are arriving at, and the feet in between. Rock genuinely
+ * standing in front is nearer than all three and still covers them.
+ *
+ * actorOwnPixels() is the ruler: a crawler's silhouette counted from four
+ * pictures of one instant, and how many of those pixels the picture actually
+ * shows. A rock in front hides part of a crawler and is meant to, so a bare
+ * number proves nothing and a step is judged only against its own two ends. A
+ * step whose ends are BOTH clean -- nothing painted over the crawler while they
+ * stood on either square -- must not lose pixels in between. That is why the
+ * seeds below are a handful of them: a crawler with a boulder at their shoulder
+ * is skipped, not measured. The other half of the test is the old way of
+ * painting, which the same ruler measures by flipping Render.stepGround off; if
+ * that stops hiding anything, the ruler has gone blind and the test says so
+ * rather than passing.
+ *
+ * Measured on seeds 1-8: 161 steps taken, 41 of them clean, worst 208 (and 40
+ * of the 41 over 20) pixels lost with the old way against 3 with the new, so all
+ * three bounds below are load-bearing rather than decorative. */
+await test('a crawler walking is never painted under the ground they walk on (seeds 1-8)', async () => {
+  const r = await page.evaluate((moments) => {
+    const t = window.__test, out = { shipped: null, ended: [], steps: [] };
+    const wasZoom = t.buffer().zoom;
+    t.pause();
+    out.shipped = t.stepGround();
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      t.seed(seed);
+      t.zoom(4);
+      t.pause();
+      const actors = t.actors();
+      for (let i = 0; i < actors.length; i++) {
+        const fx = Math.floor(actors[i].gx), fy = Math.floor(actors[i].gy);
+        for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          /* How many of them the picture leaves out, walking that one step by
+             the given rule, that far into it. Null when the game would not
+             take the step, so no test measures a step that cannot happen. */
+          const look = function (rule, tt) {
+            t.stepGround(rule);
+            if (!t.midStep(i, fx, fy, fx + d[0], fy + d[1], tt).legal) return null;
+            const p = t.actorOwnPixels(i);
+            return p ? p.hidden : null;
+          };
+          const stand0 = look(true, 0), stand1 = look(true, 1);
+          if (stand0 === null || stand1 === null) continue;
+          out.ended.push(Math.max(stand0, stand1));
+          if (Math.max(stand0, stand1) > 1) continue;    /* rock in the way */
+          let worstOn = 0, worstOff = 0;
+          for (const tt of moments) {
+            const on = look(true, tt), off = look(false, tt);
+            if (on === null || off === null) continue;
+            worstOn = Math.max(worstOn, on);
+            worstOff = Math.max(worstOff, off);
+          }
+          out.steps.push({ seed: seed, i: i, at: fx + ',' + fy, step: d.join(','),
+                           on: worstOn, off: worstOff });
+        }
+      }
+    }
+    t.stepGround(true);
+    t.zoom(wasZoom);
+    return out;
+  }, [0.15, 0.3, 0.5, 0.7, 0.85]);
+
+  assert(r.shipped === true,
+    'the shipped game sorts a walking crawler by where their feet are and nothing else, '
+    + 'so the ground can paint over their legs');
+  const clean = r.steps.length;
+  assert(clean >= 25,
+    `only ${clean} of the ${r.ended.length} steps taken had nothing at all painted over the crawler `
+    + 'at either end, which is too few to judge the ground by');
+  const sunk = r.steps.filter((q) => q.on > 8);
+  assert(sunk.length === 0,
+    `${sunk.length} of ${clean} steps walked with the shipping rule swallowed part of the crawler: `
+    + sunk.slice(0, 4).map((q) => `seed ${q.seed} crawler ${q.i} at ${q.at} stepping ${q.step} `
+      + `lost ${q.on}px`).join('; '));
+  const blind = r.steps.filter((q) => q.off > 20).length;
+  assert(blind >= clean * 3 / 4,
+    `painting a walking crawler by their feet alone swallowed part of them in only ${blind} `
+    + `of ${clean} clean steps, so this ruler can no longer tell the two ways apart`);
+});
+
 await test('the page raised no errors while all that happened', async () => {
   assert(errors.length === 0, errors.join(' | '));
 });

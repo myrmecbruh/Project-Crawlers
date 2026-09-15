@@ -7,6 +7,94 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.19.0 — a walking crawler is never painted under the ground they walk on
+
+**Reported as: "units moving clip behind the ground they are walking on".** They
+were right, and the middle of a step is the whole of it: **180 to 208 px of a
+~700 px crawler** — their bottom 14 to 16 rows — vanished into a flat square of
+floor part way through a stride, and came back at each end of it.
+
+**One number, read at the wrong moment.** Every shape in the game is painted in
+order of how near it is to the camera, and a ground square's nearness is worked
+out from its **centre**. A crawler halfway between two squares is drawn at the
+point their feet are at, which is strictly *inside* the square they are walking
+towards — or outside the one they left, on the way out. So whichever of those
+two squares is the nearer one painted **after** the figure and ate its legs. At
+rest it cannot happen: standing on a square, the feet and the square's centre
+agree to the pixel, which is why this had been there since v0.12.0 gave crawlers
+a stride and nobody had seen it in a still frame.
+
+**The rule now.** A crawler part way through a step is painted after the whole of
+the ground that step covers: their own square, the square they left and the
+square they are heading into. Flat ground can no longer paint over their legs.
+Rock in front of them still does, and should — rock has real height, so a crawler
+behind it is genuinely behind it. Standing is provably untouched, by a gate on the
+stride itself (`actor.moveT < 1`): with the feet on a square the three depths are
+the same number, so nothing about a settled crawler changes.
+
+**What was measured**, seeds 1–8, camera quarter per seed, zoom 4, both rules
+painted of the very same instant inside one build (`__test.stepGround`), paused
+repaint:
+
+| seed | steps walked | clean at both ends |
+|---|---|---|
+| 1 | 20 | 7 |
+| 2 | 22 | 0 |
+| 3 | 21 | 0 |
+| 4 | 22 | 11 |
+| 5 | 18 | 3 |
+| 6 | 22 | 15 |
+| 7 | 19 | 0 |
+| 8 | 17 | 5 |
+| **all** | **161** | **41** |
+
+The 41 clean steps, by direction: north 12, east 11, south 12, west 6. Worst
+hidden pixel count part way through those steps: **208 px with the old rule,
+3 px with the new one**. Across all 41: old rule
+`{0:1, 120:2, 140:1, 160:8, 180:23, 200:6}` — **40 of the 41 hide more than
+20 px**, the largest 208, and the *quietest* step of the 41 still hides 193 px at
+one end of it; new rule `{0:25, 1:12, 2:3, 3:1}` — **nothing over 3 px**. The
+three worst steps under the new rule leave 1–3 px hidden, which is the scale of a
+soft edge rather than of a covering shape — the largest measured is a single
+pixel row — which is why the test's bound is 8 px rather than 0: a bound of
+nothing would be a bound that nothing could meet.
+
+**Why only 41 of 161 steps can be judged, and why that is the honest number.**
+"Hidden" on its own is not a fault: a rock in front of a crawler is supposed to
+cover them, and on the worst case measured — one crawler with 750 of their 776
+pixels behind rock — the figure shifting one or two pixels between the two
+frames moves that count by **±14 px** with nothing having changed at all. A step
+is only evidence if **both ends are clean**, because that is the only way to know
+the middle is being covered by the floor and not by scenery. Four of eight seeds
+give nothing clean, which is the correct answer for a seed whose crawlers are
+always standing beside rock, not a failure to measure.
+
+**Why the ends are exact and the middle is not.** The figure is drawn with its
+bottom edge sitting on its ground point, so a crawler standing on a square is
+painted either wholly after that square or wholly before it — and against flat
+floor it comes out the same either way. Mid-stride the bottom edge is *between*
+two squares' centres, and no per-object depth can be right for both. The fix is
+therefore not a better depth but a wider one: paint after everything the step
+touches. The counting rule for the test falls straight out of that — if either
+end of the step is occluded, the middle cannot be attributed to the floor.
+
+**The switch is what makes it provable.** `render.stepGround` is a Render flag,
+default `true`, flipped off **only** by the test that walks one stride both ways
+and counts the crawler's own pixels both times — the same house idiom as
+`clipWalls` in v0.18.0. The test asserts the game ships with it on, that 25 or
+more clean steps survive the seeds, that no clean step loses more than 8 px under
+the shipping rule, and — the negative control — that with the old rule at least
+three quarters of those clean steps hide more than 20 px. Without that last
+assertion the test would pass on a picture with no crawler in it.
+
+Two harness seams were added to make a single instant measurable at all:
+`__test.midStep(...)` places a named crawler part way through a chosen stride, and
+`__test.actorOwnPixels(...)` returns four pictures of that one instant — the
+crawler alone, blank, the scene, and the scene without them — so "this many of
+their pixels are covered" is a count rather than an opinion.
+
+---
+
 ## v0.18.0 — the walls buried in the rock are not painted
 
 **Every rock column used to paint its side walls from its own top all the way
