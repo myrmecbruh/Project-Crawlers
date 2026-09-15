@@ -114,7 +114,11 @@ const Game = {
       s.geomDirty = true;
       s.viewDirty = true;
     }
-    if (s.geomDirty) Render.build(s);   /* the pick pass waits until asked */
+    if (s.geomDirty) Render.build(s);   /* the list the pointer walks */
+    /* Asking the pointer is arithmetic over that list now -- shapes and a
+       bounding box each, no canvas -- so it is cheap enough to ask every frame
+       the pointer is over the picture, which is what makes the tooltip keep up
+       with a walking crawler. */
     if (s.pointer.over) {
       const hit = Render.pickAt(s, s.pointer.bx, s.pointer.by);
       if (hit !== s.hover) { s.hover = hit; s.viewDirty = true; }

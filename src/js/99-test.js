@@ -586,11 +586,13 @@ window.__test = {
   },
 
   /* Draw the same moment again, without advancing it. A test comparing two
-     pictures of one instant must not have time pass in between. */
+     pictures of one instant must not have time pass in between. Only the
+     picture is repainted: the pick buffer is no longer read by the game, so
+     painting it here would be work no test asked for. */
   redraw() {
     const s = Game.state;
     s.geomDirty = true; s.viewDirty = true;
-    Render.build(s); Render.drawPick(s); Render.draw(s);
+    Render.build(s); Render.draw(s);
     return Render.consumed;
   },
 

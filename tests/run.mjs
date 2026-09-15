@@ -1673,20 +1673,176 @@ await test('the panel stops rebuilding itself, so its buttons can be pressed', a
   assert(after.follow === -1, 'closing the panel left the view still riding them');
 });
 
-await test('the pick pass is painted only when something reads it', async () => {
-  const n = await page.evaluate(() => new Promise((res) => {
+/* ---- v0.22.0: the pointer answers without a second picture -------------- */
+
+/* Until v0.22.0 the answer to "what is under the pointer" was worked out by
+   painting the whole scene again, flat, in colours that spell out the item
+   numbers, and reading the pixel back. That second picture is gone, so this
+   now asserts the strong thing: the buffer is never painted at all -- not with
+   the pointer off the canvas, and not with the pointer sitting on a crawler,
+   which is exactly when the old code would have painted it every frame. The
+   guards underneath are what stop this from passing for the wrong reason:
+   questions really were asked, and they were asked while the picture was out
+   of date, so the old picker really would have repainted. */
+await test('the scene is never painted a second time to answer the pointer', async () => {
+  const r = await page.evaluate(() => new Promise((res) => {
     const s = Game.state;
-    s.selected = Render.actorBase(s) + 0;      /* follow someone, so the view */
-    s.cam.follow = 0;                          /* moves every single frame    */
-    s.pointer.over = false;                    /* but nobody is pointing      */
-    let painted = 0;
-    const orig = Render.drawPick.bind(Render);
-    Render.drawPick = (st) => { painted++; return orig(st); };
-    setTimeout(() => { Render.drawPick = orig; res(painted); }, 1000);
+    Game.paused = false;
+    s.geomDirty = true; s.viewDirty = true;
+    let painted = 0, asked = 0, stale = 0;
+    const origPaint = Render.drawPick.bind(Render);
+    const origAsk = Render.pickAt.bind(Render);
+    Render.drawPick = (st) => { painted++; return origPaint(st); };
+    Render.pickAt = (st, x, y) => {
+      asked++;
+      /* The exact condition the old picker repainted on: a question asked while
+         the picture on the screen was out of date. */
+      if (st.viewDirty) stale++;
+      return origAsk(st, x, y);
+    };
+    /* Aim at a crawler through the real pick buffer, then keep the view riding
+       them so the picture is rebuilt every frame -- which is when the old code
+       repainted. Riding is by INDEX (cam.follow is an actor index); being
+       pinned is by NUMBER, and the number slides as ground arrives. */
+    const got = window.__test.pointAtAnyActor();
+    const idx = got.found ? got.index : -1;
+    const riding = idx >= 0 ? s.actors[idx] : null;
+    let named = 0;
+    const tick = setInterval(() => {
+      if (!riding) return;
+      s.selected = Render.actorBase(s) + idx;
+      s.cam.follow = idx;
+      s.viewDirty = true;
+      /* Hold the pointer on them the way the rest of this file does, through
+         the game's own door. The real mouse cannot be used for this: it sits
+         wherever the last real click left it, and the panel can be lying over
+         the picture at that spot, which turns `pointer.over` off through the
+         canvas's own leave handler. That is the game working as asked, not a
+         fault, so a test must not read its own meaning off it. */
+      const overWhat = window.__test.point(got.sx, got.sy);
+      if (Render.isActorPick(s, overWhat) && Render.actorFromPick(s, overWhat) === riding) {
+        named++;
+      }
+    }, 20);
+    setTimeout(() => {
+      clearInterval(tick);
+      Render.drawPick = origPaint;
+      Render.pickAt = origAsk;
+      res({ painted: painted, asked: asked, stale: stale, named: named,
+            found: got.found });
+    }, 1000);
   }));
-  assert(n <= 2,
-    `the scene was painted a second time into the pick buffer ${n} times in a `
-    + 'second with no pointer on the canvas');
+  /* The whole point of the test only means something if a question was really
+     being asked, every frame, with a moving picture to answer it in. */
+  assert(r.found, 'no crawler could be reached by the pointer at all');
+  /* A question is only asked while the game holds the pointer over the
+     picture, so this many of them also says the pointer was really on it. */
+  assert(r.asked >= 20,
+    `the game only asked the pointer ${r.asked} times in a second, so there was `
+    + 'nothing to make the old code repaint');
+  /* And they were asked with the picture out of date, which is the only time
+     the old picker repainted -- otherwise this could pass by asking about a
+     picture that had already been drawn. */
+  assert(r.stale >= 20,
+    `the pointer was asked ${r.asked} times but only ${r.stale} of those came `
+    + 'while the picture was out of date, so the old code would not have repainted');
+  assert(r.painted === 0,
+    `the scene was painted a second time into the pick buffer ${r.painted} times `
+    + `in a second while the pointer sat on a crawler (naming them ${r.named} of `
+    + 'those asks)');
+});
+
+/* The old answer was the pixel that ended up on top. The new answer is the
+   first shape, walking the painted list front to back, that contains the
+   point. Those are the same only if the list really is in painter's order and
+   the bounding boxes it is culled by never hide a shape behind them -- so the
+   two are compared here against a deliberately slow walk in the paint
+   direction that ignores the boxes entirely and remembers the LAST shape
+   containing the point. Nothing is painted: there are no pixels in this test,
+   so it cannot pass by two mistakes cancelling out in a blend. */
+await test('the pointer finds the frontmost shape all over the picture (v0.22.0)', async () => {
+  const r = await page.evaluate(() => {
+    const s = Game.state;
+    Game.paused = true;
+    s.selected = -1; s.cam.follow = -1;
+    s.pointer.over = false; s.hover = -1;
+    s.geomDirty = true; s.viewDirty = true;
+    Render.build(s); Render.draw(s);
+    const b = Render.batch;
+
+    /* Is the point inside this shape? Crossing count, asked about the MIDDLE
+       of the pixel, which is the point canvas itself tests when it decides
+       whether to fill one. */
+    const inside = (pts, px, py) => {
+      let c = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const a = pts[i], d = pts[j];
+        if ((a.y > py) !== (d.y > py) &&
+            px < (d.x - a.x) * (py - a.y) / (d.y - a.y) + a.x) c = !c;
+      }
+      return c;
+    };
+
+    /* The long way: the order the picture is painted in, back to front, with
+       the last shape containing the point winning. No bounding boxes, so a box
+       drawn a hair too tight shows up as a disagreement instead of hiding. */
+    const slow = (px, py) => {
+      let last = -1;
+      for (let k = 0; k < b.length; k++) {
+        const it = b[k];
+        let yes = false;
+        if (it.kind === 'cell') {
+          if (it.solid) {
+            const qL = it.nbrL >= 0 ? it.cutL : it.left;
+            const qR = it.nbrR >= 0 ? it.cutR : it.right;
+            if (qL && inside(qL, px, py)) yes = true;
+            if (!yes && qR && inside(qR, px, py)) yes = true;
+          }
+          if (!yes && inside(it.top, px, py)) yes = true;
+        } else {
+          for (let r = 0; r < it.parts.length && !yes; r++) {
+            const fs = it.parts[r].faces;
+            for (let g = 0; g < fs.length && !yes; g++) {
+              if (inside(fs[g].pts, px, py)) yes = true;
+            }
+          }
+        }
+        if (yes) last = it.i;
+      }
+      return last;
+    };
+
+    let points = 0, notEmpty = 0, answers = 0;
+    const wrong = [];
+    const check = (x, y) => {
+      const px = x + 0.5, py = y + 0.5;
+      const fast = Render.pickAt(s, px, py), deep = slow(px, py);
+      points++;
+      if (deep !== -1) notEmpty++;
+      if (fast !== -1) answers++;
+      if (fast !== deep && wrong.length < 6) {
+        wrong.push(`at ${x},${y} the pointer says ${fast} and painting from the `
+                 + `back says ${deep}`);
+      }
+    };
+    /* A spread over the whole picture, so ground, walls and figures are all
+       walked, and every pixel of a patch in the middle, which is fine enough
+       to land on shape edges and slivers. */
+    for (let y = 2; y + 2 < Render.h; y += 9) {
+      for (let x = 2; x + 2 < Render.w; x += 9) check(x, y);
+    }
+    const mx = Math.floor(Render.w / 2), my = Math.floor(Render.h / 2);
+    for (let y = my - 15; y < my + 15; y++) {
+      for (let x = mx - 15; x < mx + 15; x++) check(x, y);
+    }
+    return { wrong, points, notEmpty, answers, items: b.length, w: Render.w, h: Render.h };
+  });
+  assert(r.notEmpty > r.points / 5,
+    `only ${r.notEmpty} of ${r.points} points landed on anything at all, so this `
+    + 'test did not look at much');
+  assert(r.wrong.length === 0,
+    `${r.wrong.length} of ${r.points} points answered differently from a walk in `
+    + `the paint direction: ${r.wrong.join('; ')}`);
 });
 
 /* ---- v0.13.0: rooms are places, built out of words --------------------- */

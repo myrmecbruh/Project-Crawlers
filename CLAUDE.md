@@ -521,6 +521,79 @@ The panel's click handler reads `Game.state` at click time rather than closing
 over the match that existed when the page loaded -- otherwise a new match leaves
 it wired to a game nobody is playing.
 
+### Nothing is painted twice
+
+The answer to "what is under the pointer" used to be a **second picture**. The
+whole scene was drawn again into a canvas nobody sees, flat and untextured, each
+thing in a colour that spells out its own number, and then the single pixel under
+the pointer was read back with `getImageData`. That is what `drawPick` is for, and
+it is why the pointer was the most expensive thing in a frame: **4.8 ms**, paid
+whenever a question was asked -- and with the view riding a crawler, a question is
+asked on every frame of the ride.
+
+**As of v0.22.0 the answer is worked out from the list the picture was already
+built from.** `Render.batch` holds every shape in the order it is painted --
+furthest back first, so the last one painted is the one in front -- which means
+**walking it backwards and stopping at the first shape that contains the point**
+is the same thing as asking what the last brush stroke left on that pixel. No
+canvas, no colour, no reading back. Nothing is drawn.
+
+- `inShape` tests the **middle** of the pixel (`floor(bx) + 0.5`), because that is
+  the point canvas itself fills; the point-in-polygon test is even-odd, which is
+  the same as nonzero for the shapes here.
+- Items carry a tight box (`minX..maxX`, `minY..maxY`, widened by a pixel in
+  `pickAt`). A box can only ever add tests, never remove an answer, and the
+  suite compares against a box-free walk to keep that honest.
+- `pickStale` is gone with the picture it was about; `drawPick` stays in
+  `40-render.js` as the **yardstick** the comparison is made against, and nothing
+  in the game reads it any more.
+
+Measured in ONE build with both ways alternating, best of three, seed 1,
+900x700, the view riding a walking crawler with the pointer on the picture:
+
+| | painted answer (v0.21.0) | worked-out answer (v0.22.0) |
+|---|---|---|
+| one frame, 12 pieces / 37,632 squares | 6.93 ms | **5.53 ms** |
+| one frame, 56 pieces / 175,616 squares | 6.91 ms | **5.48 ms** |
+| one answer on its own, 12-piece world | 1,494 µs | **1.8 µs** |
+| one answer on its own, 56-piece world | 1,418 µs | **0.5 µs** |
+| a whole second of hovering (60 answers) | 89.6 ms | **0.1 ms** |
+
+**1.4 ms a frame**, flat, whatever the world holds -- because the second picture
+never grew with the world either. An answer goes from about a millisecond and a
+half to about a microsecond, which is what lets it be asked every frame.
+
+- **A partly covered pixel is exactly where a colour answer goes wrong.** Canvas
+  blends a pixel a shape only partly covers -- and it does so **even when the
+  covering shape is the same colour**, losing the bottom bit of a channel when it
+  does. Measured on a bare canvas with no game in it: a pixel filled
+  `rgb(68,110,0)` and then partly covered with that same colour reads back
+  `67,110,0` at 10% coverage, `68,109,0` at 25%, `68,109,0` at 75%, and
+  `68,110,0` only at 100% -- six of eight partial coverages lost a bit, the same
+  with and without an alpha channel, and the fit is truncation rather than
+  rounding. One lost bit is enough to name the wrong thing: `67 + 109 * 256` is
+  **27,971** and the square next door is **27,970**. So the old picker was wrong
+  along the **outline of everything**, which is where a person is most likely to
+  be pointing at a thing. The arithmetic answer names the shape covering the
+  middle of the pixel and cannot lose a bit, because nothing is ever written
+  down. Generalised: **never encode who something is in a colour**, and if you
+  ever must, the failure is on the edges, where you will be least inclined to
+  look.
+- **The proof is pixels, not argument.** Both ways run in one build on the same
+  frozen moment, pixel for pixel: **52 cases, four of them at every single pixel
+  of the picture, 610,496 pixels asked both ways, 569,234 identical (93.24%)**.
+  The other **41,262 differ only on a shape's own edge**, where the painted
+  number is a blend of the two colours meeting; **in the middle of a shape, 0
+  differ**, and on the edges **not once did one way say something while the other
+  said nothing**. The battery prints how many different worlds its cases reached
+  (**46 of 52**) because that is the check that its seeds, turns, zooms and raised
+  angles are doing anything at all.
+- **The 24-bit ceiling this was heading for is gone.** A colour holds 24 bits, so
+  the old scheme capped the labyrinth at about 5,350 pieces and `ROADMAP.md` had
+  that down as the next thing to break. A number never goes near a colour now.
+  What is still waiting is the **memory** -- nothing is thrown away yet -- and
+  that is `forget-and-remake`.
+
 ---
 
 ## Decisions so far (not rules)
@@ -722,7 +795,7 @@ Measured on v0.17.0, seed 1, camp in view, 1100x760, 80 draws of one frame:
 | what | ms | note |
 |---|---|---|
 | drawing the picture | **7.0** | 1,695 faces; 343 patterned (the ground), 1,352 flat |
-| the hidden picture the pointer is found in | **4.8** | only painted when a pointer asks (`pickAt`), not every frame |
+| the hidden picture the pointer is found in | **4.8** | painted whenever a pointer asked for an answer (`pickAt`) — **removed in v0.22.0**, see "Nothing is painted twice" |
 | working out the shapes | **1.4** | grows with the size of the labyrinth; everything else does not |
 | the cutaway, the light map, the simulation | **<0.3** | together. Not worth looking at. |
 
@@ -770,9 +843,14 @@ the v0.17.0 table above.
 **Skipping a piece is only allowed to be a SUBSET of what the per-square test
 did, and that is proved, not argued.** 240 cases (3 rings x 5 seeds x 2 zooms x
 4 turns x 2 raised angles), both ways in one build: **the identical picture every
-time** -- 50,520 squares kept and 53,040 things drawn either way, **0 missing and
-0 extra in any case** -- with **75.9% of the square measurements no longer
-happening** (28,478,880 -> 6,873,120).
+time** -- 38,757 squares kept and 41,028 things drawn either way, **0 missing and
+0 extra in any case** -- with **89.9% of the square measurements no longer
+happening** (88,384,435 -> 8,917,751; the best case skips 95.6% of them). The 240
+cases reached **237 different worlds**, which is the check that the seeds, turns,
+zooms and raised angles are doing anything. (Those four figures were re-measured
+in v0.22.0. The ones that stood here before -- 50,520 / 53,040 / 75.9% -- came
+from the probe reading the world out of the game BEFORE asking for a new one, so
+all 240 cases measured one frozen picture; see lesson 27.)
 
 One more number belongs here because forgetting is the next job: **nothing is
 thrown away yet**, so the ground held only grows with the walking. The window
@@ -833,9 +911,13 @@ is.
   harness's `Game.frame()`, which never enters the loop.
 - **Riding a crawler makes every frame a moving frame**, so anything that used to
   happen "when the view changes" now happens sixty times a second. The pick pass
-  is therefore painted **on demand inside `pickAt()`**, not after every rebuild:
-  it is the most expensive thing in a frame (2.74ms of 16ms) and nothing reads it
-  unless a pointer is asking. On a phone there is no hover, so it runs on a tap.
+  used to answer that by painting the whole scene a second time, kept on demand
+  inside `pickAt()` so it was only paid while a pointer was asking -- which, with
+  the view riding a crawler, was every frame of the ride: the most expensive thing
+  in a frame (2.74ms of 16ms). **As of v0.22.0 there is no second painting at
+  all** -- `pickAt()` works the answer out from the shapes the picture already
+  built, so it costs about a microsecond and can be asked every frame. See
+  "Nothing is painted twice" above. On a phone there is no hover, so a tap asks.
 
 ---
 
@@ -1149,7 +1231,9 @@ checkout still builds. The build reconciles the two and inlines the result.
     missing polygon. (And measure the right thing: the first version of that
     proof counted KEPT SQUARES, which are identical either way, and so reported
     that the cull saved nothing. What a removed piece actually saves is the
-    measuring of its squares -- 75.9% of them, once counted.)
+    measuring of its squares -- **89.9% of them**, once counted. The first
+    counting of that said 75.9%, and it was measuring one frozen picture 240
+    times; see lesson 27.)
 
 24. **A test written for a fixed world is not a test of the endless one.** Four
     of the suite's tests went on passing when v0.21.0 landed, and three of them
@@ -1174,6 +1258,54 @@ checkout still builds. The build reconciles the two and inlines the result.
     moves -- and if the number can run past what the thing reading it can hold (a
     colour channel, a fixed-width id), write that down before it is reached, not
     after.
+
+26. **Never encode WHO something is in a COLOUR.** v0.22.0, the pointer's answer.
+    The old picker painted each shape in a colour spelling out its number and read
+    the pixel back, and it was wrong along the outline of *everything* -- because
+    canvas BLENDS a pixel a shape only partly covers, and it does so even when the
+    covering shape is the very same colour: fill a pixel `rgb(68,110,0)`, cover
+    part of it with `rgb(68,110,0)`, read it back, and it is `67,110,0`. Measured
+    at eight coverages, six lost the bottom bit of a channel, with and without an
+    alpha channel, and the fit is truncation rather than rounding. One lost bit is
+    a different valid number (`67 + 109*256 = 27,971`, and the square next door is
+    `27,970`), so the answer was silently somebody else. Generalised: a value
+    written into a picture is a value that can be damaged by the act of drawing,
+    and the damage lands exactly where a person is most likely to be pointing --
+    on the edges. Work the answer out from the shapes instead, and let the picture
+    be only a picture. (See "Nothing is painted twice".)
+
+27. **A probe must read the world it MEANS to measure, and say how much work it
+    did.** Two batteries were reporting numbers that looked like findings while
+    measuring one frozen moment: `window.__test.seed(n)` REPLACES the game state,
+    so a probe that captured `const s = t.state` before seeding was holding a dead
+    object and re-measuring the same frame for all 52 (and 240) of its cases. The
+    symptoms read as results -- dials that did nothing, "before" and "after"
+    identical, an answer costing 0.0 µs, 240 cases reaching one world. Fix: read
+    the state AFTER seeding, and **print the count** of whatever the battery claims
+    to have done (asks made, repaints done, DISTINCT WORLDS reached). A case count
+    of 1 in a self-check is a failing probe, not a tidy result. The v0.21.0 cull
+    proof was the worst case of this: it shipped with 240 cases that had all
+    measured one frozen picture, and three of its published figures (50,520 squares
+    kept, 53,040 things drawn, 75.9% of measurements saved) were re-measured in
+    v0.22.0 as 38,757 / 41,028 / 89.9%, with 237 of the 240 cases reaching a world
+    of their own. The conclusion never changed -- the cull really does keep the
+    same picture -- but the numbers around it were nonsense, and a wrong number in
+    the notes is worse than no number, because the next session measures against
+    it. Generalised: an instrument that cannot tell you it did nothing will tell
+    you nothing, loudly.
+
+28. **A test may only assert on what the test controls.** v0.22.0's guard on the
+    new picker went red in the full suite and green on its own, and the reason was
+    not a flake: it half-asserted `s.pointer.over`, which follows the REAL mouse --
+    the test before it clicks a close button, leaving the mouse parked at
+    (1244,34), and when the panel reappears over the canvas at that spot Chromium
+    fires a genuine `pointerleave` and the flag drops. The count it was actually
+    about (1,102 asks) was healthy the whole time. Fix: drive the pointer through
+    the harness's own door (`window.__test.point`), as the rest of the file does,
+    and assert only on numbers the test caused. Generalised: a real mouse, a real
+    clock and a real frame rate are inputs, not evidence -- and a test that reads
+    one will fail on a different machine or a different day, for a reason that
+    lives nowhere in the game.
 
 ---
 

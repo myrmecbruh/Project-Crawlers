@@ -30,8 +30,11 @@ noted against each line:
   first, and the square underfoot is always made the very frame it is wanted. What
   it does NOT do is throw anything away — **a match still holds every piece it has
   ever fetched**, so the ground held grows with the walking. Bounding that
-  (`forget-and-remake`) and the pick table below are the rest of this job. The two
-  dials are rows 90 and 91 of `docs/crawlers.xlsx`.
+  (`forget-and-remake`) is what is left of this job. The pick table below was
+  built in v0.22.0 — the pointer's answer is worked out from the shapes now
+  instead of being painted a second time, and the numbers it hands out no longer
+  have to fit in a pixel colour. The two dials are rows 90 and 91 of
+  `docs/crawlers.xlsx`.
 - **Seven ramps in a piece lean at a wall instead of at ground a metre higher.**
   Found in v0.20.0 while checking the doorways' ramps: seed 2 at (18,28) and
   (18,30), seed 3 at (42,9), seed 7 at (47,4), seed 8 at (30,29) and (31,29), seed
@@ -95,24 +98,18 @@ Rule 2 says ask and wait. These have been asked and are still open.
 
 ## Parked: smaller things, offered and measured
 
-- **The hidden picture used to find what is under the pointer costs 4.8 ms**, and
-  it draws every face in the scene a second time to do it. It only runs when a
-  pointer actually asks, so it is free when the mouse is still — but it is the
-  single most expensive thing that happens while the mouse is moving, and since
-  v0.18.0 took the buried walls out of the picture it is now the biggest cost
-  there is. Could be answered arithmetically (point-in-polygon, back to front)
-  with no second picture at all.
-- **The numbers the pointer reads are running out of room, and it does not matter
-  yet.** Every square, crawler and camp site on screen is named by its position in
-  the list of live things, and the pointer reads that number back off a pixel
-  colour — `rgb` gives 16,777,215 of them, so the list can never be longer than
-  that. Since v0.21.0 **nothing is ever forgotten**, so a match that keeps walking
-  grows the list for as long as it lasts: 25 pieces is 78,400 squares, and
-  16,777,215 is about **5,350 pieces**. Past that the numbers wrap and two
-  different things would answer to the same colour, silently. Written down here
-  rather than left to be discovered. The fix is a pick table — a list of what is
-  in front of the pointer, rebuilt as the pointer moves — which also removes the
-  second painting of the whole scene that costs 4.8 ms (the bullet below).
+- **The numbers the pointer reads used to be running out of room, and the reason
+  is gone.** Until v0.22.0 every square, crawler and camp site on screen was named
+  by its position in the list of live things, and the pointer read that number
+  back off a pixel colour — `rgb` gives 16,777,215 of them, so the list could
+  never be longer than that. Since v0.21.0 **nothing is ever forgotten**, so a
+  match that keeps walking grows the list for as long as it lasts: 25 pieces is
+  78,400 squares, and 16,777,215 is about **5,350 pieces**, past which two
+  different things would have answered to the same colour, silently. As of
+  v0.22.0 the number never goes near a colour — the answer is worked out from the
+  shapes — so there is no ceiling but the size of a JavaScript number. What is
+  still true is that the list itself grows without limit, which is
+  `forget-and-remake`'s job.
 - **The camera snaps when you pick a crawler.** Clicking one locks the view onto
   them instantly rather than easing across. It was left as a snap because they
   asked for a lock; if the jump annoys, it is a few lines to glide instead.

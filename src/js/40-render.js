@@ -13,6 +13,10 @@
 const Render = {
   w: 0, h: 0,                  /* the picture, in game pixels              */
   buf: null, bctx: null,
+  /* The pick buffer: the scene painted flat in identity colours. The game no
+     longer reads it -- pickAt() works the answer out arithmetically -- but the
+     battery still paints it as the yardstick the arithmetic answer is proved
+     against, so it is built and sized like any other buffer. */
   pick: null, pctx: null,
   batch: [],
   consumed: null,
@@ -622,7 +626,7 @@ const Render = {
      the pieces nowhere near the screen are skipped without their squares ever
      being projected (see pieceOnScreen). Each square still carries the number
      of its place in the list of every live square, because that number is what
-     the pointer reads back off the pick buffer. */
+     the pointer answers with (see pickAt). */
   build(s) {
     const w = s.world, b = this.batch;
     this.ensure();
@@ -782,7 +786,6 @@ const Render = {
     }
 
     s.geomDirty = false;
-    this.pickStale = true;     /* the pick buffer is now a frame behind */
     return b;
   },
 
@@ -1129,17 +1132,24 @@ const Render = {
     return this.consumed;
   },
 
-  /* The same scene painted flat in identity colours. Reading one pixel of it
-     says exactly what the player is pointing at -- elevation, ramps, crawlers
-     and half-built structures included. The only honest answer to "anything you
-     can SEE" (rule 8). */
+  /* The scene painted flat in identity colours: one pixel of it says what the
+     player is pointing at, elevation and ramps and crawlers and half-built
+     structures included.
+     
+     NOTHING IN THE GAME READS THIS ANY MORE. pickAt() works the same answer
+     out arithmetically, and the mouse went from being the most expensive thing
+     in a frame to almost free. This stays because it is the YARDSTICK: it is
+     the answer the game gave for years, painted the straightforward way, and
+     the battery that proves the new way agrees with the old way is a
+     comparison against this. Keeping a correct but slow version of a thing
+     beside a fast one, and proving them equal, is the whole reason the fast
+     one is allowed to exist. (See "nothing is painted twice" in CLAUDE.md.) */
   drawPick(s) {
     this.ensure();
     const ctx = this.pctx, b = this.batch;
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, this.w, this.h);
-    this.pickStale = false;
     for (let k = 0; k < b.length; k++) {
       const it = b[k];
       const id = it.i + 1;
@@ -1182,21 +1192,90 @@ const Render = {
   actorFromPick(s, p) { return s.actors[p - this.actorBase(s)]; },
   siteFromPick(s, p) { return s.camp ? s.camp.sites[p - this.siteBase(s)] : null; },
 
+  /* Is this point inside this shape? Even-odd crossing count, which for a
+     simple shape is the same as the winding rule canvas fills by.
+     
+     The point asked about is the MIDDLE of a pixel, because that is the point
+     canvas itself tests when it decides whether to fill one -- so asking here
+     gives the same answer the painted buffer gave. */
+  inShape(pts, px, py) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i], b = pts[j];
+      if ((a.y > py) !== (b.y > py) &&
+          px < (b.x - a.x) * (py - a.y) / (b.y - a.y) + a.x) inside = !inside;
+    }
+    return inside;
+  },
+
+  /* What is under the pointer?
+   *
+   * "Anything you can SEE" (rule 8) is the standing answer, and the way that
+   * was honoured until now was to paint the whole scene a second time flat in
+   * identity colours and read the pixel back. That is a second full pass over
+   * every face in the frame -- the single most expensive thing left in a
+   * frame, paid every frame the pointer was over the canvas, because the view
+   * rides a walking crawler and so the picture is rebuilt every frame anyway.
+   *
+   * It is not needed. The list this reads is already in painter's order, back
+   * to front, and the last thing to paint a pixel is what the player sees
+   * there. Walking that list the OTHER way -- front to back -- and stopping at
+   * the first shape that contains the point finds that exact same thing, with
+   * no canvas, no colours and no pixels: just the shapes that were already
+   * worked out for the picture.
+   *
+   * So what is compared is not "the same polygons" but the same polygons
+   * tested at the same point in the same order, which is why the two answers
+   * agree. Where they DO differ is a genuine improvement: a pixel on the edge
+   * of a shape came back from the painted buffer as a BLEND of two identity
+   * colours -- a number belonging to neither, sometimes a number belonging to
+   * something else entirely, and sometimes nothing at all. There is no blend
+   * here. A pixel belongs to the shape it is inside, and to nothing else.
+   *
+   * The bounding box each item already carries is a cheap no: that is the same
+   * box the picture was culled by, widened by a pixel so that a box drawn a
+   * hair too tight can never hide a shape behind it. */
   pickAt(s, bx, by) {
-    if (!this.pick) return -1;
-    /* Painting the whole scene a second time in identity colours is the most
-       expensive thing in a frame, and nothing reads it unless a pointer is
-       actually asking. So it is repainted here, on demand, rather than after
-       every rebuild -- which, now that crawlers walk and the view can ride
-       one, is every single frame. */
-    if (this.pickStale) this.drawPick(s);
     const x = Math.floor(bx), y = Math.floor(by);
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return -1;
-    const d = this.pctx.getImageData(x, y, 1, 1).data;
-    const id = d[0] + d[1] * 256 + d[2] * 65536;
+    const px = x + 0.5, py = y + 0.5;
+    const b = this.batch;
+    for (let k = b.length - 1; k >= 0; k--) {
+      const it = b[k];
+      if (px < it.minX - 1 || px > it.maxX + 1 ||
+          py < it.minY - 1 || py > it.maxY + 1) continue;
+      if (it.kind === 'cell') {
+        if (it.solid) {
+          /* The same two choices drawPick() makes: a wall is cut down where
+             something flat and tall enough stands in front of it, and a wall
+             that shows at all is as much a hit as the top is. Both faces
+             belong to this one square, so their order does not matter here. */
+          const qL = it.nbrL >= 0 ? it.cutL : it.left;
+          const qR = it.nbrR >= 0 ? it.cutR : it.right;
+          if (qL && this.inShape(qL, px, py)) return this.hit(s, it.i);
+          if (qR && this.inShape(qR, px, py)) return this.hit(s, it.i);
+        }
+        if (this.inShape(it.top, px, py)) return this.hit(s, it.i);
+        continue;
+      }
+      const parts = it.parts;
+      for (let r = 0; r < parts.length; r++) {
+        const fs = parts[r].faces;
+        for (let g = 0; g < fs.length; g++) {
+          if (this.inShape(fs[g].pts, px, py)) return this.hit(s, it.i);
+        }
+      }
+    }
+    return -1;
+  },
+
+  /* One number identifies anything on screen, and the three runs of numbers
+     are worked out from how much is in the world -- so a number left over from
+     before a piece was fetched is refused rather than answered as somebody
+     else. */
+  hit(s, i) {
     const max = s.world.cells.length + s.actors.length
               + (s.camp ? s.camp.sites.length : 0);
-    if (id < 1 || id > max) return -1;
-    return id - 1;
+    return (i < 0 || i >= max) ? -1 : i;
   }
 };

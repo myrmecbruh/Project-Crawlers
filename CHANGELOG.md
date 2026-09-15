@@ -7,6 +7,115 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.22.0 — the pointer works the answer out instead of painting one
+
+Since the beginning, "what is under the mouse" was answered by **drawing the whole
+scene a second time** into a canvas nobody sees, flat and untextured, in colours
+that spell out the numbers of the things drawn, and then reading back the single
+pixel the mouse is on. It worked, and it was the most expensive thing in the
+game: a full second picture, on the frame, every time the pointer asked. It is
+gone. The answer is now **worked out from the shapes the picture was already
+built from**.
+
+**How it works, in one breath.** The list of shapes is in the order the picture is
+painted — furthest back first, so the last thing painted is the thing in front.
+Walking that list **backwards and stopping at the first shape that contains the
+point** therefore finds exactly what the last brush stroke would have left there,
+which is the same answer the painted version read back. Nothing is drawn. Shapes
+carry a rectangle around themselves and are skipped when the point is outside it;
+a rectangle can only ever add tests, never remove an answer, and that is what the
+suite's comparison against a box-free walk guards.
+
+**What it costs now.** Measured in one build with both ways alternating, best of
+three, seed 1, 900 × 700 window, the view riding a walking crawler with the
+pointer on the picture — this is the case the old code repainted on:
+
+| | painted answer (v0.21.0) | worked-out answer (v0.22.0) |
+|---|---|---|
+| one frame, 12 pieces / 37,632 squares | 6.93 ms | **5.53 ms** |
+| one frame, 56 pieces / 175,616 squares | 6.91 ms | **5.48 ms** |
+| one answer on its own | 1,494 µs | **1.8 µs** |
+| one answer on its own, 56-piece world | 1,418 µs | **0.5 µs** |
+| a whole second of hovering (60 answers) | 89.6 ms | **0.1 ms** |
+
+**1.40 and 1.43 ms a frame** — the price of the second picture — and it does not
+grow with the world, because the second picture never did either: 12 pieces and 56
+pieces cost the same 1.4 ms. **One answer goes from about a millisecond and a
+half to about a microsecond**, a thousand times cheaper, which is why a second of
+hovering costs a tenth of a millisecond of drawing instead of 89.6 ms of it. The
+instrument counts its own work so that a silent no-op cannot look like a result:
+**30 questions asked in 30 frames the new way and 30 the old way, 30 repaints
+counted the old way, 269 shapes in both worlds, and 400 of 400 sample points
+landing on something both ways**. (The number of asks in a second follows the
+browser's clock, not this code, so the test that guards all this holds the
+pointer on a crawler and checks that questions really were asked, rather than
+guessing at a frame rate.)
+
+**The old way was also sometimes wrong, and now it is known exactly how.** The
+identity colours packed a thing's number into the three colour bytes of a pixel.
+Canvas, when it paints a shape, **blends a pixel that a shape only partly covers**
+— and it turns out it does this even when the shape covering it is the *same
+colour*, and it loses the bottom bit of a channel when it does. Measured on a bare
+canvas, with no game involved: a pixel filled `rgb(68,110,0)` and then covered
+partly with that same colour reads back as `67,110,0` at 10% coverage, `68,109,0`
+at 25%, `68,109,0` at 75%, and `68,110,0` only at 100% — six of eight partial
+coverages lost a bit, and the same with transparency on or off. One lost bit is
+enough: `67 + 109 × 256` is **27,971**, and the square next door is **27,970**, so
+a partly covered pixel could quietly name the neighbouring thing. That is exactly
+what the last stubborn "disagreement" of the previous session turned out to be —
+a pixel on the outline of a spade that decodes to the square beside it. The new
+answer names the shape covering the **middle** of the pixel, which is the thing
+canvas itself fills, and it cannot lose a bit because nothing is ever written
+down. **A cost saving that was only a speed-up became a correctness fix.**
+
+**And that is proved, not argued.** The two ways are run in the same build on the
+same frozen moment, pixel for pixel: **52 cases, four of them at every single
+pixel of the picture, 610,496 pixels asked both ways**. **569,234 of them — 93.24%
+— got the identical answer.** The remaining **41,262 differ only on a shape's own
+edge**, where the painted number is a blend of the two colours meeting; **in the
+middle of a shape, 0 differ**, and on those edges **not once did one of the two
+say something while the other said nothing** — they never disagree about whether
+there is anything there, only about which of two touching things a boundary pixel
+belongs to, which is a question with no right answer. The battery reports **46 of
+its 52 cases reaching a world of their own**, which is the check that its seeds,
+turns, zooms and raised angles are really doing something: the same battery was
+silently comparing one frozen view 52 times before this session, because it read
+the world out of the game *before* asking for a new one, and the game hands out a
+brand-new world when you ask for a seed.
+
+**The number ceiling this was heading for is gone with it.** Colours hold
+24 bits, which capped the labyrinth at about 5,350 pieces, and `ROADMAP.md` had
+that written down as the next thing to break. A thing's number never goes near a
+colour any more, so there is no ceiling. What is still waiting is the memory —
+nothing is ever thrown away yet — and that is `forget-and-remake`.
+
+**And the same broken ruler was found under an older claim.** The proof that
+v0.21.0's ground-skipping keeps the same picture had the very same fault: it read
+the world out of the game before asking for a new one, so its 240 cases were 240
+looks at one frozen picture, and three of its published figures were nonsense. Run
+properly — 237 of the 240 cases now reaching a world of their own — it still says
+what it said: the picture is identical, 0 squares missing, 0 things painted twice,
+in all 240 cases. But the numbers beside it moved: 38,757 squares kept and 41,028
+things drawn, not 50,520 and 53,040, and **89.9% of the square measurements saved,
+not 75.9%** (88,384,435 of them down to 8,917,751). The v0.21.0 entry above has
+been corrected and says so; a wrong number left in the notes is worse than no
+number at all.
+
+**Two tests stand in place of the old one.** The old test asked that the second
+picture was painted *only when somebody read it*. That is now the strong thing
+instead: **the picture is never painted a second time at all** — not with the
+pointer off the canvas, and not while riding a crawler, which is when the old code
+repainted every frame — with the guard that questions really were asked, and asked
+with the picture out of date, so that it cannot pass by asking nothing. The second
+test compares the new answer against a deliberately slow walk in the paint
+direction that ignores the rectangles entirely, over a sweep of the whole picture
+plus **every pixel of a 30 × 30 patch in the middle**: 3,729 points, all 3,729
+landing on something, 0 wrong. `drawPick` stays in the file as the yardstick the
+comparison is made against, with a note on it saying nothing in the game reads it
+any more.
+
+---
+
 ## v0.21.0 — the ground arrives as you walk, and the picture only pays for what it can see
 
 v0.20.0 made the world underneath endless: a piece of ground is worked out from
@@ -73,11 +182,18 @@ measuring itself.
 **Skipping a piece is only allowed to be a SUBSET of the work the old per-square
 test did, and that is proved rather than argued.** The proof runs both ways in one
 build across 3 rings × 5 seeds × 2 zooms × 4 turns × 2 raised angles: 240 cases,
-**every one of them painting the identical picture** — 50,520 squares kept and
-53,040 things drawn, both ways, in all 240 — with **0 squares missing and 0 extra
-things painted in any case**, while **75.9% of the square measurements stopped
-happening** (28,478,880 → 6,873,120). Nothing a player can see moved; a fifth of
-the work did.
+**every one of them painting the identical picture** — 38,757 squares kept and
+41,028 things drawn, both ways, in all 240 — with **0 squares missing and 0 extra
+things painted in any case**, while **89.9% of the square measurements stopped
+happening** (88,384,435 → 8,917,751; the best case skips 95.6% of them). Nothing a
+player can see moved; nine tenths of the work did.
+
+*(That paragraph was corrected in v0.22.0. As first written it said 50,520 squares
+kept, 53,040 things drawn and 75.9% of measurements saved. The probe behind those
+figures was reading the world out of the game **before** asking for a new one, so
+all 240 of its cases were measuring one frozen picture; re-run properly, 237 of the
+240 reach a world of their own. The claim itself — the picture is identical, not a
+square missing, not a thing painted twice — held in all 240 cases both times.)*
 
 **New ground arrives at the end of the list of live squares, and every number
 after it slides along.** Pick numbers run the squares, then the crawlers, then the
