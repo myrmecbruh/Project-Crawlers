@@ -26,6 +26,20 @@ SLOPE_HIGH[SLOPE_XDN] = [1, 0, 0, 1];   /* A and D */
 SLOPE_HIGH[SLOPE_YUP] = [0, 0, 1, 1];   /* C and D */
 SLOPE_HIGH[SLOPE_YDN] = [1, 1, 0, 0];   /* A and B */
 
+/* The four EDGES of a cell, named by the corner they run from going
+   A -> B -> C -> D: edge 0 is A-B (north), 1 is B-C (east), 2 is C-D (south),
+   3 is D-A (west). EDGE_STEP says which way to step to the square that shares
+   that edge; ACROSS[edge][c] is which of THAT square's corners is the same
+   point of the grid as our corner c (A=0, B=1, C=2, D=3), or -1 when c is not
+   on that edge at all. */
+const EDGE_STEP = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+const ACROSS = [
+  [3, 2, -1, -1],   /* north of us: our A is its D, our B its C */
+  [-1, 0, 3, -1],   /* east:  our B is its A, our C its D */
+  [-1, -1, 1, 0],   /* south: our C is its B, our D its A */
+  [1, -1, -1, 2]    /* west:  our D is its C, our A its B */
+];
+
 function slopeFor(dx, dy) {
   if (dx > 0) return SLOPE_XUP;
   if (dx < 0) return SLOPE_XDN;

@@ -568,14 +568,27 @@ Measured on v0.17.0, seed 1, camp in view, 1100x760, 80 draws of one frame:
 | working out the shapes | **1.4** | grows with the size of the labyrinth; everything else does not |
 | the cutaway, the light map, the simulation | **<0.3** | together. Not worth looking at. |
 
-Inside the drawing, **the rock side walls are two thirds of it**: 686 faces,
+Inside the drawing, **the rock side walls were two thirds of it**: 686 faces,
 2.9 ms, covering ten screenfuls of pixels. They are drawn from each column's top
 **all the way down to the floor of the world**, so 90-96% of what is painted is
-inside the rock standing next to it (measured on seeds 1, 2, 3, 7, 777). Parked
-in `ROADMAP.md`; see it before opening any other performance investigation.
+inside the rock standing next to it (measured on seeds 1, 2, 3, 7, 777). Dealt
+with in v0.18.0, below.
 
 Crawlers and camp pieces together are 666 faces but under 10,000 pixels -- about
 5% of one screenful. They are not the problem and never were.
+
+**As of v0.18.0 the rock walls are clipped against the rock next door**, so a
+side wall only drops as far as the neighbour it faces. Measured on the built
+file with the flag A/B-ed inside one build (paused repaint, seed 1..777, 624x368
+-- `probe` protocol, not the table above): the wall faces painted fall 786 -> 164,
+762 -> 170, 474 -> 105, 814 -> 183, 378 -> 92, the pixels they cover fall by
+71-81%, and drawing the picture goes 5.92 -> 4.38 ms (seed 1), 6.87 -> 4.92 (2),
+5.00 -> 3.56 (3), 5.35 -> 3.81 (7), 4.06 -> 3.35 (777) -- 17% to 29%. The wall's
+own visible sliver is still painted; what went away was paint inside other rock.
+See the v0.18.0 entry in `CHANGELOG.md` for the seam it leaves, and `tests/run.mjs`
+for the bounds that keep it honest -- **the picture is not byte-identical and
+cannot be**: 2.6-4.8% of the picture moves by a shade or two at overlapping soft
+edges (worst 20/255), while nothing that was visible moves at all.
 
 ---
 
@@ -826,6 +839,24 @@ checkout still builds. The build reconciles the two and inlines the result.
     bill was with the rock side walls, which nobody looks at: 686 faces and ten
     screenfuls of pixels, 90-96% of it painted inside other rock. Detail is not
     area, and area is what a fill costs.
+
+17. **"The picture is unchanged" is not a claim a renderer can make, so the test
+    has to say what IS true instead.** The parked version of the wall clip asked
+    for "the picture provably unchanged". That cannot be had. Where a wall is
+    removed from underneath a shape that shares its edge, the coverer has a
+    one-pixel antialiased edge, and through that edge the pixel now blends with
+    whatever is behind it instead. Painting the same frame twice IS identical,
+    pixel for pixel; painting it with the clip and without is not, and never
+    will be. What settled it was not a percentage but a census of WHERE the
+    difference is: for every differing pixel, the topmost fill covering it in the
+    old picture was a shape that is still there, never a removed wall -- so
+    nothing that was visible moved, and everything left is a hairline seam. What
+    went into the tests are the two bounds that are load-bearing (how many pixels
+    may differ, and by how much) instead of the byte-identity the roadmap had
+    asked for. Generalised: when a change deletes work that something else was
+    covering, expect a seam; measure the seam's EXTENT rather than arguing about
+    its existence, and write the bound down where a later session can fail
+    against it.
 
 ---
 

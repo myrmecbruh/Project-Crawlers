@@ -297,6 +297,147 @@ await test('rock between you and a room fades, so no room hides behind its wall'
   assert(r.fadedRock < r.rock, 'every single wall faded, which is not a cutaway');
 });
 
+/* ---- putting the wall faces away -----------------------------------------
+ *
+ * A rock column's side faces are painted from the top of the block down to the
+ * floor of the world, and most of that is inside the block standing next to it.
+ * v0.18.0 leaves that part out: a face only drops as far as the block in front
+ * of it reaches, and a face that is buried entirely is not painted at all.
+ *
+ * The pixels are the assertion, not the shape list. Two rectangles that share
+ * an edge always disagree in the last pixel along that edge -- the shape on top
+ * covers it only part way -- so the picture CANNOT be byte for byte identical,
+ * and a test claiming that would be a lie that passes by luck on one seed. What
+ * is asserted instead is where the difference is allowed to be and how big:
+ * thousands of pixels may shift by a shade or two at soft edges, and NOTHING
+ * may move as much as a surface would if it were missing. Removing the
+ * see-through guard fails all three of these, measured at 14% of the picture
+ * and 184/255, so the bounds below are load-bearing rather than decorative. */
+await test('a wall buried in the rock next door is not painted (seeds 1, 2, 3, 7, 777)', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, out = [];
+    t.pause();
+    for (const seed of [1, 2, 3, 7, 777]) {
+      t.seed(seed);
+      t.clipWalls(false); t.repaint();
+      const off = t.consumed();
+      const was = { walls: off.walls, px: off.wallPx, buried: off.buried };
+      t.clipWalls(true); t.repaint();
+      const on = t.consumed();
+      out.push({ seed, was, walls: on.walls, px: on.wallPx, buried: on.buried });
+    }
+    return out;
+  });
+  for (const q of r) {
+    assert(q.was.buried === 0,
+      `seed ${q.seed}: ${q.was.buried} walls counted as buried with the clip switched off`);
+    assert(q.buried > 100,
+      `seed ${q.seed}: only ${q.buried} face was found buried in the rock next door`);
+    assert(q.walls < q.was.walls * 0.5,
+      `seed ${q.seed}: ${q.was.walls} wall faces painted, then ${q.walls}`);
+    assert(q.px < q.was.px * 0.5,
+      `seed ${q.seed}: walls covered ${q.was.px} pixels, then ${q.px}`);
+  }
+});
+
+await test('the same frame painted twice is the same picture, pixel for pixel', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, out = [];
+    t.pause();
+    for (const seed of [1, 2, 3, 7, 777]) {
+      t.seed(seed);
+      for (const clip of [false, true]) {
+        t.clipWalls(clip); t.repaint(); t.repaint();
+        t.keep();
+        t.repaint();
+        const d = t.diff();
+        out.push({ seed, clip, differ: d.differ, worst: d.worst, x: d.x, y: d.y });
+      }
+    }
+    t.clipWalls(true);
+    return out;
+  });
+  for (const q of r) {
+    assert(q.differ === 0,
+      `seed ${q.seed} with the clip ${q.clip ? 'on' : 'off'}: ${q.differ} pixels moved `
+      + `on a repaint that changed nothing (worst ${q.worst} at ${q.x},${q.y})`);
+  }
+});
+
+await test('cutting the buried walls moves soft edges only, and by a hair', async () => {
+  const cases = [{ seed: 1 }, { seed: 2 }, { seed: 3 }, { seed: 7 }, { seed: 777 },
+                 { seed: 1, quarter: 1 }, { seed: 1, quarter: 3 },
+                 { seed: 1, zoom: 1 }, { seed: 1, zoom: 3 }];
+  const r = await page.evaluate((cases) => {
+    const t = window.__test, out = [];
+    t.pause();
+    const wasZoom = t.buffer().zoom;
+    for (const c of cases) {
+      t.seed(c.seed);
+      if (c.quarter) t.rotate(c.quarter);
+      if (c.zoom) t.zoom(c.zoom);
+      t.clipWalls(false); t.repaint();
+      const off = t.consumed();
+      t.keep();
+      t.clipWalls(true); t.repaint();
+      const d = t.diff();
+      out.push({ c: c, pixels: d.pixels, differ: d.differ, worst: d.worst,
+                 deep: d.deep, x: d.x, y: d.y, walls: [off.walls, t.consumed().walls] });
+    }
+    t.zoom(wasZoom);
+    t.clipWalls(true);
+    return out;
+  }, cases);
+  for (const q of r) {
+    const at = `seed ${q.c.seed}${q.c.quarter ? ' turned ' + q.c.quarter : ''}`
+      + `${q.c.zoom ? ' at zoom ' + q.c.zoom : ''}`;
+    assert(q.walls[0] > q.walls[1], `${at}: no wall was left out at all`);
+    assert(q.differ < q.pixels * 0.06,
+      `${at}: ${q.differ} of ${q.pixels} pixels moved (${(100 * q.differ / q.pixels).toFixed(1)}%)`);
+    assert(q.deep < q.pixels * 0.015,
+      `${at}: ${q.deep} pixels moved by more than 8/255, which is a surface and not a soft edge`
+      + ` (first at ${q.x},${q.y})`);
+    assert(q.worst <= 32,
+      `${at}: one pixel moved by ${q.worst}/255, which is a surface and not a soft edge`
+      + ` (at ${q.x},${q.y})`);
+  }
+});
+
+await test('a faded block does not open a hole in the wall behind it', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, out = [];
+    t.pause();
+    for (const seed of [1, 3, 777]) {
+      t.seed(seed);
+      const at = { x: Math.round(t.buffer().w / 2), y: Math.round(t.buffer().h / 2) };
+      const hit = t.point(at.x, at.y);
+      t.select(hit);
+      t.clipWalls(false); t.repaint();
+      const off = t.consumed();
+      const faded = off.faded, wallsOff = off.walls;
+      t.keep();
+      t.clipWalls(true); t.repaint();
+      const d = t.diff();
+      out.push({ seed, hit, faded, wallsOff, wallsOn: t.consumed().walls,
+                 pixels: d.pixels, differ: d.differ, deep: d.deep,
+                 worst: d.worst, x: d.x, y: d.y });
+      t.unpoint();
+    }
+    t.clipWalls(true);
+    return out;
+  });
+  for (const q of r) {
+    assert(q.hit >= 0, `seed ${q.seed}: nothing was picked in the middle of the picture`);
+    assert(q.faded > 0,
+      `seed ${q.seed}: nothing faded, so the see-through case never came up`);
+    assert(q.wallsOn < q.wallsOff,
+      `seed ${q.seed}: the clip gave up entirely while a block was faded`);
+    assert(q.worst <= 32 && q.deep < q.pixels * 0.02,
+      `seed ${q.seed}: with a block faded the clip changed ${q.deep} pixels by more than 8/255`
+      + ` (worst ${q.worst}/255 at ${q.x},${q.y}) -- a wall behind the fade has gone missing`);
+  }
+});
+
 await test('same seed and same inputs give the same labyrinth (seed 777)', async () => {
   const r = await page.evaluate(() => {
     const run = () => {

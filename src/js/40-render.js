@@ -17,6 +17,12 @@ const Render = {
   batch: [],
   consumed: null,
   recordItems: false,
+  /* Paint only the part of a side wall that stands above the block standing in
+     front of it. Flipped off only by the test that paints one frame both ways
+     and compares the two pictures pixel for pixel. */
+  clipWalls: true,
+  cellAt: null,                /* world square -> its place in the batch      */
+  alphaPlan: null,             /* how strong each thing painted, this frame   */
 
   resize(w, h) {
     w = Math.max(64, Math.round(w));
@@ -557,6 +563,17 @@ const Render = {
     return box;
   },
 
+  /* How much of the picture a face covers, for the tests that have to prove the
+     buried walls really are gone rather than take it on trust. */
+  area(pts) {
+    let sum = 0;
+    for (let c = 0; c < pts.length; c++) {
+      const p = pts[c], q = pts[(c + 1) % pts.length];
+      sum += p.x * q.y - q.x * p.y;
+    }
+    return Math.abs(sum) / 2;
+  },
+
   /* Painter's order is back to front, which is ascending depth along whatever
      direction the camera is looking. With the view able to swing, that is no
      longer the order the cells are stored in, so everything visible goes into
@@ -618,6 +635,11 @@ const Render = {
         right: [top[near], top[right], bases[right], bases[near]],
         solid: cell.h > 0,
         wallM: cell.h,              /* how far the faces drop, in metres */
+        /* The corner both faces hang from, and the far corner of each face, so
+           the clip below can tell which of the four edges a face stands on.
+           Then the wall cut down to the block in front: see clipFaces(). */
+        near: near, cornerL: left, cornerR: right,
+        nbrL: -1, nbrR: -1, cutL: null, cutR: null, cutML: 0, cutMR: 0,
         cutaway: cell.cutaway === true,
         minX: box[0], minY: box[1], maxX: box[2], maxY: box[3],
         cx: (top[0].x + top[2].x) / 2, cy: (top[0].y + top[2].y) / 2
@@ -668,9 +690,86 @@ const Render = {
     }
 
     b.sort(function (p, q) { return p.depth - q.depth; });
+
+    /* Where each square ended up. A wall may only be cut down when the block it
+       faces is painted after it, and that is not known until the whole list is
+       in painter's order. */
+    let at = this.cellAt;
+    if (!at || at.length !== w.cells.length) at = this.cellAt = new Int32Array(w.cells.length);
+    at.fill(-1);
+    for (let k = 0; k < b.length; k++) if (b[k].kind === 'cell') at[b[k].i] = k;
+    for (let k = 0; k < b.length - 1; k++) {
+      const it = b[k];
+      if (it.kind !== 'cell' || !it.solid) continue;
+      /* A block with a ramp in it is drawn from its two lowest corners, which
+         are not always the two faces it shows, so a ramp keeps its whole wall. */
+      if (it.cell.slope !== SLOPE_FLAT) continue;
+      this.clipFaces(w, it, k, at);
+    }
+
     s.geomDirty = false;
     this.pickStale = true;     /* the pick buffer is now a frame behind */
     return b;
+  },
+
+  /* Cut a block's two side walls down to where the square standing in front of
+     it reaches.
+     *
+     * A face stands on the edge it shares with that square. Where the square is
+     * a block at least as tall as this one -- which rock is, and rock is most
+     * of what is on screen -- the whole face is inside it: that block's own top
+     * and its two near sides are painted over the same edge a moment later, so
+     * not one of those pixels can be seen. What does show is cut down to where
+     * the two blocks meet, and a face cut away to nothing is not painted at
+     * all.
+     *
+     * Only a FLAT, full-height neighbour qualifies. A flat block is a plain box
+     * whose top and two near sides are exactly what it shows, so it certainly
+     * covers everything it hides. A ramp is drawn from its two lowest corners,
+     * which are not always the two faces it shows; a floor or a pit is too low
+     * to hide anything.
+     *
+     * The cut is only allowed while that block PAINTS SOLID, and that is not
+     * known until draw() -- fade it, because you are inspecting something
+     * behind it, and the whole face has to come back or the fade would open a
+     * hole. So both shapes are worked out here and draw() picks between them. */
+  clipFaces(w, it, k, at) {
+    const cell = it.cell, x = cell.x, y = cell.y, n = w.n;
+    for (let f = 0; f < 2; f++) {
+      const other = f === 0 ? it.cornerL : it.cornerR;
+      /* Which of the four edges the face stands on, named by the corner it runs
+         from: one of the two corners it hangs between is the near corner. */
+      const e = other === (it.near + 1) % 4 ? it.near : other;
+      const nx = x + EDGE_STEP[e][0], ny = y + EDGE_STEP[e][1];
+      if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;   /* off the edge of the world */
+      const j = ny * n + nx, nk = at[j];
+      /* Not on screen, or painted before this face: either way there is nothing
+         standing in front of it to hide it. */
+      if (nk <= k) continue;
+      const nbr = w.cells[j];
+      if (nbr.slope !== SLOPE_FLAT || nbr.h <= 0) continue;
+      /* Where the two blocks meet, and never longer than our own wall: a cut
+         that ended up above it would paint outside the block. */
+      const meet = Math.min(cell.h, nbr.h);
+      if (f === 0) {
+        it.nbrL = nk;
+        it.cutML = cell.h - meet;
+        it.cutL = meet < cell.h ? this.cutWall(it.left, it.top[it.near], it.top[other], meet) : null;
+      } else {
+        it.nbrR = nk;
+        it.cutMR = cell.h - meet;
+        it.cutR = meet < cell.h ? this.cutWall(it.right, it.top[it.near], it.top[other], meet) : null;
+      }
+    }
+  },
+
+  /* The same wall, cut off at `meet` metres. Screen x does not depend on height
+     and screen y moves render.rise pixels per metre, so the cut-off foot is the
+     wall's own foot, raised -- no need to project anything again. */
+  cutWall(quad, topNear, topOther, meet) {
+    return [topNear, topOther,
+            { x: quad[2].x, y: quad[2].y - meet * CFG.rise },
+            { x: quad[3].x, y: quad[3].y - meet * CFG.rise }];
   },
 
   /* One path, one fill. */
@@ -737,19 +836,21 @@ const Render = {
       && item.minY < focus.maxY && item.maxY > focus.minY;
   },
 
-  draw(s) {
-    this.ensure();
-    const ctx = this.bctx, b = this.batch;
-    const kinds = {};
-    let drawn = 0, faded = 0, people = 0, structures = 0, cutaway = 0;
-    const wornDrawn = [];
-
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#06080b';
-    ctx.fillRect(0, 0, this.w, this.h);
-    /* changes whenever the view does, which is when the anchors must be redone */
-    this._frameStamp = s.cam.ox + ',' + s.cam.oy + ',' + s.cam.yaw + ',' + s.cam.tileH;
-
+  /* How strong every item paints this frame, worked out in one place.
+   *
+   * Two things make something see-through: the fourth wall of a room -- rock
+   * standing between you and the floor behind it -- and whatever stands between
+   * you and the thing you are inspecting. That second one is why the walls cut
+   * down in clipFaces() are chosen between HERE and not in build(): selection
+   * and hover are decided after the shapes are worked out and do not dirty them,
+   * so a wall would be cut out of a picture that no longer fades the block
+   * hiding it.
+   *
+   * The list is reused between frames: one picture, one allocation. */
+  alphas(s, b) {
+    const plan = this.alphaPlan || (this.alphaPlan =
+      { list: [], focus: null, focusPos: -1, focusIdx: -1, faded: 0, cutaway: 0 });
+    const list = plan.list;
     /* A pinned selection outranks whatever the pointer happens to be over, so
        the crawler you picked stays ringed while they walk away. */
     const focusIdx = s.selected >= 0 ? s.selected : s.hover;
@@ -759,16 +860,10 @@ const Render = {
         if (b[k].i === focusIdx) { focus = b[k]; focusPos = k; break; }
       }
     }
-
-    const items = this.recordItems ? [] : null;
-    let outlined = false;
-
-    const outlineColour = N('ui.colour_outline');
-    const worldStamp = 'w' + s.cam.ox + ',' + s.cam.oy;
-
+    let faded = 0, cutaway = 0;
+    list.length = b.length;
     for (let k = 0; k < b.length; k++) {
       const it = b[k];
-
       let alpha = 1;
       /* The see-through fourth wall: rock standing between you and a floor
          behind it goes translucent, so a room is never hidden by its own
@@ -778,11 +873,50 @@ const Render = {
         alpha = Math.min(alpha, CFG.occluderFade);
         faded++;
       }
+      /* The highlighted thing is never faded -- it is the one you are looking at. */
+      if (focus && k === focusPos) alpha = 1;
+      list[k] = alpha;
+    }
+    plan.focus = focus; plan.focusPos = focusPos; plan.focusIdx = focusIdx;
+    plan.faded = faded; plan.cutaway = cutaway;
+    return plan;
+  },
+
+  draw(s) {
+    this.ensure();
+    const ctx = this.bctx, b = this.batch;
+    const kinds = {};
+    let drawn = 0, people = 0, structures = 0;
+    let walls = 0, wallPx = 0, buried = 0;
+    const wornDrawn = [];
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#06080b';
+    ctx.fillRect(0, 0, this.w, this.h);
+    /* changes whenever the view does, which is when the anchors must be redone */
+    this._frameStamp = s.cam.ox + ',' + s.cam.oy + ',' + s.cam.yaw + ',' + s.cam.tileH;
+
+    /* How strong everything paints this frame, worked out in one place: the
+       wall cut down in build() is only safe while the block hiding it paints
+       solid, and two copies of that rule would disagree the first time either
+       changed. */
+    const plan = this.alphas(s, b);
+    const alphaOf = plan.list, focus = plan.focus, focusPos = plan.focusPos;
+    const focusIdx = plan.focusIdx, faded = plan.faded, cutaway = plan.cutaway;
+
+    const items = this.recordItems ? [] : null;
+    let outlined = false;
+
+    const outlineColour = N('ui.colour_outline');
+    const worldStamp = 'w' + s.cam.ox + ',' + s.cam.oy;
+
+    for (let k = 0; k < b.length; k++) {
+      const it = b[k];
+      const alpha = alphaOf[k];
 
       /* The highlighted thing is never faded -- it is the one you are looking
          at -- and its halo goes down first, at full strength. */
       if (focus && k === focusPos) {
-        alpha = 1;
         ctx.globalAlpha = 1;
         this.halo(ctx, this.shapeOf(it), outlineColour, CFG.outlineWidth);
         outlined = true;
@@ -865,15 +999,31 @@ const Render = {
            mapped ONTO each face rather than pasted over it. */
         const lf = litShade(def.side, CFG.shadeLeft * lift, it.light);
         const rf = litShade(def.side, CFG.shadeRight * lift, it.light);
+        /* A wall cut down where the block in front hides it -- but only while
+           that block really does paint solid. Fade it and the whole wall has to
+           come back, or the fade would open a hole, so the choice is made here
+           rather than in build(). */
+        const hideL = this.clipWalls && it.nbrL >= 0 && alphaOf[it.nbrL] === 1;
+        const hideR = this.clipWalls && it.nbrR >= 0 && alphaOf[it.nbrR] === 1;
+        const qL = hideL ? it.cutL : it.left;
+        const qR = hideR ? it.cutR : it.right;
+        /* The wall is only as tall as the cut left it, or the stonework would
+           stretch and the courses would not line up with the block's own. */
+        const mL = hideL ? it.cutML : it.wallM;
+        const mR = hideR ? it.cutMR : it.wallM;
         /* flat sides for everything that is not laid masonry */
-        this.poly(ctx, it.left, laid
-          ? this.faceFill(this.matPattern(lf, mat),
-                          it.left[0], it.left[1], it.left[3], 1, it.wallM)
-          : lf);
-        this.poly(ctx, it.right, laid
-          ? this.faceFill(this.matPattern(rf, mat),
-                          it.right[0], it.right[1], it.right[3], 1, it.wallM)
-          : rf);
+        if (qL) {
+          this.poly(ctx, qL, laid
+            ? this.faceFill(this.matPattern(lf, mat), qL[0], qL[1], qL[3], 1, mL)
+            : lf);
+          walls++; wallPx += this.area(qL);
+        } else buried++;
+        if (qR) {
+          this.poly(ctx, qR, laid
+            ? this.faceFill(this.matPattern(rf, mat), qR[0], qR[1], qR[3], 1, mR)
+            : rf);
+          walls++; wallPx += this.area(qR);
+        } else buried++;
       }
       const tf = litShade(def.top, lift, it.light);
       this.poly(ctx, it.top,
@@ -894,6 +1044,9 @@ const Render = {
       tick: s.tick, count: drawn, kinds: kinds,
       people: people, structures: structures, worn: wornDrawn,
       faded: faded, cutaway: cutaway, outlined: outlined,
+      /* Side walls only: how many were painted, how much picture they covered,
+         and how many were buried in the block in front and not painted at all. */
+      walls: walls, wallPx: Math.round(wallPx), buried: buried,
       lights: s.light ? lightSourcesIn(s).length : 0,
       focus: focusIdx, zoom: s.cam.zoom,
       bufW: this.w, bufH: this.h
@@ -932,7 +1085,16 @@ const Render = {
         }
         continue;
       }
-      if (it.solid) { this.poly(ctx, it.left, col); this.poly(ctx, it.right, col); }
+      if (it.solid) {
+        /* Nothing is faded in this picture, so a wall cut down for a block that
+           is painted solid here can always be left out: the block's own faces
+           paint that part of the buffer instead, and the last thing to paint a
+           pixel is the block you are pointing at (rule 8). */
+        const qL = it.nbrL >= 0 ? it.cutL : it.left;
+        const qR = it.nbrR >= 0 ? it.cutR : it.right;
+        if (qL) this.poly(ctx, qL, col);
+        if (qR) this.poly(ctx, qR, col);
+      }
       this.poly(ctx, it.top, col);
     }
     return b.length;

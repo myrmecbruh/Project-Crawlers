@@ -7,6 +7,81 @@ holds always works. A new address would silently strand them on an old build.
 
 ---
 
+## v0.18.0 — the walls buried in the rock are not painted
+
+**Every rock column used to paint its side walls from its own top all the way
+down to the floor of the world**, whatever was standing in front of them. Counted
+in v0.17.0 at 1100×760: 686 faces, **2.9 ms of the 7.0 ms of drawing**, and ten
+screenfuls of pixels of which 90–96% is inside the rock standing next to it. In
+the 624×368 picture measured below, seed 1 alone is **786 face paints covering
+4,677,632 pixels** — twenty screenfuls of wall into a screen. The game was
+painting the inside of solid stone.
+
+Now a side wall drops only as far as **the neighbour it faces**. Where the two
+meet is worked out once, in `build()`, alongside the rest of the shapes, so what
+reaches the painter is a genuinely shorter quad rather than a clipped one; the
+wall's own visible sliver is still painted, at full length, exactly as before.
+Out of 786 wall faces on seed 1, **164 are painted and 622 are dropped**.
+
+Each wall drops to the top of the neighbour across the edge it faces, so the cut
+is a function of the two columns' heights and of `render.rise` — one number, and
+screen x does not enter into it, which is why it can be solved in the geometry
+pass with no pixels involved.
+
+**The catch, which the roadmap had already spotted.** The see-through fourth wall
+fades a near column when it is between the camera and the room, and you really
+can see through it — so those neighbours must NOT be clipped, or a faded block
+would open a hole in the wall behind it. The guard is the fade itself: a wall is
+only cut when the neighbouring column's alpha is exactly 1. `alphaOf` is the same
+number `draw()` was already using, so there is no second opinion about how
+transparent a block is. There is a test for exactly this, because it is the way
+this change fails loudly.
+
+**What was measured**, on the built file with the flag A/B-ed inside one build
+(`__test.clipWalls`), paused repaint, 624×368:
+
+| seed | wall faces painted | wall pixels | dropped walls | repaint |
+|---|---|---|---|---|
+| 1 | 786 → **164** | −81% | 622 | 5.92 → **4.38** ms |
+| 2 | 762 → **170** | −71% | 592 | 6.87 → **4.92** ms |
+| 3 | 474 → **105** | −78% | 369 | 5.00 → **3.56** ms |
+| 7 | 814 → **183** | −79% | 631 | 5.35 → **3.81** ms |
+| 777 | 378 → **92** | −76% | 286 | 4.06 → **3.35** ms |
+
+Between 17% and 29% off drawing the picture, and the pixels thrown away are
+pixels that were covered by the rock next door. The wall pixel counts are in the
+same table because they are the reason: 786 faces painted 4,677,632 pixels of
+wall on seed 1 and now paint 884,736 — 20.4 screenfuls of wall into a picture of
+229,632 pixels, down to 3.9.
+
+**The picture is not unchanged, and cannot be.** The roadmap asked for it
+"provably unchanged" and that was the wrong thing to ask for. Where a wall is
+removed from underneath a shape that shares an edge with it, the covering shape
+has a one-pixel antialiased edge, and through that edge the pixel now blends with
+whatever is behind it instead. Painting the same frame twice is **exactly**
+identical, pixel for pixel — that is now asserted, so the measurement above can be
+trusted — but painting it with the clip and without it is not: 2.6% to 4.8% of
+the picture moves, and the worst single pixel in any of the nine cases measured
+(five seeds, two other camera quarters, zoom 1 and zoom 3) moved **20/255**.
+That is a shade or two on the edge of a block, and nowhere near what a missing
+surface looks like: the same measurement with the see-through guard taken out
+moves 14% of the picture and up to 184/255.
+
+The thing that settled it was not a percentage but a **census of where the
+difference is**. For every single differing pixel, across seeds 1, 2, 3, 7 and
+777, the topmost fill covering that pixel in the old picture was a shape that is
+still there — **never a removed wall**. Nothing that was visible moved. What is
+left is a hairline seam where two soft edges overlap, and four tests hold it
+there: the census itself (buried walls exist and are not painted), same-frame
+identity, the seam bounds, and the fade guard.
+
+Lesson 17, written up in `CLAUDE.md`: when a change deletes work that something
+else was covering, expect a seam, measure the seam's *extent* instead of arguing
+about its existence, and write the bound down where a later session can fail
+against it.
+
+---
+
 ## v0.17.0 — the grit comes off, and the frame gets counted
 
 **The grit is gone.** It had been there since v0.02: a generated speckle tile

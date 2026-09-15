@@ -1,5 +1,12 @@
 /* The in-game test harness. Tests drive the game through this and nothing else.
    A broken ruler is worse than no ruler, so it reports its own self-check. */
+
+/* How far a pixel has to move before it counts as a change you would NOTICE,
+   as opposed to the hairline shift where two shapes' soft edges overlap. Two
+   rectangles that share an edge always disagree in the last pixel of that edge
+   by a little; a shape that is actually missing moves whole pixels by a lot. */
+const NOTICEABLE = 8;
+
 window.__test = {
   version: VERSION,
   cfg: CFG,
@@ -163,6 +170,55 @@ window.__test = {
   /* What actually reached the buffer last draw. Never read Render.batch. */
   consumed() { return Render.consumed; },
   record(on) { Render.recordItems = !!on; Game.state.viewDirty = true; },
+
+  /* Paint the frame again WITHOUT letting time pass, so a test can paint the
+     same picture two ways and compare them pixel for pixel. */
+  repaint() { Game.state.viewDirty = true; Game.render(); return Render.consumed; },
+
+  /* Leave out the part of a side wall that stands inside the block in front of
+     it. Turning this off is the old way of painting, for proving the two agree.
+     Where the wall is cut is worked out while the shapes are built, so this
+     has to ask for them to be built again. */
+  clipWalls(on) {
+    Render.clipWalls = !!on;
+    Game.state.geomDirty = true;
+    Game.state.viewDirty = true;
+    return Render.clipWalls;
+  },
+
+  /* Keep the picture as it is now. diff() then reports how the next one differs
+     from it -- how many pixels, how far the worst of them moved, and the first
+     one that moved, so a failure points at the spot. The pixels never leave
+     this file. */
+  keep() {
+    const px = Render.bctx.getImageData(0, 0, Render.w, Render.h);
+    this._kept = { w: px.width, h: px.height, data: px.data };
+    return { w: px.width, h: px.height };
+  },
+  diff() {
+    const k = this._kept;
+    if (!k) return { error: 'nothing was kept' };
+    const now = Render.bctx.getImageData(0, 0, Render.w, Render.h);
+    if (now.width !== k.w || now.height !== k.h) {
+      return { w: k.w, h: k.h, resized: true, was: now.width + 'x' + now.height };
+    }
+    const a = k.data, c = now.data;
+    let n = 0, worst = 0, deep = 0, fx = -1, fy = -1;
+    /* The alpha channel is not compared: the picture is opaque, so what the
+       player can see is the three colour channels. */
+    for (let i = 0; i < a.length; i += 4) {
+      const d0 = a[i] - c[i], d1 = a[i + 1] - c[i + 1], d2 = a[i + 2] - c[i + 2];
+      if (d0 || d1 || d2) {
+        n++;
+        if (fx < 0) { const p = i >> 2; fx = p % k.w; fy = (p / k.w) | 0; }
+        const d = Math.max(Math.abs(d0), Math.abs(d1), Math.abs(d2));
+        if (d > NOTICEABLE) deep++;
+        if (d > worst) worst = d;
+      }
+    }
+    return { w: k.w, h: k.h, pixels: k.w * k.h, differ: n, deep: deep,
+             worst: worst, x: fx, y: fy };
+  },
 
   actors() {
     return Game.state.actors.map(function (a) {

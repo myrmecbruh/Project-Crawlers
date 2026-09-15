@@ -77,23 +77,13 @@ Rule 2 says ask and wait. These have been asked and are still open.
 
 ## Parked: smaller things, offered and measured
 
-- **Rock walls are painted from the top of each column down to the floor of the
-  world, even where they are buried.** Measured on v0.17.0: 686 side faces a
-  frame, **2.9 ms of the 7.0 ms of drawing**, covering **ten screenfuls** of
-  pixels into a picture 534×348 across. Across seeds 1, 2, 3, 7 and 777,
-  **90–96% of every metre of wall painted is inside the rock standing next to
-  it** — invisible by construction. A wall only ever needs to drop as far as the
-  neighbour it faces. The one catch is the see-through fourth wall: where a
-  near column is faded you CAN see through it, so those neighbours must not
-  clip. Expected saving: most of 2.9 ms, and the picture provably unchanged.
-  **This is the biggest remaining cost in the frame and should be done before
-  any other performance work.** Offered, not yet taken up.
 - **The hidden picture used to find what is under the pointer costs 4.8 ms**, and
   it draws every face in the scene a second time to do it. It only runs when a
   pointer actually asks, so it is free when the mouse is still — but it is the
-  single most expensive thing that happens while the mouse is moving. Could be
-  answered arithmetically (point-in-polygon, back to front) with no second
-  picture at all.
+  single most expensive thing that happens while the mouse is moving, and since
+  v0.18.0 took the buried walls out of the picture it is now the biggest cost
+  there is. Could be answered arithmetically (point-in-polygon, back to front)
+  with no second picture at all.
 - **The camera snaps when you pick a crawler.** Clicking one locks the view onto
   them instantly rather than easing across. It was left as a snap because they
   asked for a lock; if the jump annoys, it is a few lines to glide instead.
