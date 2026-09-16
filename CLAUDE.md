@@ -787,11 +787,55 @@ locked palette** across every tile is what makes them belong together.
 - Only rock facing a room somebody MADE is faced (`worked` in the room's tags);
   a mine or a quarry keeps the rock it was hacked out of. Done after the halls
   are cut, so doorways stay doorways.
-- **Only a DIRECTIONAL material is mapped onto a face; everything else is
-  pinned.** Fracture, dirt and moss have no direction to get wrong. A mapped fill
-  costs about **50 microseconds**, so giving raw rock a mapped material meant 686
-  of them a frame and took drawing from 7.96 ms to 43 ms. Mapped: laid masonry,
-  ~100 cells a world. Pinned: every floor, one transform per pattern per frame.
+- **Only the VERTICAL faces of a block are still pinned; the ground is mapped
+  onto the ground.** Rock's sides are in shadow and edge-on, so a material there
+  reads as almost nothing and costs a third of the frame. Everything you stand
+  on is mapped -- see below.
+
+### The ground is mapped too, and why that is not 350 mapped faces
+
+Until v0.23.0 a floor's material was **pinned to the screen**: the same translate
+everywhere, so the pattern had no direction of its own and the stonework and the
+moss faced the camera while the corridors ran diagonally past it. It was written
+down in the code as a saving -- "a floor is flat, it has no direction to get
+wrong" -- and the saving was real: mapping a face costs about **50
+microseconds**, and the ground is most of the picture, so 350 squares of it taken
+face by face costs 8.7 ms -> 43 ms. That measurement is why it was pinned, and it
+is still why it cannot be mapped one square at a time.
+
+It does not have to be. **Every flat square at one height is the same
+parallelogram of the same plane**, so one transform places the material on all of
+them at once: `plane()` builds it from a whole grid corner, `groundFill()` sets it
+once per material per height per frame, and a floor a metre higher is that same
+map moved up the picture by one rise. The cost is about what pinning cost, and
+the joints now run along the edges of the squares at every camera turn. A
+repeating material looks the same a whole tile along, so WHICH whole grid corner
+the plane is built from does not matter -- the first square of ground the frame
+draws is used, because that keeps the numbers small and exact.
+
+Two consequences worth keeping:
+
+- **The pattern cache is keyed by floor height as well as colour and material**
+  (`matPattern(colour, name, tag)`). A canvas pattern carries its placement with
+  it, so one shared between the floor at one height and the floor at the next
+  would hand the second the first's transform -- a metre out on screen. Heights
+  are whole numbers, so this is a handful of extra 32x32 tiles.
+- **A ramp is mapped from its own corners**, the same call a wall face uses,
+  because a ramp is the one square tilted in its own plane. Ramps are rare so the
+  cost is nothing, and its `hM` stays 1 so a metre of ramp is a whole tile and
+  the stones still line up with the grid.
+
+A material can be a wall's face and a square of ground in the same frame, so
+`groundFill()` keeps its own record of where it laid the pattern (`_laid`,
+`_lastLaid`) rather than sharing the face's (`_pinned`, `_lastMatrix`).
+
+**`Render.mappedGround` is named for what is ON, not for what goes away**:
+`true` means the ground is mapped. It reads the other way round at first glance
+(`false` is the old way), and that cost an afternoon -- a test instrument picking
+a record off the flag read it backwards and crashed. Turning it off pastes the
+ground flat across the screen again. **Flipped off only by the tests that paint
+one frame both ways**, which is how the picture this replaced -- materials facing
+the camera -- is kept from creeping back. `__test.mappedGround(on)` is the switch.
 
 ### What a frame costs, and where it goes
 
@@ -799,7 +843,7 @@ Measured on v0.17.0, seed 1, camp in view, 1100x760, 80 draws of one frame:
 
 | what | ms | note |
 |---|---|---|
-| drawing the picture | **7.0** | 1,695 faces; 343 patterned (the ground), 1,352 flat |
+| drawing the picture | **7.0** | 1,695 faces; 343 patterned (the ground, pasted flat in those days), 1,352 flat-coloured |
 | the hidden picture the pointer is found in | **4.8** | painted whenever a pointer asked for an answer (`pickAt`) — **removed in v0.22.0**, see "Nothing is painted twice" |
 | working out the shapes | **1.4** | grows with the size of the labyrinth; everything else does not |
 | the cutaway, the light map, the simulation | **<0.3** | together. Not worth looking at. |
@@ -861,6 +905,26 @@ One more number belongs here because forgetting is the next job: **nothing is
 thrown away yet**, so the ground held only grows with the walking. The window
 fetched its way from the camp to (169, 46) in twelve drags and went 9 pieces /
 28,224 squares -> 22 / 68,992. Bounding that is `forget-and-remake`.
+
+**As of v0.23.0 the ground is mapped onto the ground (above), and it costs
+nothing measurable.** A/B-ed inside one build -- no rebuild, so the only
+difference is the flag -- seed 1, 900x700, best of three alternating passes of
+30 frames each, at 1, 9 and 25 pieces held:
+
+| pieces held | pasted flat | **mapped onto the ground** |
+|---|---|---|
+| 1 | 4.20 ms | **4.28** (+2%) |
+| 9 | 4.71 ms | **4.70** (-0.4%) |
+| 25 | 4.89 ms | **4.68** (-4.4%) |
+
+Which is the whole claim: one transform per material per height per frame is
+**about what pinning cost**, and the 8.7 -> 43 ms that stopped it being mapped
+square by square stays stopped. The height tag on the pattern cache is tens of
+tiles, not thousands, and nothing that grows with the world: the cost probe above
+held **8 patterns**, and the real game at the camp, walked through all four
+camera turns, held **43** against eight materials. And the two ways of painting
+really do produce different pictures: **64,937 of 138,012 pixels differ** at the
+suite's 434x318, which is what makes the pixel test below worth having.
 
 ---
 
@@ -1319,6 +1383,21 @@ checkout still builds. The build reconciles the two and inlines the result.
     clock and a real frame rate are inputs, not evidence -- and a test that reads
     one will fail on a different machine or a different day, for a reason that
     lives nowhere in the game.
+
+29. **"It has no direction to get wrong" is a reason, not a check.** A floor's
+    material was pasted flat across the screen for as long as materials have
+    existed, on the argument written down in the code: a floor is flat, so it has
+    no direction to get wrong, and mapping it square by square cost 16 ms a frame
+    for 350 squares. Both halves of that were true and the conclusion was still
+    wrong -- the ground does have a direction, the grid's own, and the corridors
+    run at four different angles to the camera, so stonework and moss faced the
+    viewer while the walls they ran between were mapped correctly. What made it
+    affordable was not a cheaper per-square map but noticing that every flat
+    square at one height is the SAME plane, so the whole floor is placed by about
+    as many transforms as pinning it flat took. Generalised: when a rule of thumb
+    says to skip a case, look at what skipping it actually draws at the four
+    angles the player sees -- and check whether the case can be done in one piece
+    instead of piece by piece.
 
 ---
 

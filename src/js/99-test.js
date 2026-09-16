@@ -203,6 +203,21 @@ window.__test = {
     return Render.stepGround;
   },
 
+  /* Lay each material ON the ground it lies on, the way the game ships.
+     Turning this OFF is the old way of painting, for proving the new way
+     against it: the picture it makes is the one with the floor's material
+     facing the camera rather than lying in the floor. Called with nothing it
+     only reports which way it is set, so a test can say which way the game
+     ships. */
+  mappedGround(on) {
+    if (on !== undefined) {
+      Render.mappedGround = !!on;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.mappedGround;
+  },
+
   /* Keep the picture as it is now. diff() then reports how the next one differs
      from it -- how many pixels, how far the worst of them moved, and the first
      one that moved, so a failure points at the spot. The pixels never leave
@@ -305,6 +320,82 @@ window.__test = {
              b: { x: it.left[1].x, y: it.left[1].y },
              d: { x: it.left[3].x, y: it.left[3].y },
              mappedB: put(px, 0), mappedD: put(0, px * it.wallM) };
+  },
+
+  /* Find a square of GROUND on screen and report where it is in the world, the
+     transform the renderer used to lay its material on it, and where the
+     material's own corners landed -- so a test can say the material lies on the
+     ground rather than facing the camera.
+
+     `find` narrows which square is measured, by any of:
+       footing  'walk' for a floor, 'ramp' for a ramp
+       slope    SLOPE_FLAT for a square that is level, or 'x-' and the like
+       x, y     one named square of the world, to follow it through a turn
+     Called with nothing it takes the first square of ground it finds that
+     carries a material. A ramp is worth asking for by name: it is the one
+     square whose corners are not all at one height, so it is mapped from its
+     own corners rather than from the shared ground plane, and it is the one
+     that can go wrong on its own.
+
+     Both ways of painting are covered. `onGround` says which one happened:
+     true when the material was placed in the ground's own plane -- the record
+     only the mapped path writes -- and false when it was pasted flat across the
+     screen. Reported rather than assumed, because a reading that quietly goes
+     missing is how a bug hides.
+
+     A material can be both a wall's face and a square of ground in the same
+     frame, which is why the ground's record is kept apart from a face's. */
+  groundFaceMap(find) {
+    const want = find || {};
+    const s = Game.state;
+    s.geomDirty = true; s.viewDirty = true;
+    Render.build(s);
+    const it = Render.batch.find(function (z) {
+      if (z.kind !== 'cell') return false;
+      const def = TILE(z.cell.tile);
+      if (!def.pattern) return false;
+      if (want.footing !== undefined && def.footing !== want.footing) return false;
+      if (want.slope !== undefined && z.cell.slope !== want.slope) return false;
+      if (want.x !== undefined && (z.cell.x !== want.x || z.cell.y !== want.y)) return false;
+      return true;
+    });
+    if (!it) return null;
+    Render.draw(s);
+    const def = TILE(it.cell.tile);
+    const lift = Math.round((1 + it.cell.h * CFG.heightTint) * 100) / 100;
+    const colour = litShade(def.top, lift, it.light);
+    const pat = Render.matPattern(colour, def.pattern, it.cell.h);
+    /* Clear what the material remembers and ask for the fill the draw asked
+       for, so what is read back below is this call's placement and not an
+       earlier frame's. Clearing `_laid` also defeats the once-a-frame shortcut
+       inside the renderer, so the real laying is measured. */
+    pat._lastLaid = null; pat._lastMatrix = null; pat._laid = ''; pat._pinned = '';
+    Render.ground(colour, def.pattern, it, s, 'w' + s.cam.ox + ',' + s.cam.oy);
+    const px = Math.round(CFG.patternPx);
+    const m = pat._lastLaid || pat._lastMatrix;
+    if (!m) return null;
+    const at = function (tx, ty) {
+      return { x: m[0] * tx + m[2] * ty + m[4], y: m[1] * tx + m[3] * ty + m[5] };
+    };
+    const a = { x: it.top[0].x, y: it.top[0].y };
+    const b = { x: it.top[1].x, y: it.top[1].y };
+    const d = { x: it.top[3].x, y: it.top[3].y };
+    const sub = (p, q) => ({ x: p.x - q.x, y: p.y - q.y });
+    return { tile: it.cell.tile, slope: it.cell.slope, h: it.cell.h,
+             x: it.cell.x, y: it.cell.y,
+             mapped: Render.mappedGround, patternPx: px,
+             a: a, b: b, d: d,
+             /* true when the material was placed in the ground's own plane --
+                the record only the mapped ground path writes -- and false when
+                it was pasted flat across the screen. */
+             onGround: !!pat._lastLaid,
+             /* Where the material's own corners land. Read as a pair these are
+                the whole answer: the gap between them is how far one metre of
+                material really went, and which way. On the ground that way is
+                one of the square's own two edges. */
+             mappedB: at(px, 0), mappedD: at(0, px),
+             wentB: sub(at(px, 0), at(0, 0)), wentD: sub(at(0, px), at(0, 0)),
+             isB: sub(b, a), isD: sub(d, a) };
   },
 
   /* ---- the figure, measured rather than admired ------------------------- */

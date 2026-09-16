@@ -8,6 +8,54 @@ them on an old build.
 
 ---
 
+## v0.23.0 — the ground wears its material, instead of the screen wearing it
+
+Every square of ground — floors, the tops of blocks, ramps — had its texture
+**pasted flat across the screen** rather than laid on the ground. The same
+square of stonework sat at the same place on the picture no matter which way the
+world was turned, so it had no direction of its own: the moss and the joints
+faced the camera while the corridors ran diagonally past them, and as the view
+swung the material slid across the floor under it. Walls stopped doing this in
+v0.16.0; the ground was left behind because it could not be fixed the same way.
+
+**Why it could not be fixed the same way.** Laying a material onto one face
+costs about 50 microseconds, and the ground is most of the picture — 350 squares
+of it taken one at a time took drawing a frame from 8.7 ms to 43 ms. That is
+what the code meant when it called a flat floor a saving: *a floor has no
+direction to get wrong*. It has one. Turning the camera proves it.
+
+**What it took.** Every flat square at the same height is the **same
+parallelogram in the same plane**, so one placement serves all of them at once:
+one transform, built from a whole grid corner, laid once per material per height
+per frame instead of once per square. A floor a metre higher is that same
+placement moved up the picture by exactly one rise. Because a repeating
+material looks the same a whole tile along, which grid corner it is built from
+does not matter; a square keeps the numbers small and exact.
+
+- **The joints now run along the edges of the squares**, at every camera turn,
+  on every square at once — one metre of ground is one tile of material.
+- **A ramp is laid on the ramp itself**, built from its own corners, because a
+  ramp is the one square of ground tilted in its own plane. Its material stays
+  one tile to the metre, so its stones still line up with the grid.
+- **The pattern cache is keyed by floor height as well as colour and material.**
+  A pattern carries its placement around with it, so one shared between the
+  floor at one height and the floor at the next would hand the second the
+  first's placement — a metre out of place on screen. Heights are whole numbers,
+  so this is a handful of extra tiles and it does not grow with the world.
+- **Nothing about the picture's speed changed.** Measured inside one build with
+  only this switched on and off, 1, 9 and 25 pieces of world held: 4.20 → 4.28,
+  4.71 → 4.70, 4.89 → 4.68 ms. About what pasting it flat cost.
+- It is **0 pixels out and not stretched**, on floors and on ramps, at all four
+  camera turns and on five different worlds — where the old way is **318 pixels
+  out** and points the material's own two directions straight across the
+  screen. **64,937 of 138,012 pixels** of a frame differ between the two.
+
+The old way of painting is still in the game behind a switch, because that is
+how the tests paint one frame both ways and keep materials facing the camera
+from creeping back.
+
+---
+
 ## The link moved, and publishing is now something I can do (no game change)
 
 The permanent link used to be a Claude artifact:
@@ -33,10 +81,12 @@ link did not. Asked for a publishing tool, this is one:
   git's own store, from the file the build just wrote, so a half-finished edit in
   the source cannot end up published.
 
-**The game did not change, which is why no new version sits above this note.** The
-picture on the web is still v0.22.0 and the tests are untouched; what changed is
-that there is now somewhere to put it, and a command that puts it there. The old
-artifact link still opens, holding whatever was last published through it.
+**The game did not change when this was done, which is why no new version sits
+above this note.** What changed is that there is now somewhere to put the game,
+and a command that puts it there. At the time of writing the picture on the web
+was still v0.22.0; it became v0.23.0 with the entry above. The tests were
+untouched by the publishing change. The old artifact link still opens, holding
+whatever was last published through it.
 
 ---
 

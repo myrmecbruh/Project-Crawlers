@@ -34,7 +34,21 @@ if (!existsSync(built)) {
 
 const results = [];
 function assert(cond, why) { if (!cond) throw new Error(why); }
+
+/* Running a few tests by name, for the loop of changing a test and running it:
+ *
+ *     node tests/run.mjs --only=ground,ramp
+ *
+ * A test runs when its name contains any of the comma-separated words. The two
+ * steps that reconcile or build the spreadsheet are skipped too, because neither
+ * can be affected by which test is being run and both cost minutes. So a run
+ * with --only in it is **never the run that ships**: run without it before
+ * committing. */
+const ONLY = (process.argv.slice(2).find((a) => a.startsWith('--only=')) || '')
+  .slice('--only='.length).split(',').map((w) => w.trim()).filter(Boolean);
+
 async function test(name, fn) {
+  if (ONLY.length && !ONLY.some((w) => name.includes(w))) return;
   try { await fn(); results.push({ name, ok: true }); }
   catch (e) { results.push({ name, ok: false, why: e.message }); }
 }
@@ -42,8 +56,12 @@ async function test(name, fn) {
 /* ---- 1. the spreadsheet reconciler checks itself ------------------------- */
 console.log('\nspreadsheet reconciler');
 try {
-  console.log(execFileSync('python3', [path.join(ROOT, 'build.py'), '--check'],
-    { encoding: 'utf8' }).trimEnd().split('\n').slice(1).join('\n'));
+  if (ONLY.length) {
+    console.log(`  skipped -- --only=${ONLY.join(',')} is a test-picking run`);
+  } else {
+    console.log(execFileSync('python3', [path.join(ROOT, 'build.py'), '--check'],
+      { encoding: 'utf8' }).trimEnd().split('\n').slice(1).join('\n'));
+  }
 } catch (e) {
   console.error((e.stdout || '') + (e.stderr || ''));
   console.error('the spreadsheet reconciler failed its own self-check');
@@ -2243,6 +2261,137 @@ await test('the masonry actually reaches the screen', async () => {
     + 'on the screen to begin with');
 });
 
+await test('the ground\'s material lies ON the ground, not across the screen',
+  async () => {
+    const r = await page.evaluate(() => {
+      window.__test.seed(1);
+      const t = window.__test;
+      const s = Game.state;
+      const turns = [];
+      for (let q = 0; q < 4; q++) {
+        s.cam.quarter = q; s.cam.yaw = s.cam.yawTarget = q * Math.PI / 2;
+        camRefresh(s);
+        const m = t.groundFaceMap({ footing: 'walk', slope: SLOPE_FLAT });
+        if (m) turns.push({ turn: q, m: m });
+      }
+      s.cam.quarter = 0; s.cam.yaw = s.cam.yawTarget = 0;
+      camRefresh(s);
+      /* The same square of floor painted the old way, for the size of the
+         difference: pasted flat across the screen. */
+      t.mappedGround(false);
+      const flat = t.groundFaceMap({ footing: 'walk', slope: SLOPE_FLAT });
+      t.mappedGround(true);
+      return { turns: turns, flat: flat, ships: t.mappedGround() };
+    });
+    assert(r.ships, 'the game paints the ground flat across the screen');
+    assert(r.turns.length === 4,
+      `only ${r.turns.length} of 4 turns found a floor to measure`);
+    for (const f of r.turns) {
+      const m = f.m;
+      /* One tile of material must be exactly one metre of floor -- along the
+         floor's own two edges, so the joints run with the floor. Read as a
+         vector: how far a metre of material went, against how long a metre of
+         that floor really is. */
+      const dbx = Math.hypot(m.mappedB.x - m.b.x, m.mappedB.y - m.b.y);
+      const ddx = Math.hypot(m.mappedD.x - m.d.x, m.mappedD.y - m.d.y);
+      assert(m.onGround,
+        `turn ${f.turn}: the floor's material (${m.tile}) was not laid in the `
+        + 'floor\'s own plane');
+      assert(dbx < 0.01,
+        `turn ${f.turn}: a metre of ${m.tile} lands ${dbx.toFixed(2)}px from the `
+        + 'far edge of the floor it is on');
+      assert(ddx < 0.01,
+        `turn ${f.turn}: a metre of ${m.tile} lands ${ddx.toFixed(2)}px off the `
+        + 'floor\'s other edge');
+      const sb = Math.hypot(m.wentB.x, m.wentB.y) / Math.hypot(m.isB.x, m.isB.y);
+      const sd = Math.hypot(m.wentD.x, m.wentD.y) / Math.hypot(m.isD.x, m.isD.y);
+      assert(Math.abs(sb - 1) < 0.01 && Math.abs(sd - 1) < 0.01,
+        `turn ${f.turn}: the material is stretched by ${sb.toFixed(2)} and `
+        + `${sd.toFixed(2)} across the floor`);
+    }
+    /* The material's way across the floor must turn with the view. If it did
+       not, it would be stuck to the screen after all. */
+    const first = r.turns[0].m;
+    const same = r.turns.every((f) => Math.abs(f.m.wentB.x - first.wentB.x) < 0.01
+                                 && Math.abs(f.m.wentB.y - first.wentB.y) < 0.01);
+    assert(!same, 'the floor\'s material points the same way at every camera turn');
+    /* And the way it used to be painted must be plainly a different thing, or
+       this test could not tell the difference. Pasted flat, the material's own
+       two axes are the screen's: across, and straight down the picture. */
+    assert(r.flat, 'no floor to compare against');
+    assert(Math.abs(r.flat.wentB.y) < 0.01 && Math.abs(r.flat.wentD.x) < 0.01,
+      'painted flat, the material did not run along the screen\'s own axes after all');
+    assert(Math.abs(first.wentB.y) > 0.01,
+      'the floor\'s own edge is not diagonal, so nothing here would catch a '
+      + 'material facing the camera');
+  });
+
+await test('a ramp\'s material lies on the ramp itself', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(4);
+    const t = window.__test;
+    const s = Game.state;
+    const turns = [];
+    for (let q = 0; q < 4; q++) {
+      s.cam.quarter = q; s.cam.yaw = s.cam.yawTarget = q * Math.PI / 2;
+      camRefresh(s);
+      const m = t.groundFaceMap({ footing: 'ramp' });
+      if (m) turns.push({ turn: q, m: m });
+    }
+    return { turns: turns, flatSlope: SLOPE_FLAT };
+  });
+  /* A ramp is the one square of ground whose corners are not all at the same
+     height, so it is mapped from its own corners rather than from the shared
+     plane the flat squares share. That makes it the one that can go wrong on
+     its own -- and the corners are the test. */
+  assert(r.turns.length === 4,
+    `only ${r.turns.length} of 4 turns found a ramp to measure`);
+  for (const f of r.turns) {
+    const m = f.m;
+    const dbx = Math.hypot(m.mappedB.x - m.b.x, m.mappedB.y - m.b.y);
+    const ddx = Math.hypot(m.mappedD.x - m.d.x, m.mappedD.y - m.d.y);
+    assert(m.slope !== r.flatSlope, `turn ${f.turn}: the ramp is not a ramp`);
+    assert(dbx < 0.01 && ddx < 0.01,
+      `turn ${f.turn}: a metre of ${m.tile} lands ${dbx.toFixed(2)}px and `
+      + `${ddx.toFixed(2)}px from the ramp's own corners`);
+  }
+});
+
+await test('the ground, mapped, is a different picture from the ground pasted flat',
+  async () => {
+    const r = await page.evaluate(() => {
+      window.__test.seed(1);
+      const t = window.__test;
+      const s = Game.state;
+      const shot = () => {
+        /* Fresh patterns each time: a pattern carries the last placement it was
+           given, and a guard against laying it twice in one frame, and either
+           of those left over would hide the difference this test is looking
+           for. */
+        Render.patCache = {};
+        s.geomDirty = true; s.viewDirty = true;
+        Render.build(s); Render.draw(s);
+        return Render.bctx.getImageData(0, 0, Render.w, Render.h).data.slice();
+      };
+      t.mappedGround(true);
+      const laid = shot();
+      t.mappedGround(false);
+      const flat = shot();
+      t.mappedGround(true);
+      let differ = 0, lit = 0;
+      for (let i = 0; i < laid.length; i += 4) {
+        if (laid[i] > 18 || laid[i + 1] > 18 || laid[i + 2] > 22) lit++;
+        if (laid[i] !== flat[i] || laid[i + 1] !== flat[i + 1]
+          || laid[i + 2] !== flat[i + 2]) differ++;
+      }
+      return { differ: differ, lit: lit, painted: laid.length / 4 };
+    });
+    assert(r.lit > 0, 'nothing was painted at all');
+    assert(r.differ > 5000,
+      `mapping the ground changed only ${r.differ} of ${r.painted} pixels, so it `
+      + 'barely reached the screen');
+  });
+
 /* ---- v0.16.0: materials, and the camp as real geometry ------------------ */
 
 await test('every surface in the labyrinth has a material, and it reaches the screen',
@@ -2585,6 +2734,7 @@ await browser.close();
 
 /* ---- 4. turning a dial in the spreadsheet really does change the game ----- */
 await test('a number changed in the spreadsheet reaches the screen (rule 9)', async () => {
+  if (ONLY.length) return;
   const tmp = mkdtempSync(path.join(tmpdir(), 'crawlers-'));
   try {
     const sheet = path.join(tmp, 'tweaked.xlsx');
@@ -2617,5 +2767,11 @@ await test('a number changed in the spreadsheet reaches the screen (rule 9)', as
 console.log('');
 for (const r of results) console.log(`  ${r.ok ? 'ok  ' : 'FAIL'} ${r.name}${r.ok ? '' : '\n         ' + r.why}`);
 const failed = results.filter((r) => !r.ok).length;
-console.log(`\n${results.length - failed}/${results.length} passed\n`);
+if (ONLY.length) {
+  console.log(`\n${results.length - failed}/${results.length} passed -- `
+    + `TESTS WERE PICKED OUT BY NAME (--only=${ONLY.join(',')}), so this is not `
+    + 'a full run\n');
+} else {
+  console.log(`\n${results.length - failed}/${results.length} passed\n`);
+}
 process.exit(failed ? 1 : 0);

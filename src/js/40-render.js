@@ -30,6 +30,16 @@ const Render = {
      only by the test that walks one stride both ways and counts how many of the
      crawler's own pixels the ground covers. */
   stepGround: true,
+  /* Lay each material ON the ground it lies on, in the ground's own plane,
+     instead of pasting it flat across the screen. Flipped off only by the tests
+     that paint one frame both ways: pasting it flat is how the picture used to
+     be made, and the old way is kept as the yardstick the mapped way is proved
+     against. See ground().
+
+     Named for what is ON, not for what goes away, so that reading the flag and
+     reading the code below it cannot disagree: on means mapped. */
+  mappedGround: true,
+  planes: {},                  /* floor height -> its ground plane, this frame */
   cellAt: null,                /* world square -> its place in the batch (Map) */
   alphaPlan: null,             /* how strong each thing painted, this frame   */
 
@@ -304,9 +314,15 @@ const Render = {
      two. Filling every face twice -- once for the colour, once for an overlay
      on top -- cost eight milliseconds a frame, which was half the budget. The
      price of baking is that the lighting has to be stepped so the cache stays
-     small; at this resolution the banding reads as paint. */
-  matPattern(colour, name) {
-    const key = 'm|' + name + '|' + colour;
+     small; at this resolution the banding reads as paint.
+     
+     `tag` tells two of these apart when the same colour and material are laid
+     in different places -- a canvas pattern carries its own placement with it,
+     so one shared between the floor at one height and the floor at the next
+     would hand the second the first's transform, a metre out. Only the ground
+     uses it, and floor heights are whole numbers, so it costs a few tiles. */
+  matPattern(colour, name, tag) {
+    const key = 'm|' + name + '|' + colour + (tag === undefined ? '' : '|' + tag);
     let pat = this.patCache[key];
     if (pat) return pat;
     const tile = this.matTile(name);
@@ -355,26 +371,94 @@ const Render = {
     return pat;
   },
 
-  /* Pin a material to the world so it does not swim as the view moves. Each
-     pattern is moved at most once per frame per anchor. */
+  /* Pin a material to the world so it does not swim as the view moves: flat
+     across the screen, which is the way the GROUND used to be painted. Each
+     pattern is moved at most once per frame per anchor.
+     
+     Kept for two reasons. It is the cheap way and the whole ground is a big
+     share of the picture, so it is the thing the mapped way has to be worth
+     beating; and a test can paint one frame each way, which is how the bug this
+     replaced -- stonework and moss facing the camera instead of lying on the
+     floor -- is kept from creeping back. Only `mappedGround` being off reaches
+     it now. */
   pin(pat, ox, oy, stamp) {
     if (!pat || !pat.setTransform) return pat;
     if (pat._pinned === stamp) return pat;
-    pat.setTransform(new DOMMatrix([1, 0, 0, 1, Math.round(ox), Math.round(oy)]));
+    const m = new DOMMatrix([1, 0, 0, 1, Math.round(ox), Math.round(oy)]);
+    pat.setTransform(m);
+    pat._lastMatrix = [m.a, m.b, m.c, m.d, m.e, m.f];
     pat._pinned = stamp;
     return pat;
   },
 
-  /* The finished fill for one surface: a plain colour unless the tile names a
-     material, in which case the material pinned to the world.
+  /* The finished fill for the roof of a square of the world: the ground
+     underfoot, the cap of a stone block, or a ramp.
      
-     A material on the GROUND is pinned: one transform per pattern per frame.
-     Anchoring it to each square instead cost 16ms a frame for 350 squares, and
-     a floor is flat -- it has no direction to get wrong. A WALL does, which is
-     why walls get faceFill() instead. */
-  surface(colour, ox, oy, stamp, mat) {
+     A material here lies ON the square -- its two axes are the square's own two
+     edges -- so it turns with the view, and on a floor it runs lengthways along
+     the floor rather than facing the camera. Pasted flat across the screen a
+     floor had no direction at all, which is what made it read as a pattern hung
+     up behind the world instead of ground you are standing on. */
+  ground(colour, mat, it, s, worldStamp) {
     if (!mat || CFG.texStrength <= 0) return colour;
-    return this.pin(this.matPattern(colour, mat), ox, oy, stamp);
+    const pat = this.matPattern(colour, mat, it.cell.h);
+    if (!this.mappedGround) return this.pin(pat, -s.cam.ox, -s.cam.oy, worldStamp);
+    /* A ramp is the one square tilted in its own plane -- its corners sit at two
+       different heights -- so it is mapped from its own corners, the same as a
+       wall face is. Every flat square, floor or block cap, is in the one plane
+       for its height, and they share a transform. */
+    if (it.cell.slope === SLOPE_FLAT) return this.groundFill(pat, s, it);
+    return this.faceFill(pat, it.top[0], it.top[1], it.top[3], 1, 1);
+  },
+
+  /* Lay a material in the plane of the ground, from the shared plane rather
+     than from the square's own corners.
+     
+     Every flat square at the same height is the same parallelogram of the same
+     plane, so one transform places the material on all of them at once -- that
+     is exactly what the square's own `top` corners say (north, east, west) --
+     and a square a metre higher is that same map moved up the picture by one
+     rise. One metre of ground is one tile of material, so the joints run along
+     the edges of the squares on every square at once, whichever way the grid is
+     turned.
+     
+     This is what makes mapping the ground affordable at all. Mapping a material
+     onto one face costs about 50 microseconds, and the ground is most of the
+     picture: 350 squares of it face by face took drawing from 8.7ms to 43ms
+     when that was tried. Set once per material per height per frame it costs
+     about what pasting it flat used to. */
+  groundFill(pat, s, it) {
+    if (!pat || !pat.setTransform) return pat;
+    const stamp = this._frameStamp;
+    if (pat._laid === stamp) return pat;
+    const h = it.cell.h;
+    let pl = this.planes[h];
+    if (!pl || pl.stamp !== stamp) pl = this.planes[h] = this.plane(s, it, stamp);
+    this.faceFill(pat, pl.a, pl.b, pl.d, 1, 1);
+    /* Its own record, kept apart from a face's: the same material may be a
+       wall's face somewhere else in the same frame, and neither the placement
+       nor what a test reads back may be the other's. */
+    pat._lastLaid = pat._lastMatrix;
+    pat._laid = stamp;
+    return pat;
+  },
+
+  /* The ground plane at one floor's height: a metre either way from a whole
+     grid corner, lifted to that floor.
+     
+     The corner is the first square of ground the frame drew, and it is a whole
+     grid corner on purpose -- every square's own corners are then a whole
+     number of tiles from it, which is what puts the joints on the edges of the
+     squares. Which corner it is does not matter, because a repeating material
+     looks the same a whole tile along; a small one keeps the numbers exact.
+     Held for the frame because it is asked for once per material and it stops
+     being true the moment the view moves. */
+  plane(s, it, stamp) {
+    const c = it.cell, h = c.h;
+    return { stamp: stamp,
+             a: this.project(s, c.x, c.y, h),
+             b: this.project(s, c.x + 1, c.y, h),
+             d: this.project(s, c.x, c.y + 1, h) };
   },
 
   /* Grid corner (gxx, gyy) at elevation h metres -> game pixels.
@@ -969,8 +1053,12 @@ const Render = {
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#06080b';
     ctx.fillRect(0, 0, this.w, this.h);
-    /* changes whenever the view does, which is when the anchors must be redone */
-    this._frameStamp = s.cam.ox + ',' + s.cam.oy + ',' + s.cam.yaw + ',' + s.cam.tileH;
+    /* Changes whenever the view does, which is when the ground's own placement
+       has to be worked out again. The size of the picture is part of it because
+       the ground is projected through the middle of it, and zooming the view
+       makes that size change. */
+    this._frameStamp = s.cam.ox + ',' + s.cam.oy + ',' + s.cam.yaw + ','
+      + s.cam.tileH + ',' + this.w + 'x' + this.h;
 
     /* How strong everything paints this frame, worked out in one place: the
        wall cut down in build() is only safe while the block hiding it paints
@@ -1055,13 +1143,17 @@ const Render = {
       const lift = Math.round((1 + it.cell.h * CFG.heightTint) * 100) / 100;
       /* Every tile may name its own material; blank is plain colour.
        *
-       * Only a DIRECTIONAL material is mapped onto the vertical faces, and
-       * masonry is the only one: courses have to run along the wall. Fracture,
-       * dirt and moss have no direction to get wrong, so they take the cheap
-       * pinned path on the top and leave the sides flat -- which is what this
-       * project already decided about rock, for the same reason.
+       * A floor or a block cap carries its material mapped onto the ground it
+       * lies on, so it runs lengthways along the corridor instead of facing the
+       * camera. That is one transform per material per height for the whole
+       * frame, so it costs about what pasting it flat did -- see groundFill().
        *
-       * Measured: mapping a material onto a face costs about 50 microseconds.
+       * Only a DIRECTIONAL material is mapped onto the VERTICAL faces, and
+       * masonry is the only one: courses have to run along the wall. Rock keeps
+       * its sides flat because they are in shadow and edge-on, so a material
+       * there reads as almost nothing and costs a third of the frame.
+       *
+       * Measured: mapping a material onto one face costs about 50 microseconds.
        * Giving raw rock a mapped material meant 686 of them a frame and took
        * drawing from 8.7ms to 43ms. Masonry walls are ~100 cells, and cheap. */
       const mat = def.pattern;
@@ -1102,8 +1194,7 @@ const Render = {
         } else buried++;
       }
       const tf = litShade(def.top, lift, it.light);
-      this.poly(ctx, it.top,
-        this.surface(tf, -s.cam.ox, -s.cam.oy, worldStamp, mat));
+      this.poly(ctx, it.top, this.ground(tf, mat, it, s, worldStamp));
 
       kinds[it.cell.tile] = (kinds[it.cell.tile] || 0) + 1;
       drawn++;
