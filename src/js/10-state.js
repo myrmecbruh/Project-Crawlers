@@ -110,11 +110,18 @@ function behindDir(s) { return BEHIND[((s.cam.quarter % 4) + 4) % 4]; }
 
 /* Work out once, per view, which columns of rock stand between the camera and
    a floor behind them. It depends on which way you are looking and how steeply,
-   so it is redone when either changes -- but not every frame. */
+   so it is redone when either changes -- but not every frame.
+ *
+ * It is a MARK, not a picture: it says which rock is in the way, and what
+ * happens to that rock is the renderer's business alone (see `cutOut()`). That
+ * split is what made the ghosting bug impossible to write again -- the mark has
+ * never depended on the pointer, so no amount of hovering can change which rock
+ * is marked, only how it is drawn. */
 function markCutaway(s) {
   const w = s.world, back = behindDir(s), th = s.cam.tileH;
   for (let i = 0; i < w.cells.length; i++) {
-    w.cells[i].cutaway = hidesFloorBehind(w, w.cells[i], back, th);
+    const c = w.cells[i];
+    c.cutaway = hidesFloorBehind(w, c, back, th);
   }
   s.geomDirty = true;
   s.viewDirty = true;

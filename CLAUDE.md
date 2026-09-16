@@ -165,9 +165,61 @@ node tests/run.mjs     # run the headless tests against that built file
 python3 publish.py     # build, then put that file on the link at the top of this file
 ```
 
-**Run the build after every change, and the tests before every reply.** The
-tests run against `dist/`, never against `src/` — the thing that ships is the
-thing that gets tested.
+**Run the build after every change, and hand the game over.** The tests run
+against `dist/`, never against `src/` — the thing that ships is the thing that
+gets tested.
+
+**And when it is up, SAY SO, in the same breath.** They hold the link and nothing
+else. A fix published quietly is a fix they do not know to look at, so they go on
+reporting the one that is gone — and this had to be asked for in as many words:
+*"You have to let me know in the future when you are done publishing. That's a
+rule."* One line, every time, at the top of the reply: **it is up**, and what to
+look at. A reply that published without saying so is a reply they cannot act on.
+
+**And do not make them wait for it.** *"Yes publish always when ready, do your
+other stuff on your own time. That is a rule."* A change that is written and
+built goes up **immediately**, before any measuring, proving or tidying — the
+tests and the numbers are mine to do afterwards, on my own time, and none of
+them is a reason to sit on a finished change. They cannot run a build; the only
+version of the game that exists for them is the one at the link, so every
+minute a fix spends unpublished is a minute they are still reporting the bug it
+fixes. Measuring after publishing does not risk anything the build did not
+already risk: if a measurement later turns out badly, publish the correction.
+
+**So the order is fixed: BUILD, PUBLISH, SAY SO, and only then measure.**
+*"How can I get you to always send me a build before you start these long
+checks?"* The question is the rule. A suite, a census or an A/B is **never** the
+thing that stands between a finished change and the link — it is what happens
+afterwards, while they are already looking at it. A long check run first costs
+them the fix for exactly as long as the check takes, and buys them nothing they
+could not have told me in the time it took to open the page. If a check is the
+only way to know whether the change is even real, make it short, or make it
+after. There is one exception and it is narrow: a build that CRASHES or produces
+nothing playable must not be published, because a broken link is worse than a
+late one — so a smoke check (it builds, it boots, the page answers) comes before
+the publish, and **everything else comes after**.
+
+**They are the check for anything they can SEE. Do not stand in front of that
+with a measurement.** Asked directly, having watched a run of the suite hold up a
+fix they could have judged in two seconds: *"why do you run these long checks
+every single time? I'm probably a lot more efficient at checking for these things
+quickly."* They are, for anything visible — a colour, a shape, a hole in the
+floor, a tooltip. So **rebuild and publish**, say in one line what to look at,
+and let them look. A test of the visible is a slower, worse pair of eyes.
+
+Measuring is still how the invisible is checked, and the invisible is where it
+belongs: does the ground stay reachable, did the thing ever fire, is a number
+still whole, did anything but the ground get a texture, is the picture the same
+with a cull switched off. Rule 1 is proved on the bench because success teaching
+nothing cannot be seen. Write those tests — the project's value is that they
+exist — but run them **while they are not waiting**: in the background at the end
+of a piece of work, never as the toll gate between a fix and their hands.
+
+When a run is wanted before a reply, it is a `--only=<substring,...>` naming what
+the change touches — the full suite is half an hour and most of it is about files
+nobody moved. It prints that it was a partial run, so no later session mistakes
+it for a full one. If you cannot name the substrings, you have not understood the
+change yet. And a red result anywhere is still worth stopping for.
 
 The start-up script (`.claude/hooks/session-start.sh`) installs what a session
 needs before work begins, so the first build never fails on a missing tool.
@@ -449,7 +501,36 @@ to rooms and halls".
    equal-height regions. Grouping them by row put a ramp in every row and turned
    every ledge into an open slope.
 Blocks are separate: **a pillar goes in only if the room is still whole with it
-there**, checked one block at a time.
+there**, checked one block at a time -- and **a block MAY stand on the square a
+ramp climbs into.** That was guarded against for one version (v0.33.0) and the
+guard was thrown away in v0.33.2, because it cost every room its shape: see the
+slope rule below and lesson 30.
+
+**A ramp is a promise, and only HALF of a broken one is a defect** (v0.33.2).
+A ramp is the only place two levels meet and it means "the square I lean toward is
+one metre up". Three rules run after the ramps are dug and can take that square
+away -- `blockRoom()` placing a block, a later `digHall()` flattening the square,
+and `digDoorway()`'s corridor leaning on a wall -- so the whole promise is checked
+at the END of every piece, in local squares, by `repairSlopes()`:
+
+- **leaning at SOLID ROCK: left alone.** Their words: *"I don't mind slopes
+  leading up to walls. happens in caves and rubble all the time."* 118 of the 145
+  broken ramps in 270 pieces were this. You walk up the ramp and the rock stops
+  you, and the rock is there to be seen -- that is a cave, not a wedge.
+- **leaning at OPEN ground that is not a metre up: repaired.** 27 of the 145. A
+  drop, a ledge, another ramp at the same height: nothing explains the refusal and
+  the map says no. Re-aimed at a FLAT square exactly a metre up if it has one
+  (flat ground cannot move, so a re-aimed ramp cannot come undone), flattened to
+  its own floor if it has none.
+- **Never a step away.** Both halves can only remove an edge that was already
+  impassable, and flattening leaves the square at its own height, so it can only
+  ADD edges. `__test.slopeAudit()` counts every step a crawler can take with the
+  sweep OFF and ON in one build: **lost 0**, and the rock-leaning count is
+  **unchanged** by the sweep, which is what proves the narrowing is real.
+- A ramp leaning at a square **outside its own piece** is left alone: the pass
+  runs in local squares and cannot see next door.
+- `files/probe-slope-kind.mjs` classifies every broken ramp; `files/
+  probe-world-diff.mjs` proves a change to the generator moved nothing else.
 
 **NEVER put anything solid on a room's centre square.** The generator uses that
 square AS the room -- it is what a hall is aimed at, and what the final
@@ -475,6 +556,50 @@ paint over them. Rock in front still can and should -- rock has height. The thre
 depths collapse to one the moment the step ends, which is why this is a no-op for
 a crawler standing still. `render.stepGround` (default `true`) flips the rule off
 for the one test that paints the same stride both ways and counts.
+
+### The rock is as tall as the ground it stands in (`12-world.js`)
+
+**A column of rock used to be one plateau: `world.max_elevation + world.rock_height`,
+seven metres, wherever it stood and whatever floor was beside it.** A room dug at
+nothing had a seven-metre wall around it. They asked for two metres, and the honest
+reading of that is not "make every wall two metres" -- the mass of rock between
+rooms has to be tall enough that the picture is not a flat plain with slots cut in
+it -- but **"make the wall two metres above the ground it is a wall AROUND"**.
+
+- `lowerRockTops(world, rockTop)` is the whole of it, and it is the LAST thing a
+  piece does that changes its ground: after the halls, the walls, the doorways and
+  `repairSlopes`, and just before the piece is moved to its address. Every square a
+  crawler can stand on is a source, **highest floor first** (ties go to the taller,
+  because taller sources are enqueued first); a 4-neighbour multi-source BFS gives
+  every cell the level of the nearest walkable square; then **each column of rock
+  alone** becomes `Math.min(rockTop, level + rockHeight)`.
+- **Why that placement is safe is the whole argument: a column of rock is not a
+  square anybody can stand on**, so no rule above it -- rooms, halls, ramps,
+  doorways, promise 21 -- can have depended on how tall it was. Measured: **0 of
+  34,833 squares of ground changed height, tile, room or lean** over 8 worlds built
+  both ways in one build, with **64,036 columns of rock brought down and 251 built
+  up**. (`raised` is not zero and must not be: a column of rock that sat LOWER than
+  the ground beside it is legitimately built up to two metres above it.)
+- **A column is never made taller than the plateau**, because `screenReach`
+  (`12-world.js`) and `Render.pieceOnScreen` (`40-render.js`) both work out their
+  tall bound from `maxElevation + rockHeight`. A taller column would leave a piece
+  culled before it was drawn -- a hole in the world, and the one thing this job
+  cannot afford.
+- **The mass of rock still rises away from the floors**, because the flood takes
+  the nearest floor, so rock a long way from anything is tall. That is deliberate:
+  a settlement in a shallow bowl of its own local walls, with the world standing up
+  around it.
+- Dials: `world.rock_height` (2 m) is the wall's own height, `world.max_elevation`
+  (5 m) is the ceiling, and the plateau is the sum (7 m, the clamp).
+  `__test.rockTops(on)` switches the whole thing off inside one build -- which is
+  the game as it was -- and `__test.rockAudit(seeds)` is the battery that measures
+  both ways at once (lesson 21).
+
+**Most walls are two metres now, and it is measured rather than asserted:** of the
+27,165 columns of rock that touch a floor, **91.2% stand exactly `rock_height`
+above the lowest floor they touch** (seeds 1, 3, 7, 23, 777), against **16.5%**
+before; and the rock up at the old plateau falls from 77,804 of 78,063 columns to
+13,851. (See lesson 32 for the sentence that was wrong the first time.)
 
 ---
 
@@ -748,23 +873,82 @@ painted** -- flagstone, dirt, moss, water, rubble, bones, rock, masonry -- all a
 metre square, all transparent overlays over the tile's own colour, and **one
 locked palette** across every tile is what makes them belong together.
 
-- **A material goes on the GROUND and on a laid wall. Nothing else is textured.**
-  A crawler and a piece of the camp are flat-coloured lit faces, and the figure
-  is what you read them by. A test counts pattern fills against plain ones and
-  fails if anything but the ground is carrying a texture -- which is how "the
-  grit is gone" stays true rather than drifting back.
+- **A material goes on the GROUND and on the SIDES OF BLOCKS. Nothing else is
+  textured.** A crawler and a piece of the camp are flat-coloured lit faces, and
+  the figure is what you read them by. A test counts pattern fills against plain
+  ones and fails if the count exceeds the ground squares plus the block sides --
+  which is how "the grit is gone" stays true rather than drifting back.
 - **The material is baked into a cached per-colour pattern**, not painted as a
   second fill. Filling every face twice cost 8 ms a frame -- half the budget.
   Baking costs one fill again, at the price of stepping the lighting so the
-  cache stays bounded (20 patterns now the grit is gone; it was about 700).
+  cache stays bounded (45 patterns at the camp now the sides are mapped; 20
+  when only the ground was, and about 700 with the grit).
 - **Shaded faces go COLD, not just dark** (`texture.hue_shift`). A flat multiply
   takes every material to the same sludge.
-- **Side walls of blocks are left flat.** The ground is what you look at; the
-  sides are in shadow and edge-on. Texturing them too cost 7.6 -> 10.7 ms of
-  drawing when it was measured on v0.14.0.
+- **The sides of a block wear the same material as its cap**, mapped onto each
+  face. They were left flat colour until v0.24.0 on the argument that a side is
+  in shadow and edge-on, so a material there reads as almost nothing and costs a
+  third of the frame -- measured on v0.14.0: texturing them took drawing from
+  7.6 to 10.7 ms. The half about the cost was true then; the half about reading
+  as nothing was never looked at, and rock is nearly every wall in the
+  labyrinth, so the rule left the walls a player walks between as the one
+  surface in the game with nothing on them.
+- **What the sides cost, measured** (v0.24.0, A/B-ed inside one build, seed 1,
+  624x368, 30 frames a pass, best of three alternating passes): 182 faces are
+  painted at the camp, 636 more are buried behind a neighbour and never painted
+  at all, and the ones that are painted cover **987,000 pixels of surface -- 4.3
+  screenfuls -- of which only 29,457 are visible**, the rest lying inside rock
+  standing in front of them. That is **+3.9 ms of drawing a frame** (drawing
+  alone 7.94 -> 12.36 ms; with a forced read-back 11.9 -> 16.4 ms). It is the
+  FILL, not the transform: 182 `setTransform` calls are about half a millisecond
+  of it. **The ground's own material costs the same +3.9 ms for 72,691 visible
+  pixels**, so a screenful of wall is about two and a half times a screenful of
+  floor -- and the 33x overdraw above is the whole of the difference. It does
+  not grow with the world: +3.89 ms holding 2 pieces, +4.01 ms holding 28. What
+  it does grow is the pattern cache (24 -> 45 patterns at the camp), which is
+  the other reason the lighting is stepped rather than smooth. The historic
+  8.7 -> 43 ms that kept the sides flat was measured BEFORE v0.18.0 clipped the
+  walls against the rock next door.
 - `texture.strength` 0 turns every material off and leaves plain colours, and a
   test compares a textured picture against a flat one of the same moment to
   prove the materials reached the screen.
+
+### Natural rock, and what it is made of
+
+`rock` is worn by **Stone Block** -- the bare stone of every wall the labyrinth
+digs, and the floor the camp stands on -- so it is the material most of the game
+is seen through.
+
+**As of v0.25.0 it is lumps, not hairlines.** What it used to be: **30 wandering
+one-pixel cracks and 22 specks**, 44 separate marks whose biggest was 29 pixels,
+in runs a mean 1.8 px long, over 18% of the metre. A hatch, not stone. The
+replacement is built in three scales --
+
+- **grain**: fine low-alpha speckle;
+- **sixteen mottling patches**, dropped in clumps so they join into bigger
+  shapes;
+- **six crevices**, and they are the only dark thing in it.
+
+-- and it is measured the same way as the thing it replaced: coverage 18% -> 54%,
+44 marks whose biggest was 29 px -> 37 whose biggest is **319 px**, mean run
+1.8 -> 3.4 px, and the tendency of neighbouring pixels to agree **0.337 ->
+0.495** (1 is one flat patch, 0 is noise). Few big soft shapes where there were
+many thin ones is the whole of the change.
+
+- **`rock` is deliberately isotropic and stays that way.** `masonry` is the only
+  directional material in the game, and it is directional because somebody laid
+  it. Every material is mapped onto the face it is worn by, but for noise that
+  mapping is invisible -- which is what lets one 32-px tile be a wall's side, a
+  block's cap and a square of ground in the same frame without anything looking
+  wrong. **Do not give rock a grain direction**: that would be masonry's job and
+  it would slide with the camera the way masonry did before `faceFill()`.
+- **A material that reads as a hatch is a bug of the kind no eyeball finds.** 44
+  thin marks look, at a glance, like "texture"; the count is what says they are
+  all edges and no body. The counts above exist to prove the change is of the
+  kind asked for -- **not to grade how it looks**, which is judged in the game
+  and nowhere else. If it is wrong it is one branch of `matTile()` in
+  `40-render.js`, and the tile that wears it is the `pattern` column of the
+  `tiles` tab.
 
 ### Masonry, and mapping a texture onto the model
 
@@ -787,10 +971,14 @@ locked palette** across every tile is what makes them belong together.
 - Only rock facing a room somebody MADE is faced (`worked` in the room's tags);
   a mine or a quarry keeps the rock it was hacked out of. Done after the halls
   are cut, so doorways stay doorways.
-- **Only the VERTICAL faces of a block are still pinned; the ground is mapped
-  onto the ground.** Rock's sides are in shadow and edge-on, so a material there
-  reads as almost nothing and costs a third of the frame. Everything you stand
-  on is mapped -- see below.
+- **A block's sides carry its material too, and they are mapped onto the face.**
+  `wall()` is the whole of it: the face's own top edge says which way the
+  material has to run, and `faceFill()` turns that into an affine map at any
+  camera angle, so the courses run along the wall and turn with it. `hM` is how
+  tall the wall really stands after the clip, so a cut wall shows whole courses
+  from the foot up rather than a squashed course. One transform per face -- about
+  180 of them a frame, see above -- where the ground shares one per material per
+  height. Everything you stand on and everything you walk between is mapped.
 
 ### The ground is mapped too, and why that is not 350 mapped faces
 
@@ -815,11 +1003,15 @@ draws is used, because that keeps the numbers small and exact.
 
 Two consequences worth keeping:
 
-- **The pattern cache is keyed by floor height as well as colour and material**
-  (`matPattern(colour, name, tag)`). A canvas pattern carries its placement with
-  it, so one shared between the floor at one height and the floor at the next
-  would hand the second the first's transform -- a metre out on screen. Heights
-  are whole numbers, so this is a handful of extra 32x32 tiles.
+- **The pattern cache is keyed by floor height as well as colour, material AND the
+  picture the square picked** (`matPattern(colour, name, tag, lit, pick)`). A canvas
+  pattern carries its placement with it, so one shared between the floor at one
+  height and the floor at the next would hand the second the first's transform -- a
+  metre out on screen. Heights are whole numbers, so this is a handful of extra
+  32x32 tiles. The pick is in the key because two pictures are two surfaces, so a
+  square's pattern is not named by its colour and material alone -- anything
+  rebuilding that call by hand has to pass the pick too, or it names a different
+  object (lesson 33).
 - **A ramp is mapped from its own corners**, the same call a wall face uses,
   because a ramp is the one square tilted in its own plane. Ramps are rare so the
   cost is nothing, and its `hM` stays 1 so a metre of ramp is a whole tile and
@@ -926,6 +1118,44 @@ camera turns, held **43** against eight materials. And the two ways of painting
 really do produce different pictures: **64,937 of 138,012 pixels differ** at the
 suite's 434x318, which is what makes the pixel test below worth having.
 
+**As of v0.24.0 the block sides carry material too, and that one is not free.**
+A/B-ed inside one build through `Render.mappedWalls` (no rebuild, so the flag is
+the only difference), seed 1, 624x368, camp in view and walked out to 28 pieces,
+30 frames a pass, best of three alternating passes each, 5 warm-up frames and the
+pattern cache cleared before every arm:
+
+| arm | drawing | drawing + a forced read-back | whole frame | patterns | visible textured px |
+|---|---|---|---|---|---|
+| flat (no material anywhere) | 3.7 ms | 4.0 ms | 5.0 ms | 0 | 0 |
+| ground only -- what v0.23.0 shipped | 7.7 | 10.8 | 11.1 | 24 | 72,691 |
+| ground **and** sides | **11.6** | **16.3** | **16.9** | **45** | **102,148** |
+
+- **The sides add +3.9 to +4.0 ms of drawing a frame** (drawing alone 7.94 ->
+  12.36; with a read-back forcing the raster 11.9 -> 16.4).
+- **182 faces are painted, 636 more are buried** behind a neighbour and never
+  painted at all. The painted ones cover **987,000 pixels -- 4.3 screenfuls --
+  of which only 29,457 are visible**; the other 97% lies inside rock standing in
+  front of them. So a screenful of wall material costs about **two and a half
+  times** a screenful of floor, and that overdraw is the whole of the difference.
+- **It is the fill, not the transform.** 182 `setTransform` calls come to about
+  half a millisecond of the total, which is why the two cheaper schemes designed
+  for this (one shared transform for all the walls at one height, an
+  axis-aligned rect fill) could only ever have recovered about a tenth of it.
+- **It does not grow with the world**: +3.89 ms holding 2 pieces, +4.01 ms
+  holding 28. It grows the **pattern cache** instead -- 24 -> 45 patterns at the
+  camp, 14 -> 27 out in the open, against nine materials -- which is the other
+  reason the lighting is stepped rather than smooth.
+- These are software-rendered headless numbers and are not comparable with the
+  v0.17.0 table above; what is comparable is the RATIO inside one build, which is
+  the only thing the flag A/B is for.
+
+What that means in one line: **the walls now cost about what the floor already
+cost, so the picture is roughly twice what it was to paint.** Nothing here
+suggests it is being wasted on something that should not be textured -- the walls
+are the thing that was asked for -- but a match stood in a room looking at a lot
+of near wall is the most expensive picture in the game. `Render.mappedWalls
+false` puts it back, and `texture.strength` 0 turns every material off.
+
 ---
 
 ## Light, and the dark
@@ -990,6 +1220,158 @@ is.
 
 ---
 
+## The fourth wall, and why nothing is drawn see-through any more
+
+**As of v0.34.0 exactly one thing may go missing from the picture, and it is the
+rock of the fourth wall.** Rock standing between the camera's corner and a room is
+not painted at all, so the room is read through the gap it leaves. Nothing in the
+game is drawn at less than full strength.
+
+- **Which rock is a MARK, settled from the view alone.** `markCutaway()` in
+  `10-state.js` asks `hidesFloorBehind()` of every cell and writes `c.cutaway`,
+  once per view (the quarter turn and the tilt *and nothing else* -- not the
+  pointer, never the pointer). That split is what made the old ghosting bug
+  impossible to write again: what is marked cannot change because the mouse moved.
+- **How it is painted is the renderer's business**, and it is one dial:
+  `render.cut_solid` (rule 9). **0** is the game as it ships -- the square is not
+  painted as a wall; **1** paints it like any other rock; in between is the haze the
+  old look used, kept only so the dial cannot be connected to nothing. **A marked
+  square does not disappear outright: since v0.39.0 it keeps its bottom
+  `render.cut_stump_m` metres** -- the foot of rock, below.
+- **The one question the picture and the pointer both ask** is
+  `Render.cutOut(it)` -- `it.kind === 'cell' && it.cutaway === true &&
+  CFG.cutSolid <= 0 && !it.stumped`. `draw()` skips such an item before the halo and before every
+  other branch (`cut++; continue;`), so a cut square never reaches
+  `consumed().items` at all, and `pickAt()` and `drawPick()` each begin their loop
+  with the same call. **That is how rule 8 holds in lockstep**: a square that is
+  not in the picture cannot be picked, and a square that is painted cannot be
+  unpickable. The selected thing is no exception -- it is drawn solid and given a
+  halo, because a halo with no shape under it is a ring around nothing.
+- **`Render.alphas()` still fills `plan.list[k]`**, one number per batch item, and
+  the draw reads it to decide whether a wall may be clipped away. A slot is now
+  **1 or `CFG.cutSolid`** and nothing else -- and a square wearing a **foot of
+  rock** is **1**, because it paints solid. `plan.list !== Render.batch` is still a
+  same-length, different array, and it is the strength of the mark now rather than
+  a decision. `plan.focus`/`focusPos`/`focusIdx` survive because the **halo** needs
+  them.
+- **The other half of that rule, removed in v0.34.0.** Anything later in the batch
+  that `occludes()` the thing you had selected or hovered *was* faded to
+  `CFG.occluderFade` (0.28) -- and that is what "the tiles to the lower left and
+  lower right of the campfire go transparent" was: the camp pieces drawn in front
+  of the fire, at 0.28, whenever the pointer was on it. Measured on the build it
+  was reported against (`files/probe-fire-hover.mjs`, 3 seeds x 4 quarters): the
+  pointer on the fire opened **6 things, none of them a square of ground**, while
+  **33 to 47 squares of rock were see-through in every one of the twelve views**
+  with the pointer nowhere near them. `occludes()`, `painted()`, `facesCross()`,
+  `COVER_EPS` and `__test.fadeBox()` are gone with it; the pieces of that hunt
+  worth keeping are lessons 26 and 31.
+- **A face may only be cut away while the block hiding it paints solid**
+  (`hideL = clipWalls && nbrL >= 0 && alphaOf[nbrL] === 1`), **and only as far as
+  that block actually PAINTS** (`Math.min(mine, this.drawnM(nbr))`, v0.40.0). The
+  draw counts what
+  that guard does: `kept` when the block is see-through and the face comes back,
+  `lost` when a face stays cut away anyway -- a hole. Both are in
+  `this.consumed`, and `lost` must be zero. This replaced an assertion on
+  PIXELS ("with a block faded the clip may change almost nothing") that passed
+  **only while the fade was the bug**: a fade that see-through'd nearly the whole
+  picture made the clip give up everywhere, so clip-on and clip-off drew the same
+  frame. Presence and absence are different claims; the count of faces that came
+  back is the one that can fail for the right reason.
+
+---
+
+## What a wall looks like now: no lid, a dissolving top, and a foot of rock
+
+**v0.36.0 -- v0.41.0, and it is all their instruction, in their words:**
+
+> "make the TOPS of ALL walls invisible (or just delete their tops). do not render
+> sides of wall blocks that can never be seen (within solid areas of wall). do not
+> render the inside of wall blocks (you probably already do not). make the top
+> meter of all visible walls gradient fade to complete transparency"
+
+Four things, and one rule underneath them:
+
+- **The top face of a block is not painted** (`wallCaps: false`). It is the one
+  face the camera never needs: the same colour as the rock below it, and what was
+  hiding the rooms.
+- **The top `CFG.wallFadeM` metres of a visible wall dissolve**
+  (`wallFade: true`, `fadeBand()`, `paintSide()`). `paintSide()` answers **0** for
+  a whole face, **1** for a gradient band of flat colour, and **2** for a band
+  that **carries the wall's own mapped material** -- and 2 is the shipped path,
+  because their report of the first cut was *"where the wall begins to fade to
+  transparent, the texture stops. texture should continue up the wall and merely
+  become transparent until invisible."* **The material runs the whole height; only
+  its alpha changes.** `banded` in the census is how that stays true.
+- **A strip of the face survives at the top edge** (`wallLips: true`,
+  `lipShown()`, `lipQuad()`), so a wall whose neighbour has been cut away does not
+  lose its own outline.
+- **A wall buried in the rock next door is not painted** -- the v0.18.0
+  `clipFaces()`. *"do not render sides of wall blocks that can never be seen"*.
+
+### The rule under all of it: the clip must ask what the coverer PAINTS
+
+**`drawnM(cell)` is the only answer to "how many metres of this block reach the
+picture"**, and `clipFaces()` and `sideShown()` both ask it of the **neighbour**:
+`Math.min(mine, this.drawnM(nbr))`. It hands back the world height, or the foot of
+rock, or **0** for a square that paints nothing -- zero is a height too.
+
+It used to read `nbr.h`, the world's own height, and that was **the corner holes**.
+A hidden block's `h` is six metres and the number of metres it paints is one, so a
+six-metre face was cleared over five metres nothing covered: a bare strip of
+backdrop exactly where two hidden blocks met, which is to say at the corners -- and
+`pickAt` skipped it too. **Never clear a face for something that does not paint
+over it.** Measured (`files/probe-voids.mjs`, live-canvas flood, buffer 518x316,
+seeds 1 and 3, 80 views each way): the foot-of-rock look went from **31,825 hole
+pixels and a 1,952-pixel gash** to **4,660 hole pixels and a 7-pixel speck**, and
+the `foot off` arm is identical to the pixel before and after the fix, which is
+what makes the other two rows mean anything.
+
+### The foot of rock: `render.cut_stump_m`, `knobs` row 41
+
+A block marked "cut away" **keeps its bottom metre** (`stumpOf(cell)`, a clamped
+`top[]`, the `stumps` counter, and `alphas()` handing a stumped square **1**). It
+is the part a person looks through when standing beside it, and it fills the square
+the corner hole used to be. Two cheaper answers were tried first and failed:
+painting the block's own stonework on the square its top used to be covers it only
+from directly above (v0.38.0), and leaving the strip out entirely is **35.85% of
+the picture** a lattice.
+
+**The honest cost, and it is in the code:** the bottom metre of anything standing
+directly behind a hidden block is covered. One number settles it either way.
+
+### It cost the harness its own ruler, and that is why the suite was quiet
+
+Every suite log from `suite-0370.log` to `suite-0380a.log` carries
+`self-check ... FAIL  pointing at a block finds that block -- wanted 3101, got -1`.
+**The game was fine; the question was wrong.** The check took a pixel from the
+CENTRE of a block's square and asked the picker about **`it.aim`** -- the point on
+the block's face the picker actually tests -- **77 pixels further down a four-metre
+wall face**. It now requires `it.aim` to land 8 px inside `Render.w`/`Render.h`
+before asking. **v0.41.0 is the first build whose self-check passes.**
+
+And the census had been calling the fade a texture: `fillKinds()` sorted fills by
+whether `fillStyle` is a string, and `fadeBand()` uses `ctx.createLinearGradient`,
+an OBJECT -- so every faded side counted as stonework. `files/probe-census.mjs`
+showed `other` always equal to `faded`. There are four named doors now
+(`Render.ground`, `Render.wall`, `Render.wallBand`, and `fadeBand` wrapped) and a
+**`band`** bucket of its own. **A gradient is not a texture.**
+
+### What holds it
+
+Three tests, and each asserts an identity **derived from what the frame measured**
+rather than from the look it was written for:
+
+    ground door  === cells - body - capsOff
+    wall   door  === walls + banded
+    pattern door === ground door + wall door
+    kept === 0 && lost === 0   (the shipped look),  bare.lost === 0
+
+`files/probe-voids.mjs` is the picture's own census: a pixel is a hole when the
+backdrop shows through and the flood from the border cannot reach it. Its negative
+controls are `--caps` (lids back on: the holes close, **0.06%**), `--lips=0` (the
+strip left out: **35.85%**) and `--stump=0` (a clean hole again).
+
+---
 ## The machinery, and why each piece exists
 
 ### One file, one command
@@ -1027,6 +1409,12 @@ not "it feels slower".
 **The harness reports its own self-check every run** (`__test.selfCheck()`), and
 the runner refuses to trust a single game assertion until it passes. A broken
 ruler is worse than no ruler.
+
+**Every test is also printed as it starts**, on stderr, one line each
+(`  ... 57 running: ...`). The results are all held back until the end and a full
+run takes minutes, so without that line a run that is working and a run that is
+wedged look identical from outside — and both have been killed for it. The last
+line before a stop names where it stopped.
 
 ### Version, changelog, one permanent link
 
@@ -1398,6 +1786,89 @@ checkout still builds. The build reconciles the two and inlines the result.
     says to skip a case, look at what skipping it actually draws at the four
     angles the player sees -- and check whether the case can be done in one piece
     instead of piece by piece.
+
+30. **A rule of tidiness is not a defect, and the fix for it can cost more than
+    it mends.** v0.33.0 checked every ramp of the labyrinth at the end of every
+    piece, found 145 of 10,244 that no longer reached a metre of ground, and
+    mended all of them -- and kept the generator from putting a block there, so
+    the room a block used to stand in came out shaped differently afterwards.
+    Their words when they saw it: "I don't mind slopes leading up to walls.
+    happens in caves and rubble all the time." The census then said 118 of the
+    145 were leaning into SOLID ROCK -- a bank of rubble fetching up against a
+    face, which is what a cave is -- 26 at open ground and 1 at a ledge. So 27
+    were ever wrong, and 118 were mended for looking untidy, and the price was
+    paid by every room in the game. v0.33.2 put the guard back and left the rock
+    alone: `files/probe-world-diff.mjs` compares v0.32.0 with v0.33.2 over nine
+    worlds and **254,016 squares**, and **13 differ, all of them a ramp that no
+    longer climbed, 0 for any other reason, with 0 of 720 rooms different in
+    centre, elevation, floor, name or tags**. Generalised: before mending
+    something the generator produced, ask what it looks like at the size the
+    player sees it, and ask WHICH ones are actually wrong -- an unexplained
+    refusal (a slope over open ground) is a bug; a refusal the picture explains
+    (a slope up against rock) is terrain. And it is the same ask-before-a-new-
+    rule discipline as the non-negotiables: a "defect" found by a rule you just
+    wrote is the rule's opinion, not theirs.
+
+31. **A stored box is not a silhouette.** v0.34.0, and the last of the
+    see-through. Everything the ground is drawn around -- a crawler, a bedroll, a
+    camp store, a campfire -- is stored with a box so the picture and the pointer
+    have somewhere to work, and the box **reaches out over the squares either
+    side of the one the thing stands on**, because a rectangle round something
+    that is not a rectangle is bigger than the thing. Any test of the form "what
+    is in front of this?" that reads one of those boxes therefore answers
+    *yes* for the two squares beside the thing you pointed at -- the one place
+    you will never look for the cause, because you are looking at the thing, not
+    at the ground next to it. v0.25.0 found it once (two floors beside a selected
+    floor) and fixed that case with an exact shape-against-shape test; v0.33.x
+    found it again, reported from play, and the answer that finally settled it
+    was to stop asking the question at all: **one thing, and only one, may be
+    missing from the picture, and it is chosen from the VIEW and never from the
+    pointer.** Generalised: a bounding box is an index, not a shape -- if a
+    decision has to be exact, it has to be made against what is drawn. And when
+    the same bug comes back after an exact fix, stop sharpening the test and ask
+    whether the rule it tests should exist.
+
+32. **Count the thing that must NOT have changed, and print its histogram.**
+    v0.35.0, bringing the rock down to the ground it stands beside. The change is
+    a loop over every square in the world that is allowed to touch **one kind of
+    square and no other** -- rock, never ground -- and its first draft had the
+    polarity of that one condition backwards, so it skipped the rock and raised
+    every walkable square in the game by two metres instead, clamped at seven.
+    Nothing failed. The world was still connected, every room was still reachable,
+    the camp still stood where it stood, and a full suite of 97 tests ran over it
+    and said nothing, because the one test about heights asserted
+    `most === tallest` -- a claim that the world is FLAT up there, which is just
+    as true of floors shoved up to meet a plateau as it is of rock brought down to
+    meet a floor. What found it was a twenty-second probe that printed the
+    **histogram of floors** -- `{2:144, 3:702, 4:1537, 5:1840, 6:2755, 7:1740}` --
+    and floors at six and seven metres are above the ceiling the world is built
+    to, which is a thing no run of that suite was ever going to say. Generalised:
+    a step whose promise is "and nothing else moves" is checked by measuring the
+    thing it is forbidden to touch, not the thing it is there to change -- and the
+    cheapest form of that check is the distribution of the forbidden quantity,
+    because a wrong polarity does not make the world break, it makes the
+    distribution shift. Both halves are kept: the probe, and a test that builds
+    each seed BOTH ways in one build and fails on a single square that moved.
+
+33. **A test that rebuilds the thing it is testing is a second copy of a rule, and
+    a copy is right only by accident.** v0.35.0's full suite run, and the last test
+    standing red. `__test.groundFaceMap` has to lay a square's material the way the
+    picture lays it in order to read back where the material landed -- and it did
+    so by calling `Render.matPattern` itself rather than asking the renderer for
+    the pattern. When the dropped-in textures arrived (v0.31.0), which of a
+    material's several pictures a square wears became part of that pattern's
+    **identity** -- it is in the cache key -- so the by-hand call, which left the
+    pick out, named a different object: the plane was laid on one pattern and the
+    answer read off another. Only the squares whose pick came out 0 answered.
+    **3 of the 4 camera turns passed and the fourth failed**, which reads like a
+    bug in the thing being measured and was a bug in the ruler: the copy of the
+    rule had been correct for the whole of its life up to then, and nothing said
+    so when it stopped being. Generalised: when a test needs the same artifact the
+    code produces, ask the code for it -- a duplicated call is a duplicate rule,
+    and `undefined` is an argument that silently matches whatever it happens to
+    match. And when a function can answer "nothing" for two different reasons, make
+    it say which (lesson 27): that diagnostic is what turned a one-line mystery
+    into a one-line fix.
 
 ---
 

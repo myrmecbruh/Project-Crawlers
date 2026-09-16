@@ -17,6 +17,7 @@ needs is inlined here, so the output plays from a file on a phone with no
 network. Run this after every change.
 """
 
+import base64
 import hashlib
 import json
 import pathlib
@@ -28,6 +29,7 @@ ROOT = pathlib.Path(__file__).resolve().parent
 SRC = ROOT / "src"
 DIST = ROOT / "dist"
 SHEET = ROOT / "docs" / "crawlers.xlsx"
+TEXTURES = ROOT / "textures"
 
 sys.path.insert(0, str(ROOT / "tools"))
 import sheet as S
@@ -35,6 +37,63 @@ import sheet as S
 # The one line in the whole project that declares a version.
 VERSION_FILE = SRC / "js" / "00-version.js"
 VERSION_RE = re.compile(r"^const VERSION = '([^']+)';", re.M)
+
+# Pictures somebody dropped into textures/<material>/, inlined as data URIs the
+# same way the spreadsheet is, so the built page still plays from a file on a
+# phone with no network. The eight material names come from sheet.py, so the
+# folders here, the names the sheet may use and the eight the renderer draws are
+# one list and cannot drift apart.
+IMAGE_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+}
+
+
+def natural(name):
+    """Reads 2.png as two rather than as ten. The order matters: the pictures in
+    a folder are laid across the material in this order, so it is the order
+    somebody sees them in the folder."""
+    return [int(p) if p.isdigit() else p.lower()
+            for p in re.split(r"(\d+)", name)]
+
+
+def collect_textures():
+    """material -> [data URI, ...], in the order the files are named.
+
+    A folder that is not one of the eight, or a file that is not a picture, is
+    printed and skipped rather than fatal: it is somebody's picture next to the
+    game, not a broken build."""
+    out = {}
+    if not TEXTURES.is_dir():
+        return out
+    for folder in sorted(TEXTURES.iterdir(), key=lambda p: natural(p.name)):
+        if not folder.is_dir() or folder.name.startswith("."):
+            continue
+        if folder.name not in S.MATERIALS:
+            print("  !! textures/%s is not a material the game has; ignoring it "
+                  "(it has: %s)" % (folder.name, ", ".join(S.MATERIALS)))
+            continue
+        files = []
+        for p in sorted(folder.iterdir(), key=lambda p: natural(p.name)):
+            if p.is_dir() or p.name.startswith("."):
+                continue
+            # The notes in these folders are for the person, not the game.
+            if p.suffix.lower() in (".txt", ".md"):
+                continue
+            mime = IMAGE_TYPES.get(p.suffix.lower())
+            if not mime:
+                print("  !! textures/%s/%s is not a picture the page can read; "
+                      "ignoring it" % (folder.name, p.name))
+                continue
+            files.append("data:%s;base64,%s" % (
+                mime, base64.b64encode(p.read_bytes()).decode("ascii")))
+        if files:
+            out[folder.name] = files
+    return out
 
 
 def fail(msg):
@@ -156,6 +215,14 @@ def main():
     code = code.replace("{{DATA}}", json.dumps(game_data, separators=(",", ":")))
     style = (SRC / "style.css").read_text().strip()
 
+    # And the pictures somebody dropped in travel the same way, for the same
+    # reason: one self-contained page.
+    pictures = collect_textures()
+    if "{{TEXTURES}}" not in code:
+        fail("no module contains {{TEXTURES}}; the pictures would never reach "
+             "the game")
+    code = code.replace("{{TEXTURES}}", json.dumps(pictures, separators=(",", ":")))
+
     shell = (SRC / "shell.html").read_text()
     for token in ("{{STYLE}}", "{{CODE}}"):
         if token not in shell:
@@ -206,6 +273,17 @@ def main():
         print("  %-18s %4d lines" % (m.name, len(m.read_text().splitlines())))
     print("  %-18s %4d lines" % ("style.css", len(style.splitlines())))
     print("  script syntax      %s" % syntax)
+    total = sum(len(v) for v in pictures.values())
+    if total:
+        kb = sum(len(u.encode()) for v in pictures.values() for u in v) / 1024
+        print("  %-18s %6.1f KB   <- %d picture%s in %d material%s: %s"
+              % ("textures", kb, total, "" if total == 1 else "s",
+                 len(pictures), "" if len(pictures) == 1 else "s",
+                 ", ".join("%s %d" % (k, len(pictures[k]))
+                           for k in sorted(pictures))))
+    else:
+        print("  %-18s %6s      <- no pictures dropped in; every surface is the "
+              "generated one" % ("textures", "-"))
     print("  %-18s %6.1f KB   <- play this, and publish this"
           % (versioned.name, len(standalone) / 1024))
     if not out_override:

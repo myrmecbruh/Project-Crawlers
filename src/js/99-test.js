@@ -7,6 +7,22 @@
    by a little; a shape that is actually missing moves whole pixels by a lot. */
 const NOTICEABLE = 8;
 
+/* Every colour in a picture or a canvas, as a sorted list of "r,g,b" -- the
+   whole palette of a thing rather than a sample of it, so "these colours are
+   what this tile is made of" can be asserted instead of hoped at. */
+function coloursIn(src) {
+  const c = document.createElement('canvas');
+  c.width = src.width; c.height = src.height;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0);
+  const px = g.getImageData(0, 0, c.width, c.height).data;
+  const set = new Set();
+  for (let i = 0; i < px.length; i += 4) {
+    set.add(px[i] + ',' + px[i + 1] + ',' + px[i + 2]);
+  }
+  return Array.from(set).sort();
+}
+
 window.__test = {
   version: VERSION,
   cfg: CFG,
@@ -186,6 +202,80 @@ window.__test = {
     return Render.clipWalls;
   },
 
+  /* Paint the LID of a solid block, the way the game used to: a stone surface --
+     material and all -- laid across the top of the rock. It is NOT what the game
+     ships. A wall's top is plain rock now (`wallBody`), and turning this on is
+     the picture as it was before v0.36.0, which is the yardstick the new look and
+     the rock are both proved against. Called with nothing it only reports which
+     way it is set, so a test can say which way the game ships. */
+  wallCaps(on) {
+    if (on !== undefined) {
+      Render.wallCaps = !!on;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.wallCaps;
+  },
+
+  /* Paint the strip of a wall face that a deleted lid used to cover, where
+     nothing else covers it. With the look the game ships no strip is ever laid:
+     the rock itself covers those faces whole, so this only bites with the rock
+     switched off (`wallBody(false)`) or the lids switched on. Off, with the rock
+     off, is the picture with a hole through the middle of the rock -- the
+     negative control the strips are proved against, in one build. Nothing to
+     rebuild: the strip is painted, not built. */
+  wallLips(on) {
+    if (on !== undefined) {
+      Render.wallLips = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.wallLips;
+  },
+
+  /* Paint the rock where a wall's cap used to be -- the look the game ships.
+     On, the top of a wall is the stuff the wall is cut out of: flat, untextured,
+     and lit like the wall's own faces, so a wall's top is rock rather than a lid
+     and the face below dissolves into it. Off is the picture v0.37.0 shipped,
+     where a deleted lid left the rock mass a lattice of holes -- the negative
+     control the rock is proved against, in one build. */
+  wallBody(on) {
+    if (on !== undefined) {
+      Render.wallBody = !!on;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.wallBody;
+  },
+
+  /* Fade away the top `metres` of every wall face, the way the game ships -- 1
+     metre by default, read from the sheet. 0 leaves a wall solid to its top,
+     which is the picture as it was before, for proving the new look against it.
+     Called with nothing it only reports which way it is set. Nothing to rebuild:
+     the band is painted, not built. */
+  wallFade(metres) {
+    if (metres !== undefined) {
+      CFG.wallFadeM = Number(metres);
+      Game.state.viewDirty = true;
+    }
+    return CFG.wallFadeM;
+  },
+
+  /* How much of a block hidden behind the wall in front stays standing, the way
+     the game ships -- 1 metre by default, read from the sheet. 0 deletes the
+     whole square, which leaves the nothing at the bottom of a hidden column that
+     v0.37.0 shipped, and is the negative control the foot of rock is proved
+     against in one build. Called with nothing it only reports the height.
+     Changing it changes how tall a block is DRAWN, so the shapes are built
+     again. */
+  cutStump(metres) {
+    if (metres !== undefined) {
+      CFG.cutStumpM = Number(metres);
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return CFG.cutStumpM;
+  },
+
   /* Paint a crawler part way through a step after the whole of the ground that
      step covers, so the ground can never paint over their legs. Turning this
      off is the old way of painting a walking crawler -- ordering them by where
@@ -216,6 +306,332 @@ window.__test = {
       Game.state.viewDirty = true;
     }
     return Render.mappedGround;
+  },
+
+  /* A square of ground may only skip its own placement while the pattern still
+     carries that floor's plane, the way the game ships. Turning this OFF is the
+     old rule -- skip and hope -- which is what let a ramp's sloped transform be
+     worn by every floor square laid after it at the same height. Called with
+     nothing it only reports which way it is set. See groundFill(). */
+  ownPlane(on) {
+    if (on !== undefined) {
+      Render.ownPlane = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.ownPlane;
+  },
+
+  /* Hand a selected block's halo the STORED side -- the quad running down to the
+     floor of the world -- instead of the side as far as the clip leaves it. This
+     is the rule the selection test was fixed FROM and it is that test's own
+     control: with it on, the ring runs away past the shapes that were painted in
+     37 of its 50 selections, by as much as 220px, where the shipped rule escapes
+     in none. See shapeOf(). */
+  ringStored(on) {
+    if (on !== undefined) {
+      Render.ringStored = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.ringStored;
+  },
+
+  /* ---- the ramps, and the proof that repairing them costs nothing --------
+     A ramp is a promise that the square it leans toward is one metre up. It can
+     fail that promise in two ways, and only one of them is a defect:
+
+       leaning at SOLID ROCK  -- a slope fetching up against a face. THEY ASKED
+                                 FOR THIS ("happens in caves and rubble all the
+                                 time", v0.33.2) and it is left alone.
+       leaning at OPEN GROUND -- a drop, a ledge, another ramp at the same
+         not a metre up         height. A WEDGE: nothing explains the refusal
+                                 and the map will not let you off the top of it.
+                                 The generator repairs these at the end of every
+                                 piece (repairSlopes()).
+
+     This counts every ramp and every step a crawler can really take with the
+     repair OFF and then ON in one build. The sweep throws no dice, so those are
+     the same world twice and the difference between them is exactly the repair.
+     The world it was given back is the one it hands back.
+
+     A seed REPLACES the world, so the state is read after seeding (lesson 27),
+     and the battery reports how much work it did: cases, worlds, pieces. */
+  slopeRepair(on) {
+    if (on !== undefined) SLOPES_REPAIRED = !!on;
+    return SLOPES_REPAIRED;
+  },
+
+  slopeAudit(seeds) {
+    const list = (seeds && seeds.length) ? seeds : [1, 2, 3, 7];
+    const n = CFG.chunkTiles;
+    const keep = Game.state, wasCut = SLOPES_REPAIRED;
+    const out = { cases: list.length, worlds: 0, pieces: 0,
+                  rampsOld: 0, rampsNew: 0, wedgesOld: 0, wedgesNew: 0,
+                  atRockOld: 0, atRockNew: 0,
+                  aimed: 0, flatted: 0, rock: 0, left: 0,
+                  stepsOld: 0, stepsNew: 0, lost: 0, gained: 0, notJudged: 0,
+                  causes: {}, worst: [] };
+    const look = function (where) {
+      const w = Game.state.world;
+      const steps = new Set();
+      const bad = {};
+      let pieces = 0, ramps = 0, wedges = 0, rock = 0;
+      for (const piece of w.live) {
+        pieces++;
+        for (const c of piece.cells) {
+          for (const s of STEPS) {
+            const nb = w.at(c.x + s[0], c.y + s[1]);
+            if (!nb || !canStep(c, nb, s[0], s[1])) continue;
+            steps.add(c.x + ',' + c.y + ',' + s[0] + ',' + s[1]);
+          }
+          if (!c.slope || TILE(c.tile).footing === 'block') continue;
+          ramps++;
+          const d = slopeDir(c.slope);
+          const nb = w.at(c.x + d[0], c.y + d[1]);
+          if (!nb) { out.notJudged++; continue; }
+          if (TILE(nb.tile).footing === 'block') { rock++; continue; }
+          if (canStep(c, nb, d[0], d[1])) continue;
+          wedges++;
+          const cause = nb.h < c.h + 1
+            ? 'the ground drops (' + TILE(nb.tile).name + ' at ' + nb.h + ')'
+            : 'a step of ' + (nb.h - c.h) + ' m into open ' + TILE(nb.tile).name;
+          bad[cause] = (bad[cause] || 0) + 1;
+          if (where === 'old' && out.worst.length < 8) {
+            out.worst.push({ seed: w.seed, x: c.x, y: c.y, h: c.h, room: c.room,
+                             slope: c.slope, into: TILE(nb.tile).name,
+                             intoH: nb.h, cause: cause });
+          }
+        }
+      }
+      return { pieces: pieces, ramps: ramps, wedges: wedges, rock: rock,
+               steps: steps, bad: bad };
+    };
+    const run = function (sd, cut, where) {
+      SLOPES_REPAIRED = cut;
+      Game.state = newState(sd >>> 0);
+      const w = Game.state.world;
+      for (let cx = -1; cx <= 1; cx++) {
+        for (let cy = -1; cy <= 1; cy++) w.ensure(cx * n + (n >> 1), cy * n + (n >> 1));
+      }
+      out.worlds++;
+      const r = look(where);
+      if (cut) {
+        for (const piece of w.live) {
+          const f = piece.slopeFix;
+          if (!f) continue;
+          out.aimed += f.aimed; out.flatted += f.flatted;
+          out.left += f.left; out.rock += f.rock;
+        }
+      }
+      return r;
+    };
+    const diff = function (a, b, lostKey, gainedKey) {
+      a.steps.forEach(function (k) { if (!b.steps.has(k)) out[lostKey]++; });
+      b.steps.forEach(function (k) { if (!a.steps.has(k)) out[gainedKey]++; });
+    };
+    for (const sd of list) {
+      const old = run(sd, false, 'old');
+      const fixed = run(sd, true, null);
+      out.pieces += old.pieces;
+      out.rampsOld += old.ramps; out.rampsNew += fixed.ramps;
+      out.wedgesOld += old.wedges; out.wedgesNew += fixed.wedges;
+      out.atRockOld += old.rock; out.atRockNew += fixed.rock;
+      out.stepsOld += old.steps.size; out.stepsNew += fixed.steps.size;
+      for (const k in old.bad) out.causes[k] = (out.causes[k] || 0) + old.bad[k];
+      diff(old, fixed, 'lost', 'gained');
+    }
+    SLOPES_REPAIRED = wasCut;
+    Game.state = keep;
+    return out;
+  },
+
+  /* Bring the rock down to suit the ground it stands in, or leave it at the
+     plateau, the way the game used to. Called with nothing it only reports
+     which way it is set, so a test can say which way the game ships. */
+  rockTops(on) {
+    if (on !== undefined) ROCK_LOWERED = !!on;
+    return ROCK_LOWERED;
+  },
+
+  /* Does bringing the rock down leave the world a crawler can USE untouched?
+
+     Rock is not a square anybody stands on, so the promise this makes is easy
+     to state and worth counting exactly: every square that is not a block comes
+     out at the same height, wearing the same tile, in the same room, leaning the
+     same way. Nothing walkable moves by a millimetre -- the promise the doorways
+     and the ramps are held to as well -- and only the rock around them changes.
+
+     Run both ways IN ONE BUILD (lesson 21): the generator throws no dice that
+     this can disturb, so the two runs are the same world and the difference
+     between them is exactly the rock. The battery prints how much work it did
+     (worlds, pieces, squares) because a probe that cannot say it did nothing
+     will report nothing, loudly (lesson 27). */
+  rockAudit(seeds) {
+    const list = (seeds && seeds.length) ? seeds : [1, 2, 3, 7];
+    const n = CFG.chunkTiles;
+    const keep = Game.state, wasLow = ROCK_LOWERED;
+    const out = { cases: list.length, worlds: 0, pieces: 0, ground: 0,
+                  moved: 0, retiled: 0, rerolled: 0, reproomed: 0,
+                  rockOld: 0, rockNew: 0, tallestOld: 0, tallestNew: 0,
+                  lowered: 0, raised: 0, topOld: {}, topNew: {}, worst: [] };
+    const run = function (sd, low) {
+      ROCK_LOWERED = low;
+      Game.state = newState(sd >>> 0);
+      const w = Game.state.world;
+      for (let cx = -1; cx <= 1; cx++) {
+        for (let cy = -1; cy <= 1; cy++) w.ensure(cx * n + (n >> 1), cy * n + (n >> 1));
+      }
+      out.worlds++;
+      const ground = new Map();
+      let pieces = 0, rock = 0, tallest = 0;
+      for (const piece of w.live) {
+        pieces++;
+        const f = piece.rockFix;
+        if (f) { out.lowered += f.lowered; out.raised += f.raised; }
+        for (const c of piece.cells) {
+          if (TILE(c.tile).footing === 'block') {
+            rock++;
+            const top = low ? out.topNew : out.topOld;
+            top[c.h] = (top[c.h] || 0) + 1;
+            if (c.h > tallest) tallest = c.h;
+            continue;
+          }
+          ground.set(c.x + ',' + c.y,
+                     { h: c.h, tile: c.tile, room: c.room, slope: c.slope });
+        }
+      }
+      return { ground: ground, pieces: pieces, rock: rock, tallest: tallest };
+    };
+    for (const sd of list) {
+      const old = run(sd, false);
+      const now = run(sd, true);
+      out.pieces += old.pieces;
+      out.ground += old.ground.size;
+      out.rockOld += old.rock; out.rockNew += now.rock;
+      if (old.tallest > out.tallestOld) out.tallestOld = old.tallest;
+      if (now.tallest > out.tallestNew) out.tallestNew = now.tallest;
+      old.ground.forEach(function (a, k) {
+        const b = now.ground.get(k);
+        if (!b) { out.moved++; return; }
+        if (b.h !== a.h) {
+          out.moved++;
+          if (out.worst.length < 8) {
+            out.worst.push({ seed: sd, at: k, was: a.h, now: b.h });
+          }
+        }
+        if (b.tile !== a.tile) out.retiled++;
+        if (b.room !== a.room) out.reproomed++;
+        if (b.slope !== a.slope) out.rerolled++;
+      });
+      now.ground.forEach(function (b, k) { if (!old.ground.has(k)) out.moved++; });
+    }
+    ROCK_LOWERED = wasLow;
+    Game.state = keep;
+    return out;
+  },
+
+  /* Lay each material on the SIDES of a block too, the way the game ships.
+     Turning this OFF is the old way of painting, in which only masonry -- the
+     facing on a worked room -- had anything on its sides and every other wall
+     in the labyrinth was flat colour. Kept as the yardstick the new way is
+     proved against. Called with nothing it only reports which way it is set, so
+     a test can say which way the game ships. */
+  mappedWalls(on) {
+    if (on !== undefined) {
+      Render.mappedWalls = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.mappedWalls;
+  },
+
+  /* Compose each material from the pictures somebody dropped into
+     textures/<material>/ rather than generating it, which is the way the game
+     ships when there are any. Turning it OFF is how every surface in the game
+     looked before there were pictures -- so the same moment can be painted both
+     ways and counted, which is the only thing that tells a picture that reached
+     the screen from a picture that was loaded and then ignored. */
+  pictures(on) {
+    if (on !== undefined) {
+      Render.pictures = !!on;
+      Render.forgetMaterials();
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.pictures;
+  },
+
+  /* Have the pictures dropped into textures/ finished decoding? The suite waits
+     on this before it trusts a picture, because an image arrives when it
+     arrives and a test that reads one early reads a game with no pictures in it
+     -- and passes. */
+  texturesReady() {
+    return { ready: Textures.ready, done: Textures.done, wants: Textures.wants };
+  },
+
+  /* What was dropped into textures/ and what became of it: how many pictures
+     each material has, how many decoded, and -- for one material named -- the
+     colours in the tile the renderer makes out of each of them against the
+     colours in the picture itself. A picture that never reached the game and a
+     picture that reached it and was thrown away look the same on screen; this is
+     how a test tells them apart.
+
+     For a named material it also hands back the SCATTER: which picture each
+     square of a patch of ground picks. That is the half of "use them randomly"
+     that no single tile can show -- one picture per metre, chosen from where the
+     square is -- so the count of each, how often a square picks the same picture
+     as the one next to it, and how many whole rows and columns came out all one
+     picture. Those four numbers are what tells a scatter from a lattice, and
+     from a picker that has stopped picking. */
+  textures(name) {
+    const out = { ready: Textures.ready, on: !!Render.pictures,
+                  done: Textures.done, wants: Textures.wants,
+                  files: {}, decoded: {} };
+    /* Every material the game has, whether or not anybody has dropped a picture
+       into its folder -- a list built from the tiles that wear them, so a
+       material nobody has drawn yet reports 0 rather than being absent, which
+       would read the same as a name nothing ever asked about. */
+    const known = new Set(Object.keys(Textures.files));
+    for (const k of Object.keys(DATA.tiles)) {
+      if (DATA.tiles[k].pattern) known.add(DATA.tiles[k].pattern);
+    }
+    /* And a material the renderer has generated a tile for at all, which is the
+       one honest answer to "does this name exist". */
+    for (const k of Object.keys(Render.mats || {})) known.add(k);
+    for (const k of known) {
+      out.files[k] = (Textures.files[k] || []).length;
+      out.decoded[k] = (Textures.imgs[k] || []).filter(Boolean).length;
+    }
+    out.materials = Object.keys(out.files).filter((k) => out.files[k]);
+    if (name) {
+      const raw = Render.matPictures(name);
+      out.tiles = raw.map((c) => c.width + 'x' + c.height);
+      out.tilesColours = raw.map((c) => coloursIn(c));
+      out.sources = (Textures.imgs[name] || []).filter(Boolean)
+        .map((img) => ({ w: img.width, h: img.height, colours: coloursIn(img) }));
+      out.scatter = window.__test.scatter(name, 24, 24);
+    }
+    return out;
+  },
+
+  /* Which picture a patch of ground picks, walked square by square as the ground
+     is: `w` by `h` squares from the origin, at one height, row by row. Pure --
+     it reads the picker and nothing else -- so it can be asked about ground no
+     match has ever stood on.
+
+     It hands back the picks themselves rather than a summary of them, because
+     what a scatter has to be told apart from is a LATTICE, and telling those two
+     apart takes fitting one: a lattice repeats at a fixed step, so squares that
+     far apart agree every time. The test does that arithmetic; this only reports
+     what the renderer would wear where. See Render.pickIndex. */
+  scatter(name, w, h, salt) {
+    const n = Render.matPictures(name).length;
+    const saltAt = salt === undefined ? PICK_GROUND : salt;
+    const picks = new Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        picks[y * w + x] = n ? Render.pickFor(name, x, y, saltAt) % n : 0;
+      }
+    }
+    return { n: n, w: w, h: h, picks: picks };
   },
 
   /* Keep the picture as it is now. diff() then reports how the next one differs
@@ -283,13 +699,21 @@ window.__test = {
              bonus: gearBonus(a, skill), tool: toolPenalty(a, skill),
              skill: skillLevel(a, skill) };
   },
-  pose(i) {
+  /* Where the bones are, optionally posed as something else. A WALK pose is a
+     crawler mid-step, so asking for one puts them half way through a step --
+     standing still they breathe, whatever they are up to. */
+  pose(i, doing, moveT, tick) {
     const a = Game.state.actors[i];
-    const p = poseFor(a, Game.state.tick);
+    const wasDoing = a.doing, wasMove = a.moveT;
+    if (doing) a.doing = doing;
+    if (moveT !== undefined) a.moveT = moveT;
+    else if (doing === 'walking') a.moveT = 0.5;
+    const p = poseFor(a, tick === undefined ? Game.state.tick : tick);
     const bones = buildSkeleton(p);
     const out = {};
     for (const id of BONE_IDS) out[id] = bones[id].p.slice();
-    return { bob: p.bob, face: a.face, doing: a.doing, bones: out };
+    a.doing = wasDoing; a.moveT = wasMove;
+    return { bob: p.bob, face: a.face, doing: doing || wasDoing, bones: out };
   },
   rolls() { return Game.state.rolls; },
 
@@ -307,7 +731,8 @@ window.__test = {
     if (!it) return null;
     Render.draw(s);
     const def = TILE(it.cell.tile);
-    const pat = Render.matPattern(litShade(def.side, CFG.shadeLeft, it.light), def.pattern);
+    const pat = Render.matPattern(litShade(def.side, CFG.shadeLeft, it.light), def.pattern,
+      undefined, lightShade(CFG.shadeLeft, it.light));
     Render.faceFill(pat, it.left[0], it.left[1], it.left[3], 1, it.wallM);
     const px = Math.round(CFG.patternPx);
     /* Where the texture's own corners land once the map is applied. */
@@ -359,21 +784,57 @@ window.__test = {
       if (want.x !== undefined && (z.cell.x !== want.x || z.cell.y !== want.y)) return false;
       return true;
     });
-    if (!it) return null;
+    if (!it) {
+      this.mapMiss = `no ${want.footing || 'any'} square in the picture at all `
+        + `(${Render.batch.length} things in it)`;
+      return null;
+    }
     Render.draw(s);
-    const def = TILE(it.cell.tile);
-    const lift = Math.round((1 + it.cell.h * CFG.heightTint) * 100) / 100;
-    const colour = litShade(def.top, lift, it.light);
-    const pat = Render.matPattern(colour, def.pattern, it.cell.h);
-    /* Clear what the material remembers and ask for the fill the draw asked
-       for, so what is read back below is this call's placement and not an
-       earlier frame's. Clearing `_laid` also defeats the once-a-frame shortcut
-       inside the renderer, so the real laying is measured. */
-    pat._lastLaid = null; pat._lastMatrix = null; pat._laid = ''; pat._pinned = '';
-    Render.ground(colour, def.pattern, it, s, 'w' + s.cam.ox + ',' + s.cam.oy);
     const px = Math.round(CFG.patternPx);
-    const m = pat._lastLaid || pat._lastMatrix;
-    if (!m) return null;
+    /* Lay one square's material the way the draw lays it -- ask for the pattern
+       the picture would ask for, clear what that pattern remembers, fill, read
+       back. Clearing `_laid` also defeats the once-a-frame shortcut inside the
+       renderer, so the real laying is measured rather than remembered. */
+    const lay = function (z) {
+      const d2 = TILE(z.cell.tile);
+      const lift2 = Math.round((1 + z.cell.h * CFG.heightTint) * 100) / 100;
+      const col2 = litShade(d2.top, lift2, z.light);
+      /* The SAME call ground() makes, pick included: which of the material's
+         pictures a square wears is part of the pattern's identity, so asking
+         with the pick left out names a different object -- and then the plane
+         was laid on one pattern and read back from another. */
+      const p2 = Render.matPattern(col2, d2.pattern, z.cell.h, lightShade(lift2, z.light),
+        Render.pickFor(d2.pattern, z.cell.x, z.cell.y, PICK_GROUND));
+      p2._lastLaid = null; p2._lastMatrix = null; p2._laid = ''; p2._pinned = '';
+      const gave = Render.ground(col2, d2.pattern, z, s, 'w' + s.cam.ox + ',' + s.cam.oy,
+        lightShade(lift2, z.light));
+      return { m: p2._lastLaid || p2._lastMatrix, pat: p2, gave: gave };
+    };
+    const one = lay(it);
+    const pat = one.pat, m = one.m;
+    if (!m) {
+      /* Which of the two ways this came back empty, and how much of the rest of
+         the frame did answer -- an instrument that cannot say what it did is
+         worth nothing (lesson 27). */
+      let ok = 0, bad = 0, firstBad = '';
+      Render.batch.forEach(function (z) {
+        if (z === it || z.kind !== 'cell') return;
+        const t2 = TILE(z.cell.tile);
+        if (!t2.pattern) return;
+        const r2 = lay(z);
+        if (r2.m) { ok += 1; return; }
+        bad += 1;
+        if (!firstBad) firstBad = `${z.cell.tile}@${z.cell.x},${z.cell.y} h${z.cell.h}`;
+      });
+      this.mapMiss = `found ${it.cell.tile} at ${it.cell.x},${it.cell.y} h${it.cell.h} `
+        + `but the fill laid no plane (mapped ${Render.mappedGround}, `
+        + `flat ${it.cell.slope === SLOPE_FLAT}, gave the pattern back ${one.gave === pat}, `
+        + `can be placed ${!!pat.setTransform}, pick ${pat._pick}); `
+        + `of the frame's other patterned squares ${ok} laid one`
+        + (bad ? ` and ${bad} did not, first ${firstBad}` : '');
+      return null;
+    }
+    this.mapMiss = '';
     const at = function (tx, ty) {
       return { x: m[0] * tx + m[2] * ty + m[4], y: m[1] * tx + m[3] * ty + m[5] };
     };
@@ -398,6 +859,41 @@ window.__test = {
              isB: sub(b, a), isD: sub(d, a) };
   },
 
+  /* Every square of ground that was painted in a plane that is not its own
+     floor's, over one drawn frame, with both answers side by side: how far a
+     metre of its material really went (got) and where its own floor says that
+     metre goes (want). A ramp is the only square that should ever differ from
+     the shared plane, and it is mapped from its own corners on purpose -- so a
+     ramp is not counted; a flat square that came out with a ramp's stretch is,
+     and that is the whole of what this asks.
+
+     `on` says which rule to measure under: true is the way the game ships, false
+     is the old one -- lay the material once a frame per pattern and skip the
+     rest. Both run in the same build on the same frame, which is the only way a
+     rule that takes work AWAY is allowed to be proved. */
+  groundPlaneFaults(on) {
+    Render.ownPlane = on === undefined ? Render.ownPlane : !!on;
+    const s = Game.state;
+    const was = Render.planeFaults;
+    Render.planeFaults = true;
+    Render._faults = null;
+    let flats = 0, ramps = 0;
+    s.geomDirty = true; s.viewDirty = true;
+    Render.build(s);
+    for (let i = 0; i < Render.batch.length; i++) {
+      const z = Render.batch[i];
+      if (z.kind !== 'cell') continue;
+      if (!TILE(z.cell.tile).pattern) continue;   /* only these are laid */
+      if (z.cell.slope === SLOPE_FLAT) flats++; else ramps++;
+    }
+    Render.draw(s);
+    Render.planeFaults = was;
+    const faults = (Render._faults || []).slice();
+    Render._faults = null;
+    return { ownPlane: !!Render.ownPlane, flats: flats, ramps: ramps,
+             count: faults.length, faults: faults.slice(0, 8) };
+  },
+
   /* ---- the figure, measured rather than admired ------------------------- */
 
   /* Draw ONE crawler alone and count how many pixels of them land on each row
@@ -408,8 +904,12 @@ window.__test = {
   figureRows(index, doing, tick) {
     const s = Game.state, i = index || 0, a = s.actors[i];
     if (!a) return null;
-    const wasDoing = a.doing, wasTick = s.tick;
-    if (doing) a.doing = doing;
+    const wasDoing = a.doing, wasTick = s.tick, wasMove = a.moveT;
+    if (doing) {
+      a.doing = doing;
+      /* A walk pose is a crawler mid-step; standing still they breathe. */
+      a.moveT = doing === 'walking' ? 0.5 : 1;
+    }
     if (tick !== undefined) s.tick = tick;
     const wasSel = s.selected, wasHover = s.hover, wasOver = s.pointer.over;
     s.selected = -1; s.hover = -1; s.pointer.over = false;
@@ -418,7 +918,7 @@ window.__test = {
     const want = Render.actorBase(s) + i;
     const keep = Render.batch.filter(function (z) { return z.i === want; });
     if (!keep.length) {
-      a.doing = wasDoing; s.tick = wasTick;
+      a.doing = wasDoing; a.moveT = wasMove; s.tick = wasTick;
       s.selected = wasSel; s.hover = wasHover; s.pointer.over = wasOver;
       return null;
     }
@@ -438,7 +938,7 @@ window.__test = {
       }
       rows.push(n);
     }
-    a.doing = wasDoing; s.tick = wasTick;
+    a.doing = wasDoing; a.moveT = wasMove; s.tick = wasTick;
     s.selected = wasSel; s.hover = wasHover; s.pointer.over = wasOver;
     s.geomDirty = true; s.viewDirty = true;
     return { y0: y0, y1: y1, rows: rows, doing: doing || wasDoing };
@@ -645,24 +1145,95 @@ window.__test = {
              materials: Object.keys(Render.mats || {}).length };
   },
   /* Draw one frame and count what KIND of fill each face got: a plain colour,
-     or a repeating pattern. Patterns are the expensive kind, and since the grit
-     was taken off crawlers and camp pieces only the ground should still use
-     them -- so this is how a test proves the grit is really gone rather than
-     merely faint. */
-  fillKinds() {
+     or a repeating pattern. Patterns are the expensive kind, and exactly two
+     places in the game are allowed to wear one -- the GROUND, and the SIDES OF
+     BLOCKS. Everything else is flat-coloured lit faces, and that is what makes a
+     crawler and a piece of the camp read as shape rather than as surface.
+
+     So this counts WHERE a texture came from rather than how many there are:
+     every patterned fill is put to the door it came through, and `other` counts
+     the ones that came through neither of the two. That is a census of the whole
+     picture, which is the only kind of assertion that can hold a line like
+     "materials are on the ground and on walls and nowhere else" -- a count of
+     patterned fills against the number of ground squares cannot, because since
+     v0.24.0 the block sides carry a material too and legitimately outnumber it.
+
+     `foul` paints one pattern through the wrong door before the counts are read,
+     so a test can prove the census can SEE the thing it is looking for. A ruler
+     that cannot fail is worth less than no ruler.
+
+     FOUR DOORS, because a wall's material can reach the picture two ways and a
+     wall's top metre is not a material at all: `Render.ground` (a material on a
+     square of ground), `Render.wall` (a material on the face of a block),
+     `Render.wallBand` (the SAME picture of that material on the faded top of the
+     face, so the stonework runs on up the wall instead of stopping), and
+     `Render.fadeBand`, which paints a GRADIENT -- the wall's own colour
+     dissolving -- and is not a surface at all. So a gradient is counted as
+     `band`, not as a pattern: "nothing is textured when the texture dial is off"
+     has to go on meaning that, and with the material off every wall side fades
+     through a gradient.
+
+     `things` is everything the frame consumed, which used to be called `drawn`
+     here -- and no longer is, because as of v0.30.0 "drawn" means a material
+     made out of a picture somebody dropped in (Render.drawn), and two meanings
+     for one word in one file is how a later session mis-reads a number. The
+     frame's own counters come back beside the fills (`cells`, `walls`, `banded`,
+     `body`, `capsOff`) so a test can tie the two together -- how many squares
+     wear a material, and how many wall sides do -- without asking which frame
+     `Render.consumed` belongs to now. */
+  fillKinds(foul) {
     const s = Game.state, ctx = Render.bctx;
     const real = ctx.fill.bind(ctx);
-    let plain = 0, pattern = 0;
+    const realGround = Render.ground, realWall = Render.wall;
+    const realWallBand = Render.wallBand, realFadeBand = Render.fadeBand;
+    const from = new Map();      /* a fill object -> the door it came out of */
+    let plain = 0, pattern = 0, band = 0, ground = 0, wall = 0, other = 0;
+    const door = (f, which) => { if (f && typeof f === 'object') from.set(f, which); return f; };
+    Render.ground = function () { return door(realGround.apply(this, arguments), 'ground'); };
+    Render.wall = function () { return door(realWall.apply(this, arguments), 'wall'); };
+    /* The band carries the face's own material on up the wall, so it is the same
+       door -- and while fadeBand() runs, whatever object it paints with (its
+       gradient) belongs to the wall as well. */
+    Render.wallBand = function () { return door(realWallBand.apply(this, arguments), 'wall'); };
+    Render.fadeBand = function () {
+      const wasPoly = Render.poly;
+      Render.poly = function (c, q, fill) {
+        if (fill && typeof fill === 'object') from.set(fill, 'wall');
+        return wasPoly.apply(this, arguments);
+      };
+      try { return realFadeBand.apply(this, arguments); }
+      finally { Render.poly = wasPoly; }
+    };
     ctx.fill = function () {
-      if (typeof this.fillStyle === 'object') pattern++; else plain++;
+      const f = this.fillStyle;
+      if (f && typeof f === 'object') {
+        if (typeof f.addColorStop === 'function') band++;   /* a fade, not a surface */
+        else {
+          pattern++;
+          const d = from.get(f);
+          if (d === 'ground') ground++;
+          else if (d === 'wall') wall++;
+          else other++;
+        }
+      } else plain++;
       return real();
     };
     s.geomDirty = true; s.viewDirty = true;
     Render.build(s); Render.draw(s);
+    if (foul) {
+      /* One pattern drawn by hand, from no door at all. The census has to put it
+         in `other` and nowhere else. */
+      Render.poly(ctx, [{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 0, y: 3 }],
+                  Render.matPattern('#ffffff', 'moss'));
+    }
     ctx.fill = real;
-    return { plain: plain, pattern: pattern, drawn: Render.consumed.count,
-             cells: Render.consumed.count - Render.consumed.people
-                    - Render.consumed.structures };
+    Render.ground = realGround; Render.wall = realWall;
+    Render.wallBand = realWallBand; Render.fadeBand = realFadeBand;
+    const c = Render.consumed;
+    return { plain: plain, pattern: pattern, band: band, things: c.count,
+             ground: ground, wall: wall, other: other,
+             cells: c.count - c.people - c.structures,
+             walls: c.walls, banded: c.banded, body: c.body, capsOff: c.capsOff };
   },
 
   /* How many different colours appear along one line across the picture. A flat
@@ -819,6 +1390,18 @@ window.__test = {
       add('one tile is one square metre (rule 7)',
           CFG.metresPerTile === 1, 'metres_per_tile=' + CFG.metresPerTile);
 
+      /* -- the pictures somebody dropped in, if there are any --------------- */
+      const dropped = Textures.wants;
+      const drawnMats = Object.keys(Textures.files).filter((k) => Render.drawn(k));
+      add('the pictures dropped into textures/ became materials',
+          dropped === 0 ? drawnMats.length === 0
+                        : (Textures.ready && drawnMats.length > 0),
+          dropped === 0
+            ? 'none dropped in, so every surface is the one the game generates'
+            : Textures.done + ' of ' + dropped + ' decoded, and ' + drawnMats.length
+              + ' material' + (drawnMats.length === 1 ? '' : 's') + ' drawn from them ('
+              + drawnMats.join(', ') + ')');
+
       /* -- the world is deterministic --------------------------------------- */
       const a = newState(777), b = newState(777), c = newState(778);
       const sig = (s) => s.world.cells.map((q) => q.h + q.tile).join('|');
@@ -845,12 +1428,13 @@ window.__test = {
           Math.round(CFG.actorHeight * CFG.rise) === 52,
           Math.round(CFG.actorHeight * CFG.rise) + 'px for ' + CFG.actorHeight + ' m');
 
-      /* -- everything built reached the buffer ------------------------------ */
+      /* -- everything built was either painted or cut away ---------------- */
       Render.recordItems = true;
       const built = Render.build(a).length;
       const drew = Render.draw(a);
-      add('the renderer consumed everything it built',
-          drew.count === built, 'built ' + built + ', drew ' + drew.count);
+      add('every square the frame built was painted or counted as cut away',
+          drew.count + drew.cut === built,
+          'built ' + built + ', drew ' + drew.count + ', cut ' + drew.cut);
       add('the picture is a whole number of game pixels',
           drew.bufW === Math.round(drew.bufW) && drew.bufH === Math.round(drew.bufH)
           && drew.bufW > 0, drew.bufW + 'x' + drew.bufH);
@@ -870,18 +1454,38 @@ window.__test = {
       /* -- picking finds what is under the pointer ---------------------------
          Use the LAST block painted that is comfortably inside the picture: it
          is in front of everything else, so nothing can be hiding it, and the
-         view is only a window onto a chunk wider than itself. */
+         view is only a window onto a chunk wider than itself.
+
+         The pixel is taken from that block's own NEAR FACE, not from the middle
+         of its square: a square's screen footprint is its TOP, and the tops are
+         exactly what the wall look deletes -- so the centre of a block is a
+         pixel the block itself no longer paints, and the honest answer there is
+         whatever the deleted lid was hiding. A near face is painted in every
+         look, which is what makes this a check on the picker rather than on the
+         lid.
+
+         WHAT IS TESTED FOR BEING INSIDE THE PICTURE IS THAT PIXEL, not the
+         square's centre. A near face is four metres of wall -- 128 pixels down
+         the screen -- and the point is 60% of the way down it, which can easily
+         be past the bottom edge of the window while the square's own centre sits
+         comfortably in the middle of it. Judging the centre handed pickAt() a
+         point off the canvas, and refusing one is the one thing pickAt() is
+         right to do; the check then failed on behalf of a picker that was
+         working. (It is the pixel the answer is about, so it is the pixel that
+         has to be in the picture.) */
       Render.drawPick(a);
       let front = null;
       for (let k = drew.items.length - 1; k >= 0; k--) {
         const it = drew.items[k];
-        if (it.sx > 8 && it.sx < Render.w - 8 && it.sy > 8 && it.sy < Render.h - 8) {
-          front = it; break;
-        }
+        if (!it.aim) continue;
+        const m = 8;
+        if (!(it.aim.x > m && it.aim.x < Render.w - m
+              && it.aim.y > m && it.aim.y < Render.h - m)) continue;
+        front = it; break;
       }
       add('some of the labyrinth is actually in view', !!front,
           drew.items.length + ' blocks drawn');
-      const hit = front ? Render.pickAt(a, front.sx, front.sy) : -2;
+      const hit = front ? Render.pickAt(a, front.aim.x, front.aim.y) : -2;
       add('pointing at a block finds that block',
           front && hit === front.i, front ? 'wanted ' + front.i + ', got ' + hit : 'no block');
       add('pointing off the edge of the picture finds nothing',
@@ -954,7 +1558,7 @@ window.__test = {
         if (TILE(c.tile).footing === 'block') { rock++; if (c.cutaway) cut++; }
       }
       add('some rock is cut away so rooms are not hidden by their own walls',
-          cut > 0 && cut < rock, cut + ' of ' + rock + ' rock columns fade');
+          cut > 0 && cut < rock, cut + ' of ' + rock + ' rock columns stand in the way');
 
       /* -- the camp -------------------------------------------------------- */
       add('the crawlers picked a room to camp in', !!a.camp,

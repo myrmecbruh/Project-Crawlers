@@ -417,6 +417,11 @@ function blockRoom(world, r, box, rand, kind, amt) {
     if (x === r.cx && y === r.cy) continue;
     const c = at(x, y);
     if (!c || c.slope || TILE(c.tile).footing === 'block') continue;
+    /* A block MAY land on the square a ramp climbs into, and it stays there.
+       That was guarded against for one version (v0.33.0) and the guard was
+       thrown away in v0.33.2 -- a slope that fetches up against rock is a cave,
+       not a defect, and keeping the guard cost the room its shape. See the
+       long note over repairSlopes() in 12-world.js. */
     const wasTile = c.tile, wasH = c.h;
     if (kind === 'rubble' && rand() < 0.5) {
       c.tile = 'rubble';                 /* walkable, just hard going */

@@ -2,7 +2,8 @@
  *
  * Bones hang off one another; every visible part is a tapered box fixed to a
  * bone; the whole thing is turned to face where the crawler is going and posed
- * by a walk, a work swing or a slow idle breath. It is then projected into the
+ * by a walk while they are going somewhere, a work swing at a site, or a slow
+ * idle breath the rest of the time. It is then projected into the
  * same small buffer as everything else, which is what makes 3D read as sprite
  * work -- the geometry is real, the resolution is not.
  *
@@ -65,25 +66,36 @@ function turnToward(from, to, by) {
 
 /* The whole animation system: three procedural clips. The SHAPE of each is
    here in code because it is logic; every AMOUNT is a knob in the spreadsheet,
-   so the walk can be widened or the work slowed without touching this. */
+   so the walk can be widened or the work slowed without touching this.
+ *
+ * The walk plays only while the BODY is actually going somewhere. A crawler's
+ * stride takes fewer ticks than the pause before their next step, and a step
+ * they fail leaves them standing where they were, so `doing === 'walking'` is
+ * true for long stretches in which nothing is moving. Reading the walk off
+ * `moveT` instead of off what they are up to is what stops a standing crawler
+ * marching on the spot; `doing` is still the intent, so the panel goes on
+ * saying what they are about. */
 function poseFor(actor, tick) {
   const pose = { root: [0, 0, actor.face] };
   let bob = 0;
 
-  if (actor.doing === 'walking') {
+  if (actor.doing === 'walking' && actor.moveT < 1) {
     const t = ((tick + actor.gait) % CFG.walkTicks) / CFG.walkTicks * TAU;
-    const swing = Math.sin(t) * CFG.walkLegSwing * DEG;
-    const arm = Math.sin(t) * CFG.walkArmSwing * DEG;
+    /* Eased in and out across the step, so the legs come to rest with the body
+       instead of being left half way through a stride to snap back from. */
+    const ease = Math.sin(Math.PI * actor.moveT);
+    const swing = Math.sin(t) * CFG.walkLegSwing * DEG * ease;
+    const arm = Math.sin(t) * CFG.walkArmSwing * DEG * ease;
     pose.thigh_l = [swing, 0, 0];
     pose.thigh_r = [-swing, 0, 0];
     /* A knee only ever folds one way. */
-    pose.knee_l = [-Math.max(0, Math.sin(t - 0.7)) * CFG.walkKneeBend * DEG, 0, 0];
-    pose.knee_r = [-Math.max(0, Math.sin(t + Math.PI - 0.7)) * CFG.walkKneeBend * DEG, 0, 0];
+    pose.knee_l = [-Math.max(0, Math.sin(t - 0.7)) * CFG.walkKneeBend * DEG * ease, 0, 0];
+    pose.knee_r = [-Math.max(0, Math.sin(t + Math.PI - 0.7)) * CFG.walkKneeBend * DEG * ease, 0, 0];
     pose.shoulder_l = [-arm, 0, 0];
     pose.shoulder_r = [arm, 0, 0];
     pose.elbow_l = [-Math.abs(arm) * 0.6, 0, 0];
     pose.elbow_r = [-Math.abs(arm) * 0.6, 0, 0];
-    bob = Math.abs(Math.sin(t)) * CFG.walkBob;
+    bob = Math.abs(Math.sin(t)) * CFG.walkBob * ease;
 
   } else if (actor.doing === 'clearing' || actor.doing === 'building') {
     const t = ((tick + actor.gait) % CFG.workTicks) / CFG.workTicks * TAU;
@@ -102,6 +114,7 @@ function poseFor(actor, tick) {
     bob = -lift * 0.02;
 
   } else {
+    /* Standing about, which now includes the pause between two steps. */
     const t = ((tick + actor.gait) % CFG.idleTicks) / CFG.idleTicks * TAU;
     const sway = Math.sin(t) * CFG.idleSway * DEG;
     pose.chest = [sway * 0.4, sway, 0];

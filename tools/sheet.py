@@ -13,6 +13,14 @@ import collections
 import json
 import pathlib
 
+# The eight surfaces the renderer knows how to mark a tile with, and the eight
+# folders under textures/ -- one list, because a material the sheet may name, a
+# material the renderer can draw and a folder somebody may drop a picture into
+# are the same eight things. build.py imports this too, so a ninth material
+# added here appears in all three places at once.
+MATERIALS = ("masonry", "flagstone", "dirt", "moss", "water",
+             "rubble", "bones", "rock")
+
 # section -> (id column heading, value column headings, read-only?)
 # The first value column is what the game reads for the simple sections.
 SECTIONS = {
@@ -290,9 +298,7 @@ def check_vocabulary(game):
             if tag not in known:
                 errors.append("tiles: '%s' claims the tag '%s', which is not in "
                               "the tags sheet" % (tid, tag))
-        if t.get("pattern") and t["pattern"] not in (
-                "masonry", "flagstone", "dirt", "moss", "water",
-                "rubble", "bones", "rock"):
+        if t.get("pattern") and t["pattern"] not in MATERIALS:
             errors.append("tiles: '%s' asks for the pattern '%s', which the "
                           "renderer does not know (blank means plain)"
                           % (tid, t["pattern"]))

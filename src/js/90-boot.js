@@ -21,6 +21,10 @@ const Game = {
 
     this.fit();
     this.state = newState(seed === undefined ? 1 : seed);
+    /* The pictures dropped into textures/ decode in their own time. Loading them
+       is once per page however many matches are started; what is baked before
+       they arrive is thrown away for them. */
+    Textures.load();
     this.fit();
     addEventListener('resize', () => { this.fit(); if (this.state) this.state.viewDirty = true; });
     bindInput(this.state, this.canvas, (cx, cy) => this.toBuffer(cx, cy));
@@ -127,6 +131,8 @@ const Game = {
       Render.draw(s);
       Inspector.render(s);
     }
+    /* Laid straight onto the window. The picture is whole: it carries no
+       transparency, so there is nothing to lay it onto first. */
     this.ctx.drawImage(Render.buf, 0, 0);
   },
 

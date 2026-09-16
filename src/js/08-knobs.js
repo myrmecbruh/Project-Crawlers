@@ -95,7 +95,6 @@ const CFG = {
   tileHLow:    K('render.tile_h_low'),
   tileHHigh:   K('render.tile_h_high'),
   rise:        K('render.rise'),
-  occluderFade: K('render.occluder_fade'),
   shadeLeft:   K('render.side_shade_left'),
   shadeRight:  K('render.side_shade_right'),
   heightTint:  K('render.height_tint'),
@@ -104,8 +103,10 @@ const CFG = {
   zoomMax:     K('render.zoom_max'),
   maxBufW:     K('render.max_buffer_w'),
   maxBufH:     K('render.max_buffer_h'),
-  cutawayFade: K('render.cutaway_fade'),
+  cutSolid:    K('render.cut_solid'),
   cutawayDepth: K('render.cutaway_depth'),
+  wallFadeM:   K('render.wall_fade_m'),
+  cutStumpM:   K('render.cut_stump_m'),
   swingMs:     K('camera.swing_ms'),
   tiltMs:      K('camera.tilt_ms'),
   keyPan:      K('camera.key_pan_speed'),
@@ -214,3 +215,14 @@ function litShade(hex, f, light) {
        + ',' + c((n >> 8) & 255, (1 + w * 0.10) * (1 - cold * 0.18))
        + ',' + c(n & 255, (1 - w * 0.30) * (1 + cold * 0.65)) + ')';
 }
+
+/* The SHADING alone, with no colour of its own: what a surface is multiplied by
+   at this facing and this much light. It is the same function with white in it,
+   rather than a second copy of the arithmetic, so the two cannot drift apart.
+
+   A material the game GENERATES is drawn as an overlay on the tile's colour and
+   never needs this. A material somebody DREW is the colour, and the picture has
+   to be multiplied by the light on its own: multiplied by the tile's colour as
+   well it would come out nearly black -- a picture's own mid-brown against
+   packed earth's brown is about a tenth as bright as either. */
+function lightShade(f, light) { return litShade('#ffffff', f, light); }

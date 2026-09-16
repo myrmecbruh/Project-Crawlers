@@ -47,8 +47,15 @@ function assert(cond, why) { if (!cond) throw new Error(why); }
 const ONLY = (process.argv.slice(2).find((a) => a.startsWith('--only=')) || '')
   .slice('--only='.length).split(',').map((w) => w.trim()).filter(Boolean);
 
+/* Every test is printed as it STARTS, on stderr, because the results are all
+ * held back until the end and a full run takes minutes -- a run that is working
+ * and a run that is wedged look exactly alike from the outside, and both have
+ * been killed for it. The line names the test that is running NOW, so the last
+ * line before a stop says where it stopped. */
 async function test(name, fn) {
   if (ONLY.length && !ONLY.some((w) => name.includes(w))) return;
+  const n = results.length + 1;
+  process.stderr.write(`  ... ${n} running: ${name}\n`);
   try { await fn(); results.push({ name, ok: true }); }
   catch (e) { results.push({ name, ok: false, why: e.message }); }
 }
@@ -78,6 +85,10 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
 await page.goto(pathToFileURL(built).href);
 await page.waitForFunction(() => window.__test && window.__test.state);
+/* The pictures dropped into textures/ decode in their own time. Wait for them
+   before anything is measured, or a test that asks about a picture reads a game
+   with none in it -- and passes. A build with no pictures is ready at once. */
+await page.waitForFunction(() => window.__test.texturesReady().ready);
 await page.evaluate(() => window.__test.pause());
 
 /* ---- 2. the in-game harness checks itself -------------------------------- */
@@ -122,23 +133,69 @@ await test('varied ground: several materials and several elevations appear', asy
   assert(r.tiles.length >= 4, `only ${r.tiles.length} materials: ${r.tiles}`);
 });
 
-await test('ramps climb exactly one metre, toward ground exactly one metre higher', async () => {
+await test('ramps climb exactly one metre, toward ground exactly one metre higher (v0.33.2)', async () => {
   const r = await page.evaluate(() => {
-    window.__test.seed(1);
-    const w = window.__test.state.world;
     const step = { 'x+': [1, 0], 'x-': [-1, 0], 'y+': [0, 1], 'y-': [0, -1] };
-    let ramps = 0, wrong = 0;
-    for (const c of w.cells) {
-      if (TILE(c.tile).footing !== 'ramp') continue;
-      ramps++;
-      const d = step[c.slope];
-      const up = w.at(c.x + d[0], c.y + d[1]);
-      if (!up || up.h !== c.h + 1) wrong++;
+    let ramps = 0, up1 = 0, rock = 0, wrong = 0, edge = 0, seeds = 0;
+    for (const seed of [1, 2, 3, 7, 8, 777]) {
+      window.__test.seed(seed);
+      seeds++;
+      const w = window.__test.state.world;
+      for (const c of w.cells) {
+        if (TILE(c.tile).footing !== 'ramp') continue;
+        ramps++;
+        const d = step[c.slope];
+        const up = w.at(c.x + d[0], c.y + d[1]);
+        if (!up) { edge++; continue; }
+        /* A slope that fetches up against rock is a cave, not a defect: that is
+           their rule (v0.33.2). What may not happen is a slope leaning at open
+           ground that is not a metre up -- a wedge the map refuses to let you
+           walk off. */
+        if (TILE(up.tile).footing === 'block') { rock++; continue; }
+        if (up.h === c.h + 1) { up1++; continue; }
+        wrong++;
+      }
     }
-    return { ramps, wrong };
+    return { ramps, up1, rock, wrong, edge, seeds };
   });
-  assert(r.ramps > 0, 'the labyrinth generated no ramps at all on seed 1');
-  assert(r.wrong === 0, `${r.wrong} of ${r.ramps} ramps climb to nowhere`);
+  assert(r.ramps > 0, 'the labyrinth generated no ramps at all');
+  assert(r.edge === 0, `${r.edge} ramps lean at the edge of the piece, where nothing can say what is there`);
+  assert(r.wrong === 0,
+         `${r.wrong} of ${r.ramps} ramps lean at open ground that is not a metre up, over ${r.seeds} seeds`);
+  assert(r.up1 + r.rock === r.ramps,
+         `${r.up1} ramps climb a metre and ${r.rock} lean at rock, out of ${r.ramps}`);
+});
+
+/* A ramp is the only place two levels meet. It may end against ROCK -- a bank of
+   rubble fetching up against a face, which is what a cave looks like and what
+   they asked for (v0.33.2: "I don't mind slopes leading up to walls"). It may
+   not end over OPEN ground that is not a metre up: there is nothing there to
+   explain the refusal, so the picture shows a slope and the map says no. Three
+   rules applied after the ramps are dug (a block placed in the room, a hall dug
+   over the square, a doorway corridor leaning on "the next square is higher")
+   used to leave 145 of them in 270 pieces -- 118 leaning at rock, which is now
+   left alone, and 27 leaning at open ground, which is repaired.
+   This runs the repair OFF and ON in one build: the OFF run has to find the
+   wedges, the ON run has to find none, and the rock-leaning ramps have to be
+   untouched by it, or the rule they asked for is not in the game. See lesson 21
+   (prove a change against the same build with it switched off) and lesson 22
+   (run the range, not the sample). */
+await test('a slope may end at rock, but never over a drop (v0.33.2)', async () => {
+  const r = await page.evaluate(() => window.__test.slopeAudit([1, 2, 3, 7, 8, 777]));
+  assert(r.worlds === 2 * r.cases,
+         `the audit made ${r.worlds} pieces of world for ${r.cases} cases (expected ${2 * r.cases})`);
+  assert(r.pieces >= 40, `the audit only reached ${r.pieces} pieces, so it measured next to nothing`);
+  assert(r.wedgesOld > 0,
+         `the old way had no wedges to repair (${r.wedgesOld} of ${r.rampsOld} ramps), so this test proves nothing`);
+  assert(r.wedgesNew === 0,
+         `${r.wedgesNew} of ${r.rampsNew} ramps still lean at open ground: ${JSON.stringify(r.causes)}`);
+  assert(r.left === 0, `${r.left} ramps were still wedges when the repair gave up`);
+  assert(r.lost === 0, `the repair took ${r.lost} steps away (gained ${r.gained})`);
+  assert(r.aimed + r.flatted > 0, 'nothing was repaired at all');
+  assert(r.atRockNew > 0,
+         'no ramp leans at rock any more, so the rule they asked for is not in the game');
+  assert(r.atRockNew === r.atRockOld,
+         `the repair touched ${r.atRockOld - r.atRockNew} of the ${r.atRockOld} ramps that lean at rock, which they told us to leave alone`);
 });
 
 await test('hovering a block outlines it and names it on screen (rule 8)', async () => {
@@ -204,25 +261,110 @@ await test('pointing at nothing at all names nothing, and there is no edge to wa
   assert(r.b === null && !r.outlined, 'the highlight stayed after the pointer left');
 });
 
-await test('a block in the way fades so you can see what you are inspecting', async () => {
+/* THE REPORTED BUG, v0.34.0: "when mousing over the campfire, the tiles to the
+ * lower left and lower right of it go transparent."
+ *
+ * The old rule worked out what stood in front of a thing from the BOX the thing
+ * was drawn in, and a structure's box reaches out over the squares either side
+ * of it -- so pointing at the campfire knocked the two tiles beside it into
+ * see-through. A box is not a silhouette, and there is no answer to "is this
+ * behind that" that a box can give.
+ *
+ * So the pointer is walked over every pixel of a box round the fire -- the
+ * report is answered by asking the question the report is about, everywhere it
+ * could be true -- and what is counted is what the picture drew at less than
+ * full strength. The arm with the haze switched back on is the negative
+ * control: it is the same counter, and it has to be able to fail. */
+await test('the campfire never makes the tiles beside it see-through (v0.34.0)', async () => {
   const r = await page.evaluate(() => {
-    window.__test.seed(3); window.__test.record(true);
-    const drew = window.__test.frame(1);
-    /* Find a block with something painted after it that covers it. */
-    let best = null;
-    for (let k = 0; k < drew.items.length - 40; k++) {
-      const it = drew.items[k];
-      if (it.sx < 40 || it.sx > window.__test.buffer().w - 40) continue;
-      if (it.sy < 40 || it.sy > window.__test.buffer().h - 40) continue;
-      best = it; break;
-    }
-    window.__test.select(best.i);
-    const c = window.__test.consumed();
-    return { faded: c.faded, focus: c.focus, want: best.i, fade: window.__test.cfg.occluderFade };
+    const t = window.__test;
+    t.pause(); t.unpoint();
+    const was = t.cfg.cutSolid;
+    const arm = (solid) => {
+      t.cfg.cutSolid = solid;
+      const rows = [];
+      for (const seed of [1, 3, 5, 7, 23, 777]) {
+        /* Run the match on until the crawlers have raised the camp themselves,
+           so the fire is the game's own and not a test's arrangement of it. */
+        t.seed(seed);
+        t.step(3001);
+        t.record(true);
+        t.redraw();
+        const s = Game.state;
+        for (let k = 0; k < 8; k++) {      /* settle the world first (lesson 24) */
+          const n = s.world.cells.length;
+          s.geomDirty = true; s.viewDirty = true; Game.render();
+          if (s.world.cells.length === n) break;
+        }
+        t.repaint();
+        const fire = (t.consumed().items || [])
+          .find((q) => q.kind === 'site' && q.structure === 'campfire');
+        if (!fire) { rows.push({ seed, none: true, tick: s.tick }); continue; }
+        let samples = 0, onFire = 0, stained = 0;
+        const what = new Set();
+        const FX = Math.round(fire.sx), FY = Math.round(fire.sy);
+        /* An adjacent square is about 16 px away in x and 8 in y at 32 px to the
+           metre, so this box takes in every neighbour of the fire. */
+        for (let y = FY - 16; y <= FY + 16; y++) {
+          for (let x = FX - 16; x <= FX + 16; x++) {
+            if (x < 0 || y < 0 || x >= Render.w || y >= Render.h) continue;
+            samples++;
+            if (t.point(x, y) === fire.i) onFire++;
+            for (const q of (t.consumed().items || [])) {
+              if (q.alpha >= 1) continue;
+              stained++;
+              what.add(q.kind + ' ' + (q.structure || q.name || q.tile));
+            }
+          }
+        }
+        t.unpoint();
+        /* Is anything beside the fire cut away at all, and is any of it ground a
+           crawler could stand on? The cut mark is hover-independent by
+           construction, and the census below proves the pointer cannot move it. */
+        let cut = 0, walkCut = 0;
+        for (const it of Render.batch) {
+          if (it.kind !== 'cell' || !it.cutaway) continue;
+          cut++;
+          if (it.cell && TILE(it.cell.tile).footing === 'walk') walkCut++;
+        }
+        rows.push({ seed, fire: [fire.x, fire.y], samples, onFire, stained,
+                    cut, walkCut, what: [...what].slice(0, 6) });
+      }
+      t.unpoint(); t.record(false);
+      return rows;
+    };
+    const shipped = arm(was);
+    const hazy = arm(0.5);
+    t.cfg.cutSolid = was;
+    t.seed(1); t.redraw();
+    return { was, shipped, hazy, back: t.cfg.cutSolid };
   });
-  assert(r.focus === r.want, 'the wrong block was selected');
-  assert(r.faded > 0, 'nothing in front of the selected block faded at all');
-  assert(r.fade < 1, 'the fade knob is set to never fade');
+  const sum = (a, k) => a.reduce((n, q) => n + (q.none ? 0 : q[k]), 0);
+  const seen = r.shipped.filter((q) => !q.none);
+  const haz = r.hazy.filter((q) => !q.none);
+  assert(r.was === 0 && r.back === 0,
+    `the see-through haze is on in the spreadsheet (cut_solid ${r.was})`);
+  assert(seen.length === 6 && haz.length === 6,
+    `${seen.length} of six seeds had a campfire to look at`);
+  assert(sum(seen, 'samples') > 5000 && sum(seen, 'onFire') >= 400,
+    `the pointer was put on ${sum(seen, 'samples')} pixels round the fire and`
+    + ` answered with the fire ${sum(seen, 'onFire')} times, so it did not really`
+    + ' walk over the fire at all');
+  assert(sum(seen, 'cut') > 0,
+    'no rock was cut away anywhere near the fire, so this test is not catching'
+    + ' the behaviour it is about');
+  assert(sum(seen, 'walkCut') === 0 && sum(haz, 'walkCut') === 0,
+    `${sum(seen, 'walkCut')} squares a crawler could stand on were cut away round`
+    + ' the fire');
+  assert(sum(seen, 'stained') === 0,
+    `pointing at the campfire drew ${sum(seen, 'stained')} things at less than`
+    + ` full strength: ${[...new Set(seen.flatMap((q) => q.what))].join(', ')}`);
+  assert(sum(haz, 'stained') > 0,
+    'with the haze switched back on not one thing was drawn see-through, so the'
+    + ' count above cannot fail');
+  assert(sum(seen, 'stained') * 20 < sum(haz, 'stained'),
+    `the shipped dial stained ${sum(seen, 'stained')} samples and the haze`
+    + ` ${sum(haz, 'stained')}, which is not the difference the dial claims`);
 });
 
 await test('panning moves the view, and picking follows it', async () => {
@@ -311,19 +453,390 @@ await test('the labyrinth is rooms and halls, and every room can be reached', as
   }
 });
 
-await test('rock between you and a room fades, so no room hides behind its wall', async () => {
+await test('nothing you point at or select is ever drawn see-through (v0.34.0)', async () => {
   const r = await page.evaluate(() => {
-    window.__test.seed(1); window.__test.record(true);
-    const drew = window.__test.frame(1);
-    const rock = drew.items.filter((i) => i.kind === 'cell' && i.tile === 'stone_block');
-    return { cutaway: drew.cutaway, rock: rock.length,
-             fadedRock: rock.filter((i) => i.alpha < 1).length,
-             fade: window.__test.cfg.cutawayFade };
+    const t = window.__test;
+    const arm = (solid) => {
+      t.cfg.cutSolid = solid;
+      let shots = 0, stained = 0, floors = 0, stains = 0, worlds = 0;
+      for (const seed of [1, 3, 5, 7, 23, 777]) {
+        t.seed(seed);
+        t.record(true);
+        t.frame(2);
+        worlds++;
+        /* Settle the world before looking at it, or a square's number slides
+           under the test the moment more ground is fetched (lessons 24, 25). */
+        const s = Game.state;
+        for (let k = 0; k < 8; k++) {
+          const n = s.world.cells.length;
+          s.geomDirty = true; s.viewDirty = true; Game.render();
+          if (s.world.cells.length === n) break;
+        }
+        const b = Render.batch, spots = [];
+        for (let k = 0; k < b.length; k += 8) {
+          const it = b[k];
+          if (it.kind !== 'cell' || !it.cell || it.cutaway) continue;
+          if (TILE(it.cell.tile).footing !== 'walk') continue;
+          spots.push([it.cell.x, it.cell.y]);
+        }
+        for (const spot of spots) {
+          let focus = null;
+          for (const it of Render.batch) {
+            if (it.kind === 'cell' && it.cell
+                && it.cell.x === spot[0] && it.cell.y === spot[1]) { focus = it; break; }
+          }
+          if (!focus) continue;
+          t.select(focus.i);
+          const c = t.consumed();
+          if (c.focus !== focus.i) continue;
+          /* What the picture drew at less than full strength with this floor
+             pinned. Nothing may, ever -- the haze is what the report was about. */
+          let n = 0;
+          for (const q of (c.items || [])) {
+            if (q.alpha >= 1) continue;
+            n++;
+            if (q.kind === 'cell' && q.cell
+                && TILE(q.cell.tile).footing === 'walk') stains++;
+          }
+          shots++; if (n > 0) stained++; floors += n;
+        }
+      }
+      t.select(-1); t.repaint();
+      return { shots, stained, floors, stains, worlds };
+    };
+    t.pause();
+    const wasCut = t.cfg.cutSolid;
+    const exact = arm(wasCut);
+    const hazy = arm(0.5);
+    t.cfg.cutSolid = wasCut;
+    t.select(-1); t.record(false); t.repaint();
+    return { exact, hazy, wasCut, back: t.cfg.cutSolid };
   });
-  assert(r.fade < 1, 'the cutaway is switched off in the spreadsheet');
-  assert(r.rock > 0, 'no rock was drawn at all');
-  assert(r.fadedRock > 0, 'not one wall faded, so rooms hide behind their own walls');
-  assert(r.fadedRock < r.rock, 'every single wall faded, which is not a cutaway');
+  assert(r.exact.worlds === 6 && r.hazy.worlds === 6,
+    `${r.exact.worlds} and ${r.hazy.worlds} of six seeds were looked at`);
+  assert(r.exact.shots > 60, `only ${r.exact.shots} floors were pointed at`);
+  assert(r.wasCut === 0 && r.back === 0,
+    `the see-through haze is on in the spreadsheet (cut_solid ${r.wasCut})`);
+  assert(r.exact.floors === 0 && r.exact.stains === 0,
+    `selecting ${r.exact.shots} floors drew ${r.exact.floors} things at less than`
+    + ` full strength (${r.exact.stains} of them ground a crawler could stand on,`
+    + ` in ${r.exact.stained} of the pictures)`);
+  /* The negative control: the same counter, with the haze switched back on. */
+  assert(r.hazy.floors > 0,
+    'with the haze switched back on not one thing was drawn see-through, so the'
+    + ' count above cannot fail');
+});
+
+await test('a camp structure does not make the ground beside it see-through (v0.34.0)', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test;
+    t.pause(); t.record(true);
+    const wasCut = t.cfg.cutSolid;
+
+    /* Is this the thing the picture ended up pinned on? The batch is built again
+       for every picture, so a thing is found by where it stands. */
+    const same = (it, w) => {
+      if (!it) return false;
+      if (w.kind === 'actor') return it.kind === 'actor' && it.actor === w.actor;
+      return it.kind === 'site' && it.site
+        && it.site.x === w.x && it.site.y === w.y && it.site.structure === w.what;
+    };
+    const find = (w) => {
+      for (const it of Render.batch) if (same(it, w)) return it;
+      return null;
+    };
+
+    /* Point at each thing in turn and count what the picture drew at less than
+       full strength while it was pinned. */
+    const blank = () => ({ shots: 0, sites: 0, people: 0, things: 0, floors: 0, stained: 0 });
+    const at = (asked) => {
+      const got = blank();
+      for (const w of asked) {
+        const here = find(w);
+        if (!here) continue;
+        t.select(here.i);
+        const c = t.consumed();
+        if (c.focus !== here.i) continue;
+        /* What reached the canvas at less than full strength, with this thing
+           pinned. Nothing may, ever -- the haze is what the report was about. */
+        let n = 0;
+        for (const q of (c.items || [])) {
+          if (q.alpha >= 1) continue;
+          n++;
+          if (q.kind === 'cell' && q.cell
+              && TILE(q.cell.tile).footing === 'walk') got.floors++;
+        }
+        got.shots++;
+        if (w.kind === 'site') got.sites++; else got.people++;
+        got.things += n;
+        if (n > 0) got.stained++;
+      }
+      return got;
+    };
+    const add = (into, got) => { for (const k in got) into[k] += got[k]; };
+
+    /* Everything of one kind the picture is holding that has parts to be a
+       silhouette of: a site with no parts is not drawn at all. */
+    const collect = (kind) => {
+      const asked = [];
+      for (const it of Render.batch) {
+        if (it.kind !== kind || !it.parts || !it.parts.length) continue;
+        if (kind === 'actor') asked.push({ kind: 'actor', actor: it.actor });
+        else asked.push({ kind: 'site', x: it.site.x, y: it.site.y, what: it.site.structure });
+      }
+      return asked;
+    };
+
+    const faces = blank();
+    const hazy = blank();
+    let worlds = 0, stood = 0, raised = 0;
+
+    for (const seed of [1, 3, 5, 7, 23, 777]) {
+      t.seed(seed);
+      t.frame(2);
+      const s = Game.state;
+      if (!s.actors || !s.actors.length) continue;
+
+      /* Settle the world before looking at it: keep painting until no more
+         ground is made, or the numbers slide under the test (lesson 24). */
+      const settle = () => {
+        for (let k = 0; k < 8; k++) {
+          const was = s.world.cells.length;
+          s.geomDirty = true; s.viewDirty = true; Game.render();
+          if (s.world.cells.length === was) break;
+        }
+      };
+      settle();
+
+      /* The crawlers, standing where the match began. */
+      const people = collect('actor');
+      stood += people.length;
+      t.cfg.cutSolid = wasCut; t.repaint();
+      add(faces, at(people));
+      t.cfg.cutSolid = 0.5; t.repaint();
+      add(hazy, at(people));
+      t.cfg.cutSolid = wasCut;
+
+      /* The camp, by the game's own rule, with everything in it raised -- the
+         fire among them, which is the thing that was reported. */
+      if (!s.camp) { const made = makeCamp(s); if (made) s.camp = made; }
+      if (!s.camp || !s.camp.sites.length) continue;
+      for (const q of s.camp.sites) { q.cleared = true; q.built = true; q.progress = 100; }
+      const q0 = s.camp.sites[0];
+      const p = Render.project(s, q0.x + 0.5, q0.y + 0.5, surfaceHeight(s.world.at(q0.x, q0.y)));
+      panCamera(s, p.x - Render.w / 2, p.y - Render.h / 2);
+      settle();
+
+      const built = collect('site');
+      raised += built.length;
+      t.cfg.cutSolid = wasCut; t.repaint();
+      add(faces, at(built));
+      t.cfg.cutSolid = 0.5; t.repaint();
+      add(hazy, at(built));
+      t.cfg.cutSolid = wasCut;
+      worlds++;
+    }
+
+    t.select(-1);
+    t.cfg.cutSolid = wasCut;
+    t.repaint();
+    t.record(false);
+    return { faces, hazy, worlds, stood, raised, wasCut, back: t.cfg.cutSolid };
+  });
+  assert(r.worlds === 6 && r.faces.shots === r.hazy.shots,
+    `${r.worlds} worlds were looked at, and the two rules were shown ${r.faces.shots}`
+    + ` and ${r.hazy.shots} things -- they have to be the same worlds and the`
+    + ` same things, or the comparison means nothing`);
+  assert(r.raised >= 24 && r.stood >= 4,
+    `${r.raised} camp structures and ${r.stood} crawlers were pointed at, so this`
+    + ` test is not catching the behaviour it is about`);
+  assert(r.wasCut === 0 && r.back === 0,
+    `the see-through haze is on in the spreadsheet (cut_solid ${r.wasCut})`);
+  assert(r.faces.things === 0 && r.faces.floors === 0,
+    `pointing at ${r.faces.shots} camp structures and crawlers drew`
+    + ` ${r.faces.things} things at less than full strength`
+    + ` (${r.faces.floors} of them ground a crawler could stand on, in`
+    + ` ${r.faces.stained} of the pictures) -- ${r.faces.sites} structures and`
+    + ` ${r.faces.people} crawlers in ${r.worlds} worlds`);
+  /* The negative control: the same counter, with the haze switched back on. */
+  assert(r.hazy.things > 0,
+    'with the haze switched back on not one thing was drawn see-through, so the'
+    + ' count above cannot fail');
+});
+
+/* The rule the whole cutaway rests on, asserted as a CENSUS rather than a
+ * sample (lesson 15): nothing in the picture is ever drawn at part strength.
+ * A square is either painted solidly or not painted at all, and the only thing
+ * allowed to be in the second group is rock that is standing in front of what
+ * you are looking at -- never a square a crawler could stand on.
+ *
+ * The third arm is the pointer: 8 asks a picture over 112 pictures, with the
+ * count of part-strength items taken again after each ask, because the pointer
+ * is what the reported bug was made by. And the dial is checked last, so that
+ * `render.cut_solid` has to be connected to something (rule 9). */
+await test('rock in the way is cut away, and nothing is ever drawn see-through (v0.34.0)', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test;
+    t.pause(); t.unpoint();
+    const wasCut = t.cfg.cutSolid;
+    const wasStump = t.cutStump();
+    const wasZoom = t.buffer().zoom;
+
+    /* Settle the world before looking at it: keep painting until no more ground
+       is made, or the numbers slide under the test (lesson 24). */
+    const settle = (s) => {
+      for (let k = 0; k < 8; k++) {
+        const n = s.world.cells.length;
+        s.geomDirty = true; s.viewDirty = true; Game.render();
+        if (s.world.cells.length === n) break;
+      }
+    };
+    const census = () => {
+      const c = t.consumed();
+      const list = c.items || [];
+      let zero = 0, zeroBad = 0, part = 0, partWalk = 0;
+      for (const q of list) {
+        if (q.alpha === 0) {
+          zero++;
+          /* The only thing allowed to be missing: rock being cut out of the way. */
+          const rock = q.kind === 'cell' && q.cutaway === true
+            && TILE(q.tile).footing !== 'walk';
+          if (!rock) zeroBad++;
+        } else if (q.alpha < 1) {
+          part++;
+          if (q.kind === 'cell' && q.cell
+              && TILE(q.cell.tile).footing === 'walk') partWalk++;
+        }
+      }
+      return { built: Render.batch.length, painted: c.count, cut: c.cut,
+               cutaway: c.cutaway, kept: c.kept, lost: c.lost, walls: c.walls,
+               stumps: c.stumps, zero, zeroBad, part, partWalk };
+    };
+
+    const o = { cases: 0, worlds: new Set(), built: 0, painted: 0, cut: 0,
+                cutaway: 0, stumps: 0, zero: 0, zeroBad: 0, part: 0,
+                partWalk: 0, kept: 0, lost: 0, wallsOn: 0, wallsOff: 0,
+                asks: 0, askPart: 0, askPartWalk: 0, cutCells: 0, walkCutCells: 0 };
+
+    for (const seed of [1, 2, 3, 5, 7, 23, 777]) {
+      for (const up of [false, true]) {
+        for (const zoom of [1, 2]) {
+          t.seed(seed);
+          t.step(3001);
+          t.tilt(up);
+          t.zoom(zoom);
+          t.record(true);
+          t.unpoint();
+          settle(Game.state);
+          for (let q = 0; q < 4; q++) {
+            t.rotate(q ? 1 : 0);
+            /* The clip is switched off for one picture so the walls it takes
+               away can be counted, which is what makes `kept` mean something. */
+            t.clipWalls(false); t.redraw();
+            o.wallsOff += t.consumed().walls;
+            t.clipWalls(true); t.redraw();
+            const c = census();
+            o.cases++;
+            o.worlds.add(seed + ':' + (up ? 'up' : 'flat') + ':' + zoom
+              + ':' + t.camera().quarter);
+            for (const k of ['built', 'painted', 'cut', 'cutaway', 'zero',
+                             'zeroBad', 'part', 'partWalk', 'kept', 'lost']) o[k] += c[k];
+            o.wallsOn += c.walls;
+            o.stumps += c.stumps;
+            /* How many squares this picture holds that are cut away at all --
+               the check that the census is not vacuously passing -- and how many
+               of those a crawler could stand on, which must never be any. */
+            for (const it of Render.batch) {
+              if (it.kind !== 'cell' || !it.cutaway) continue;
+              o.cutCells++;
+              if (TILE(it.cell ? it.cell.tile : it.tile).footing === 'walk') o.walkCutCells++;
+            }
+            for (let k = 0; k < 8; k++) {
+              const x = 4 + ((k * 137) % (Render.w - 8));
+              const y = 4 + ((k * 91) % (Render.h - 8));
+              t.point(x, y);
+              o.asks++;
+              const h = census();
+              o.askPart += h.part;
+              o.askPartWalk += h.partWalk;
+            }
+            t.unpoint();
+          }
+        }
+      }
+    }
+    /* Is `render.cut_solid` connected to anything? At 1 nothing may be cut. */
+    t.cfg.cutSolid = 1; t.step(1); t.redraw();
+    const dial = census();
+    t.cfg.cutSolid = wasCut;
+    /* Is `render.cut_stump_m` connected to anything? At 0 a hidden block is left
+       out of the picture whole instead of keeping a foot of rock standing, so
+       the squares `cut` counts come back and the squares `stumps` counts go to
+       nothing. That is the only way either counter is ever anything: nothing is
+       ever both. */
+    t.cutStump(0); t.redraw();
+    const bare = census();
+    t.cutStump(wasStump);
+    t.zoom(wasZoom); t.tilt(false); t.unpoint(); t.record(false);
+    t.seed(1); t.redraw();
+    return { ...o, worlds: o.worlds.size, dialCut: dial.cut, dialPart: dial.part,
+             bare: { cut: bare.cut, stumps: bare.stumps, zeroBad: bare.zeroBad,
+                     kept: bare.kept, lost: bare.lost },
+             wasCut, wasStump, wasZoom, back: t.cfg.cutSolid,
+             backStump: t.cutStump() };
+  });
+  assert(r.cases === 112 && r.worlds > 100,
+    `${r.cases} pictures were looked at and they reached ${r.worlds} different`
+    + ' ones, so the seeds, angles, zooms and turns are doing something');
+  assert(r.built === r.painted + r.cut,
+    `${r.built} shapes were built but ${r.painted} painted and ${r.cut} cut away`);
+  assert(r.wasCut === 0 && r.back === 0,
+    `the see-through haze is on in the spreadsheet (cut_solid ${r.wasCut})`);
+  assert(r.cut + r.stumps > 0 && r.cutCells > 0,
+    `nothing was ever taken out of the picture (${r.cut} squares left out whole,`
+    + ` ${r.stumps} keeping a foot of rock, ${r.cutCells} cut-away squares in the`
+    + ' batch), so this test is not catching the behaviour it is about');
+  assert(r.walkCutCells === 0,
+    `${r.walkCutCells} squares a crawler could stand on were cut out of the`
+    + ' picture, which must never happen');
+  assert(r.part === 0 && r.partWalk === 0,
+    `${r.part} shapes were drawn at less than full strength`
+    + ` (${r.partWalk} of them ground a crawler could stand on)`);
+  assert(r.zeroBad === 0,
+    `${r.zeroBad} things were left out of the picture that were not rock being`
+    + ' cut out of the way');
+  /* The guard, and the trade it makes. With a foot of rock left standing in every
+     hidden square, the block in front IS painted, so nothing is ever cut away
+     behind nothing: no wall has to be brought back (`kept`) and none is left as a
+     hole (`lost`). This is a change from v0.37.0, where a hidden square painted
+     nothing and the walls beside it came back whole -- and the arm that proves the
+     guard is still live is the foot switched off, further down. */
+  assert(r.kept === 0 && r.lost === 0,
+    `${r.kept} walls were brought back behind a cut block and ${r.lost} were`
+    + ' left as a hole, with the foot of rock standing in every hidden square');
+  assert(r.wallsOn < r.wallsOff,
+    `the clip painted ${r.wallsOn} wall faces and ${r.wallsOff} with it switched`
+    + ' off, so it is no longer taking any of them away');
+  assert(r.asks > 500 && r.askPart === 0 && r.askPartWalk === 0,
+    `${r.asks} pointer asks were made and ${r.askPart} of them left something`
+    + ` drawn see-through (${r.askPartWalk} of it ground)`);
+  assert(r.dialCut === 0 && r.dialPart === 0,
+    `${r.dialCut} shapes were cut away with cut_solid turned up to 1, so the dial`
+    + ' in the spreadsheet is not connected to the cutaway');
+  /* And the other half of the same mechanism: with the foot of rock switched
+     off the square is left out of the picture whole instead, which is the look
+     v0.37.0 shipped and the negative control this one is proved against. */
+  assert(r.backStump === r.wasStump,
+    `cut_stump_m came back as ${r.backStump} where the sheet has ${r.wasStump}`);
+  assert(r.bare.cut > 0 && r.bare.stumps === 0 && r.bare.zeroBad === 0,
+    `${r.bare.cut} squares were left out of the picture whole and ${r.bare.stumps}`
+    + ` kept a foot of rock with cut_stump_m at 0 (${r.bare.zeroBad} of them were`
+    + ' not rock being cut out of the way), so the foot of rock in the sheet is'
+    + ' not connected to the picture');
+  assert(r.bare.lost === 0,
+    `${r.bare.lost} wall faces stayed cut away behind a square that is painted`
+    + ' not at all, with the foot of rock switched off -- that is the hole this'
+    + ' look exists to close, and it is open');
 });
 
 /* ---- putting the wall faces away -----------------------------------------
@@ -393,78 +906,272 @@ await test('the same frame painted twice is the same picture, pixel for pixel', 
   }
 });
 
-await test('cutting the buried walls moves soft edges only, and by a hair', async () => {
+/* The clip takes the walls of the blocks that stand inside the rock away, and
+ * it is only allowed to move a hairline. That claim used to be asserted with a
+ * bound on HOW MANY pixels moved -- 6% of the picture -- which was a proxy for
+ * it, measured when every wall face was opaque. As of v0.36.0 the top metre of
+ * a wall fades out, so a buried wall is VISIBLE THROUGH the face standing in
+ * front of it, and hiding it now moves a shade on a sixth of the picture while
+ * nothing moves that a person could see. So what is asserted is the claim
+ * itself: no pixel is left with nothing behind it, and no pixel gains
+ * something that had nothing -- the clip opens no hole and paints nothing new
+ * -- and what does move, moves by a hair.
+ *
+ * Two arms, and the difference between them is the point:
+ *
+ *  1. THE LOOK THAT SHIPS. All nine cases, and the census is run on every one
+ *     of them. The bounds are wide (a fifth of the picture may move) because
+ *     they are only there to catch gross breakage; the SHAPE of the difference
+ *     is what this arm is for.
+ *  2. THE PROMISE THE CLIP WAS MADE UNDER (`wallFade(0)`, every face opaque),
+ *     same nine cases, held to the bounds it has always been held to: under 6%
+ *     of the picture moved, no surface moved. This is the control, and it can
+ *     fail -- it does fail with the fade left on.
+ *  3. A HOLE THE DETECTOR MUST FIND, with the rock painted where a lid used to
+ *     be turned off (`wallBody(false)`, which is the picture v0.37.0 shipped).
+ *     A detector that cannot fire is worth less than no detector.
+ *
+ * Measured across all nine cases, buffer 624x368, arms A/B-ed inside one build:
+ * shipped 2.6%-18.4% moved, up to 2.10% of the picture by more than 8/255,
+ * worst 72/255; fade off 1.4%-4.9% moved, up to 0.41% deep, worst 20/255 --
+ * and NOT ONE pixel in either arm ended up with nothing behind it, or gained
+ * paint that had none. */
+await test('cutting the buried walls opens no hole and moves a hairline only', async () => {
   const cases = [{ seed: 1 }, { seed: 2 }, { seed: 3 }, { seed: 7 }, { seed: 777 },
                  { seed: 1, quarter: 1 }, { seed: 1, quarter: 3 },
                  { seed: 1, zoom: 1 }, { seed: 1, zoom: 3 }];
   const r = await page.evaluate((cases) => {
     const t = window.__test, out = [];
     t.pause();
+    t.unpoint();
     const wasZoom = t.buffer().zoom;
+    /* The BUFFER, never the page: pickAt() answers in buffer pixels, so a census
+       read off the scaled page would ask about the wrong squares at zoom 3. And
+       read LIVE, never kept -- `t.zoom()` resizes the buffer, so a width taken
+       once before the cases is the width of whichever case happened to come
+       first, and the census would then read a rectangle the frame never painted
+       (it came out 69,140 pixels where diff() saw 30,078). */
+    const grab = () => Render.bctx.getImageData(0, 0, Render.w, Render.h).data;
+    const wasFade = t.cfg.wallFadeM;
+    /* Which pixels the clip moved, and whether ANYTHING was painted on them:
+       pickAt() is -1 exactly where no shape was drawn, so it is the game's
+       own answer to "is there a hole here" rather than a second guess at it.
+       Every moved pixel is a hit on a wall, so the census is cheap; it is the
+       holes that would cost, and there must be none. */
+    const census = function (offPx, onPx) {
+      const w = Render.w, h = Render.h;
+      const moved = [];
+      for (let y = 0, k = 0; y < h; y++) {
+        for (let x = 0; x < w; x++, k += 4) {
+          if (offPx[k] !== onPx[k] || offPx[k + 1] !== onPx[k + 1]
+            || offPx[k + 2] !== onPx[k + 2]) moved.push(y * w + x);
+        }
+      }
+      t.clipWalls(false); t.repaint();
+      let offNothing = 0;
+      for (const p of moved) {
+        if (Render.pickAt(Game.state, p % w, (p / w) | 0) < 0) offNothing++;
+      }
+      t.clipWalls(true); t.repaint();
+      let onNothing = 0;
+      for (const p of moved) {
+        if (Render.pickAt(Game.state, p % w, (p / w) | 0) < 0) onNothing++;
+      }
+      return { moved: moved.length, offNothing: offNothing, onNothing: onNothing };
+    };
     for (const c of cases) {
       t.seed(c.seed);
       if (c.quarter) t.rotate(c.quarter);
       if (c.zoom) t.zoom(c.zoom);
+      /* ARM 1: the look that ships. The picture with the clip off is KEPT, or
+         diff() reports the distance from whatever the last test left behind --
+         which is how this test silently measured nothing once. */
       t.clipWalls(false); t.repaint();
       const off = t.consumed();
+      const offPx = grab();
       t.keep();
       t.clipWalls(true); t.repaint();
       const d = t.diff();
+      const on = t.consumed();
+      const onPx = grab();
+      const cens = census(offPx, onPx);
+      /* ARM 2: the promise the clip was made under -- every face opaque. */
+      t.wallFade(0);
+      t.clipWalls(false); t.repaint();
+      t.keep();
+      t.clipWalls(true); t.repaint();
+      const f = t.diff();
+      t.wallFade(wasFade);
       out.push({ c: c, pixels: d.pixels, differ: d.differ, worst: d.worst,
-                 deep: d.deep, x: d.x, y: d.y, walls: [off.walls, t.consumed().walls] });
+                 deep: d.deep, x: d.x, y: d.y, offNothing: cens.offNothing,
+                 onNothing: cens.onNothing, moved: cens.moved,
+                 walls: [off.walls, on.walls], px: [off.wallPx, on.wallPx],
+                 flat: { pixels: f.pixels, differ: f.differ, deep: f.deep,
+                         worst: f.worst, x: f.x, y: f.y } });
     }
     t.zoom(wasZoom);
     t.clipWalls(true);
-    return out;
+    return { cases: out };
   }, cases);
-  for (const q of r) {
+  for (const q of r.cases) {
     const at = `seed ${q.c.seed}${q.c.quarter ? ' turned ' + q.c.quarter : ''}`
       + `${q.c.zoom ? ' at zoom ' + q.c.zoom : ''}`;
-    assert(q.walls[0] > q.walls[1], `${at}: no wall was left out at all`);
-    assert(q.differ < q.pixels * 0.06,
+    assert(q.walls[0] > q.walls[1] && q.px[0] > q.px[1],
+      `${at}: ${q.walls[0]} wall faces and ${q.px[0]} pixels of them were painted`
+      + ` with the clip off against ${q.walls[1]} and ${q.px[1]} with it on, so the`
+      + ' clip is not taking any away and this test is measuring nothing');
+    /* The clip may legitimately leave the picture IDENTICAL -- where the block in
+       front covers exactly what was taken away, removing it is invisible, and
+       that is the best outcome there is rather than a failure. So the guard is
+       that it did the WORK (above), not that the picture moved. The two rulers
+       must still agree: `differ` is the kept picture against the new one, and
+       `moved` is the same two pictures read straight off the buffer. */
+    assert(q.moved === q.differ,
+      `${at}: the kept picture moved ${q.differ} pixels and the census found`
+      + ` ${q.moved}, so one of the two is reading the wrong canvas`);
+    assert(q.offNothing === 0 && q.onNothing === 0,
+      `${at}: of ${q.moved} pixels that moved, ${q.offNothing} had nothing painted behind them`
+      + ` with the clip off and ${q.onNothing} had nothing with it on -- the clip took a`
+      + ` solid surface away and left the backdrop showing through`);
+    /* Wide on purpose: with the wall's top metre dissolving, the wall behind it
+       shows through, so hiding one moves a shade on a sixth of the picture.
+       These catch gross breakage; the census above is the real claim. */
+    assert(q.differ < q.pixels * 0.22,
       `${at}: ${q.differ} of ${q.pixels} pixels moved (${(100 * q.differ / q.pixels).toFixed(1)}%)`);
-    assert(q.deep < q.pixels * 0.015,
+    assert(q.deep < q.pixels * 0.035,
       `${at}: ${q.deep} pixels moved by more than 8/255, which is a surface and not a soft edge`
       + ` (first at ${q.x},${q.y})`);
-    assert(q.worst <= 32,
+    assert(q.worst <= 96,
       `${at}: one pixel moved by ${q.worst}/255, which is a surface and not a soft edge`
       + ` (at ${q.x},${q.y})`);
+    /* The control: the same nine cases with every face opaque, held to the
+       bounds the clip has always been held to. It fails if the fade stops
+       being what makes the difference. */
+    assert(q.flat.differ > 0,
+      `${at} with the fade off: the clip changed nothing, so this is measuring nothing`);
+    assert(q.flat.differ < q.flat.pixels * 0.06,
+      `${at} with the fade off: ${q.flat.differ} of ${q.flat.pixels} pixels moved`
+      + ` (${(100 * q.flat.differ / q.flat.pixels).toFixed(1)}%)`);
+    assert(q.flat.deep < q.flat.pixels * 0.015,
+      `${at} with the fade off: ${q.flat.deep} pixels moved by more than 8/255, which is a`
+      + ` surface and not a soft edge (first at ${q.flat.x},${q.flat.y})`);
+    assert(q.flat.worst <= 32,
+      `${at} with the fade off: one pixel moved by ${q.flat.worst}/255, which is a surface,`
+      + ` not the shade an edge moves by (at ${q.flat.x},${q.flat.y})`);
   }
 });
 
-await test('a faded block does not open a hole in the wall behind it', async () => {
+/* The wall behind a block you can see past is brought back whole. When a block
+ * stops being painted at all, the wall of its neighbour that used to be covered
+ * by it is painted to its full height instead -- so the hole the player would
+ * otherwise look through into nothing is closed. `lost` counts the faces that
+ * stayed cut away anyway, and it is a tripwire: a face is only ever cut where
+ * the block in front of it is painted SOLID, so a block that is not painted at
+ * all cannot leave a face cut. A/B-ed inside one build with `render.cut_solid`
+ * turned up to 1, which is the same build with nothing cut away. */
+await test('a block cut away never opens a hole in the wall beside it (v0.34.0)', async () => {
   const r = await page.evaluate(() => {
     const t = window.__test, out = [];
     t.pause();
+    const wasCut = t.cfg.cutSolid;
+    const wasStump = t.cutStump();
     for (const seed of [1, 3, 777]) {
       t.seed(seed);
-      const at = { x: Math.round(t.buffer().w / 2), y: Math.round(t.buffer().h / 2) };
-      const hit = t.point(at.x, at.y);
-      t.select(hit);
-      t.clipWalls(false); t.repaint();
-      const off = t.consumed();
-      const faded = off.faded, wallsOff = off.walls;
-      t.keep();
-      t.clipWalls(true); t.repaint();
-      const d = t.diff();
-      out.push({ seed, hit, faded, wallsOff, wallsOn: t.consumed().walls,
-                 pixels: d.pixels, differ: d.differ, deep: d.deep,
-                 worst: d.worst, x: d.x, y: d.y });
-      t.unpoint();
+      for (const up of [false, true]) {
+        t.tilt(up);
+        for (let q = 0; q < 4; q++) {
+          t.rotate(q ? 1 : 0);
+          /* The clip off: every wall of every block is painted, so this is the
+             wall count the clip, and the cut, are allowed to bring down. */
+          t.clipWalls(false); t.redraw();
+          const off = t.consumed();
+          const buf = t.buffer();
+          const hit = t.point(Math.round(buf.w / 2), Math.round(buf.h * 0.55));
+          t.unpoint(); t.select(hit);
+          const row = { seed, up, cam: t.camera().quarter, hit,
+                        wallsOff: off.walls, pxOff: off.wallPx, arms: [] };
+          /* THREE ARMS, and the middle one is where the mechanism this test is
+             named after actually lives. The look that ships leaves a foot of
+             rock standing in a hidden square (`stumps`), so no square is ever
+             left out whole and `cut` is never anything -- that trade was made
+             because deleting the square whole left the band above it covered by
+             nothing. With the foot switched off the square IS left out whole,
+             which is the picture v0.37.0 shipped: so `cut`, `kept` and `lost`
+             are proved live there rather than argued about, and the shipped arm
+             is proved to have none of them. The third arm is the sheet's own
+             see-through dial, where nothing may be cut away at all. */
+          for (const arm of [{ solid: wasCut, stump: wasStump },
+                             { solid: wasCut, stump: 0 },
+                             { solid: 1, stump: wasStump }]) {
+            t.cfg.cutSolid = arm.solid;
+            t.cutStump(arm.stump);
+            t.clipWalls(true); t.repaint();
+            const on = t.consumed();
+            row.arms.push({ solid: arm.solid, stump: arm.stump, cut: on.cut,
+                            stumps: on.stumps, walls: on.walls, px: on.wallPx,
+                            kept: on.kept, lost: on.lost });
+          }
+          t.cfg.cutSolid = wasCut; t.cutStump(wasStump);
+          t.clipWalls(true); t.unpoint();
+          out.push(row);
+        }
+      }
     }
-    t.clipWalls(true);
-    return out;
+    t.select(-1); t.redraw();
+    return { out, wasCut, wasStump, back: t.cfg.cutSolid,
+             backStump: t.cutStump() };
   });
-  for (const q of r) {
-    assert(q.hit >= 0, `seed ${q.seed}: nothing was picked in the middle of the picture`);
-    assert(q.faded > 0,
-      `seed ${q.seed}: nothing faded, so the see-through case never came up`);
-    assert(q.wallsOn < q.wallsOff,
-      `seed ${q.seed}: the clip gave up entirely while a block was faded`);
-    assert(q.worst <= 32 && q.deep < q.pixels * 0.02,
-      `seed ${q.seed}: with a block faded the clip changed ${q.deep} pixels by more than 8/255`
-      + ` (worst ${q.worst}/255 at ${q.x},${q.y}) -- a wall behind the fade has gone missing`);
+  const cams = new Set(r.out.map((q) => `${q.up ? 'up' : 'low'}:${q.cam}`));
+  assert(r.out.length === 24 && cams.size === 8,
+    `${r.out.length} cases over ${cams.size} camera settings: the range was not run`);
+  assert(r.wasCut === 0 && r.back === 0,
+    `the see-through haze is on in the spreadsheet (cut_solid ${r.wasCut})`);
+  assert(r.backStump === r.wasStump,
+    `cut_stump_m came back as ${r.backStump} where the sheet has ${r.wasStump}`);
+  let cut = 0, stumps = 0, kept = 0, wallsOn = 0, wallsOff = 0;
+  let bareCut = 0, bareKept = 0, bareStumps = 0;
+  for (const q of r.out) {
+    const at = `seed ${q.seed}${q.up ? ' raised' : ''}, turned ${q.cam}`;
+    const ship = q.arms[0], bare = q.arms[1], dial = q.arms[2];
+    assert(q.hit >= 0, `${at}: nothing was picked in the middle of the picture`);
+    assert(dial.cut === 0 && dial.stumps === 0,
+      `${at}: ${dial.cut} shapes were cut away and ${dial.stumps} squares kept a`
+      + ' foot with cut_solid turned up to 1, so the dial in the spreadsheet is'
+      + ' not connected to the cutaway');
+    assert(ship.cut === 0,
+      `${at}: ${ship.cut} squares were left out of the picture whole with the`
+      + ` foot of rock on (cut_stump_m ${r.wasStump}), which is the trade that`
+      + ' was made to close the holes -- it is no longer being made');
+    /* The guard, counted rather than argued: a face left cut away behind a block
+       that is not painted is the hole the player sees through into nothing. It
+       holds for every arm, including the one that leaves the squares out. */
+    for (const a of q.arms) {
+      assert(a.lost === 0,
+        `${at}: ${a.lost} wall faces stayed cut away behind a block that is not`
+        + ` painted (stump ${a.stump} m, cut_solid ${a.solid}) -- a hole is open`);
+      assert(a.walls <= q.wallsOff && a.px <= q.pxOff,
+        `${at}: ${a.walls} wall faces and ${a.px} pixels were painted where the`
+        + ` clip off paints ${q.wallsOff} and ${q.pxOff} (stump ${a.stump} m), so`
+        + ' the cut is painting more than it takes away');
+    }
+    cut += ship.cut; stumps += ship.stumps; kept += ship.kept;
+    bareCut += bare.cut; bareKept += bare.kept; bareStumps += bare.stumps;
+    wallsOn += ship.walls; wallsOff += q.wallsOff;
   }
+  /* And the counters are not vacuous: the picture that ships keeps a foot of
+     rock in every hidden square, and the picture with the foot switched off --
+     v0.37.0, the negative control in one build -- leaves them out instead and
+     has to bring the walls behind them back whole. */
+  assert(stumps > 0,
+    'not one hidden square kept a foot of rock in any of the 24 cases, so the'
+    + ' look that ships is not the look being measured');
+  assert(bareCut > 0 && bareStumps === 0 && bareKept > 0,
+    `with the foot of rock switched off: ${bareCut} squares were left out whole,`
+    + ` ${bareStumps} kept a foot and ${bareKept} walls were brought back whole,`
+    + ' so the mechanism this test guards was never exercised');
+  assert(wallsOn < wallsOff,
+    `the cut and the clip together painted ${wallsOn} wall faces against`
+    + ` ${wallsOff} with the clip off, so they are no longer taking any away`);
 });
 
 await test('same seed and same inputs give the same labyrinth (seed 777)', async () => {
@@ -547,12 +1254,20 @@ await test('a figure is real geometry: posed, lit, and with its back faces dropp
     const found = window.__test.pointAtAnyActor();
     const drawn = window.__test.redraw().items.find((i) => i.i === found.pick);
     const pose = window.__test.pose(found.index);
-    /* Move the arm and the hand must move with it. */
-    const a = window.__test.state.actors[found.index];
-    const was = window.__test.pose(found.index).bones.hand_r.slice();
-    a.doing = a.doing === 'walking' ? 'building' : 'walking';
-    window.__test.state.geomDirty = true;
-    const now = window.__test.pose(found.index).bones.hand_r.slice();
+    /* Move the arm and the hand must move with it. A walk pose is a crawler
+       MID-STEP -- standing still, they breathe -- so the walk is asked for over
+       a few ticks and the widest difference counts: a stride is a sine, and one
+       tick on its own can land on the moment the arm passes its rest. */
+    const see = window.__test.state.tick;
+    let was = null, now = null, best = -1;
+    for (let k = 0; k < 6; k++) {
+      const at = see + k * 6;
+      const stand = window.__test.pose(found.index, 'idle', 1, at).bones.hand_r;
+      const walk = window.__test.pose(found.index, 'walking', 0.5, at).bones.hand_r;
+      const d = Math.abs(stand[0] - walk[0]) + Math.abs(stand[1] - walk[1])
+              + Math.abs(stand[2] - walk[2]);
+      if (d > best) { best = d; was = stand.slice(); now = walk.slice(); }
+    }
     return { found, drawn, pose, was, now,
              bones: Object.keys(window.__test.data.bones).length };
   });
@@ -784,6 +1499,170 @@ await test('a selected thing is ringed by its silhouette, not boxed', async () =
   /* A box would light up every column across its width, edge to edge. A figure
      is narrow at the head and wide at the feet, so far fewer columns are lit. */
   assert(r.spread > 3, `the highlight covers only ${r.spread} columns`);
+});
+
+await test('a selected block is ringed by what was painted, not by the rock under it', async () => {
+  /* THE RING IS COUNTED BY DIFFERENCE, and the reason is that every other way of
+     counting it is a lie. The highlight is a two-pixel stroke down the edge of a
+     shape, so nearly all of it is blended with whatever stands behind it: a
+     window drawn round the shipped cream colour sees 174 of the ring's ~1,400
+     pixels over the fifty selections below, which is how this test came to be
+     passing by 26 pixels and then failing. So instead the SAME selection is
+     painted twice and only the colour of the highlight is changed -- cream and
+     then magenta. Everything the highlight covers and the thing then paints over
+     is identical in the two pictures, so every pixel that differs is a pixel the
+     ring survived on, however faintly. Nothing is compared against a colour at
+     all, which is the point: a colour-window threshold is a number nobody can
+     keep honest.
+
+     The same battery is then run a second time with `ringStored`, which hands the
+     halo the sides the block has STORED -- the quads that run all the way down to
+     the floor of the world -- instead of the sides as far as the clip really lets
+     them stand. That is the rule this test exists to keep out, and it is the
+     test's own control: it MUST escape the shape that was painted, or the test
+     cannot fail and is worth nothing. Measured: 37 of the 50 selections escape,
+     by as much as 220px, against 0 of 50 with the shipped rule. */
+  const r = await page.evaluate(() => {
+    const out = { worlds: 0, cases: 0, judged: 0, seen: 0, floors: 0, blocks: 0,
+                  wrong: 0, ring: 0, most: 0, outside: 0, worst: 0, tall: 0, past: 0,
+                  ctrlCases: 0, ctrlRing: 0, ctrlOutside: 0, ctrlWorst: 0, ctrlMost: 0,
+                  escaped: 0, shipped: N('ui.colour_outline') };
+    const grab = () => Render.buf.getContext('2d').getImageData(0, 0, Render.w, Render.h).data;
+    /* Every pixel that changed when the highlight changed colour, split into the
+       ones inside the shapes that were painted (the ring) and the ones past them
+       (which is the bug, and must be none). */
+    const count = (one, two, box, slack) => {
+      let ring = 0, outside = 0, worst = 0;
+      for (let y = 0; y < Render.h; y++) {
+        for (let x = 0; x < Render.w; x++) {
+          const q = (y * Render.w + x) * 4;
+          if (one[q] === two[q] && one[q + 1] === two[q + 1]
+              && one[q + 2] === two[q + 2]) continue;
+          ring++;
+          const over = Math.max(box[0] - slack - x, x - (box[2] + slack),
+                                box[1] - slack - y, y - (box[3] + slack));
+          if (over > 0) { outside++; if (over > worst) worst = Math.round(over); }
+        }
+      }
+      return { ring, outside, worst };
+    };
+    for (const seed of [1, 3, 5, 7, 23, 777]) {
+      const t = window.__test;
+      t.seed(seed);
+      for (let i = 0; i < 8; i++) t.frame(10);
+      out.worlds++;
+      const s = Game.state;
+      /* A handful of squares near the middle of the picture: floors and blocks
+         both, all of them well inside the screen so the ring is never cut off
+         by the edge of the buffer. */
+      const picks = [];
+      for (const it of Render.batch) {
+        if (it.kind !== 'cell' || !it.solid) continue;
+        if (it.minX < 6 || it.minY < 6) continue;
+        if (it.maxX > Render.w - 6 || it.maxY > Render.h - 6) continue;
+        picks.push(it.i);
+        if (picks.length >= 10) break;
+      }
+      for (const pick of picks) {
+        const slack = CFG.outlineWidth + 2;
+        let box = null, it = null, ctrl = null;
+        for (const stored of [false, true]) {
+          t.ringStored(stored);
+          t.select(pick);
+          /* The selection has to have LANDED, or this test measures whichever
+             square the game felt like ringing instead of the one it asked for. */
+          const plan = Render.alphas(s, Render.batch);
+          if (!plan.focus || plan.focus.kind !== 'cell' || plan.focus.i !== pick) {
+            out.wrong++;
+            break;
+          }
+          if (box === null) {
+            it = plan.focus;
+            /* WHAT THE DRAWING USED, read off the item rather than from the
+               halo: the cap, and each side as far as the clip left it. */
+            const cut = Render.wallsPainted(it, plan.list);
+            const faces = [it.top];
+            if (cut.l) faces.push(cut.l);
+            if (cut.r) faces.push(cut.r);
+            box = [Infinity, Infinity, -Infinity, -Infinity];
+            for (const f of faces) {
+              for (const p of f) {
+                if (p.x < box[0]) box[0] = p.x;
+                if (p.y < box[1]) box[1] = p.y;
+                if (p.x > box[2]) box[2] = p.x;
+                if (p.y > box[3]) box[3] = p.y;
+              }
+            }
+            /* The sides the OLD rule handed the halo: the whole column, all the
+               way down to the floor of the world, however much of it is hidden.
+               How far below the painted shape that reaches is what makes this
+               test about the bug rather than about a square that had no hidden
+               shape at all -- and it is the same 37 selections that escape. */
+            let deep = -Infinity;
+            for (const f of [it.left, it.right]) {
+              if (!f) continue;
+              for (const p of f) if (p.y > deep) deep = p.y;
+            }
+            if (deep - box[3] > 8) out.tall++;
+            if (deep - box[3] > out.past) out.past = Math.round(deep - box[3]);
+          }
+          DATA.names['ui.colour_outline'] = '#ffe9a8';
+          t.redraw();
+          const one = grab();
+          DATA.names['ui.colour_outline'] = '#ff00ff';
+          t.redraw();
+          const two = grab();
+          const got = count(one, two, box, slack);
+          if (!stored) {
+            out.ring += got.ring; out.outside += got.outside;
+            if (got.ring > out.most) out.most = got.ring;
+            if (got.ring > 0) out.seen++;
+            if (got.worst > out.worst) out.worst = got.worst;
+          } else {
+            out.ctrlCases++; out.ctrlRing += got.ring; out.ctrlOutside += got.outside;
+            if (got.ring > out.ctrlMost) out.ctrlMost = got.ring;
+            if (got.worst > out.ctrlWorst) out.ctrlWorst = got.worst;
+            if (got.outside > 0) out.escaped = (out.escaped || 0) + 1;
+          }
+        }
+        t.ringStored(false);
+        if (box === null) continue;
+        out.cases++; out.judged++;
+        if (TILE(it.cell.tile).footing === 'block') out.blocks++; else out.floors++;
+      }
+    }
+    DATA.names['ui.colour_outline'] = out.shipped;
+    return out;
+  });
+  assert(r.worlds === 6, `${r.worlds} worlds were looked at`);
+  assert(r.wrong === 0,
+    `${r.wrong} selections rang something other than the square that was asked for,`
+    + ` so what this test measured was not what it selected`);
+  assert(r.cases >= 24 && r.floors >= 6 && r.blocks >= 6,
+    `${r.cases} selections were measured: ${r.floors} walkable squares and`
+    + ` ${r.blocks} solid ones`);
+  assert(r.seen >= 24,
+    `only ${r.seen} of ${r.cases} selections put any highlight on the picture at all`);
+  assert(r.ring > 400,
+    `only ${r.ring} highlight pixels reached the picture over ${r.cases}`
+    + ` selections -- the best of them was ${r.most}px`);
+  assert(r.tall >= 6,
+    `only ${r.tall} of ${r.cases} selections were on a square whose stored sides`
+    + ` reach measurably below what is painted (worst ${r.past}px), so this test is`
+    + ` not looking at the bug it is about`);
+  assert(r.outside === 0,
+    `${r.outside} highlight pixels sat past the shapes that were painted, as much`
+    + ` as ${r.worst}px past them -- the stored sides reach ${r.past}px below the`
+    + ` block, and the ring must not follow them there`);
+  /* The control. The stored-side rule must escape the painted shape, or this
+     test is passing on a build where it cannot fail. */
+  assert(r.ctrlCases === r.cases,
+    `the control ran over ${r.ctrlCases} of ${r.cases} selections`);
+  assert((r.escaped || 0) >= 8 && r.ctrlOutside > 2000 && r.ctrlWorst >= 40,
+    `the old stored-side rule only escaped the painted shape in ${r.escaped || 0} of`
+    + ` ${r.ctrlCases} selections, by ${r.ctrlOutside}px in all and ${r.ctrlWorst}px`
+    + ` at worst -- this test is no longer able to tell the two rules apart, which is`
+    + ` what it exists to do`);
 });
 
 await test('rolls really happen in a real match, not only on the bench', async () => {
@@ -1152,7 +2031,9 @@ await test('everything keeps working after the view is turned', async () => {
     assert(q.count > 50, `at quarter ${q.q} only ${q.count} things were drawn`);
     assert(q.ordered, `at quarter ${q.q} the painting was not back to front`);
     assert(q.hit === q.want, `at quarter ${q.q} pointing at ${q.want} picked ${q.hit}`);
-    assert(q.cutaway > 0, `at quarter ${q.q} no wall faded, so rooms hide again`);
+    assert(q.cutaway > 0,
+      `at quarter ${q.q} no rock in front was cut away, so rooms hide behind`
+      + ' their walls again');
   }
 });
 
@@ -1348,13 +2229,20 @@ await test('materials reach the screen, and nothing else is textured', async () 
     const textured = rows.map((y) => window.__test.colourSpread(y));
     const kindsOn = window.__test.fillKinds();
 
+    /* The census has to be able to see a texture somewhere it should not be: one
+       pattern painted straight onto the picture, from neither door, must land in
+       `other` and nowhere else. */
+    const fouled = window.__test.fillKinds(true);
+    window.__test.redraw();
+
     const off = window.__test.setTexture(0);
     window.__test.redraw();
     const flat = rows.map((y) => window.__test.colourSpread(y));
     const kindsOff = window.__test.fillKinds();
 
     window.__test.setTexture(full);
-    return { on, off, textured, flat, kindsOn, kindsOff };
+    window.__test.redraw();
+    return { on, off, textured, flat, kindsOn, kindsOff, fouled };
   });
   assert(r.on.on === true && r.off.on === false, 'the texture switch does nothing');
   assert(r.on.materials > 0, 'no material was ever generated');
@@ -1364,18 +2252,330 @@ await test('materials reach the screen, and nothing else is textured', async () 
     `materials changed only ${better} of 3 lines across the picture: ` +
     `${r.textured.join('/')} with against ${r.flat.join('/')} without`);
 
-  /* The grit is gone: with the materials off there is not one patterned fill
-     left in the whole frame, and with them on the patterns never outnumber the
-     ground squares -- so no crawler and no camp piece is carrying one. */
+  /* A material goes on the GROUND and on a laid WALL, and nowhere else -- and
+     that is a CENSUS of the frame rather than a sample of somewhere a texture is
+     expected. Every patterned fill is put to the door it came through: `ground`,
+     `wall`, or `other`, and `other` is a crawler or a piece of the camp wearing a
+     surface. (Counting patterns against ground squares used to stand in for
+     this, and stopped meaning anything in v0.24.0 when the sides of every block
+     got a material too -- the count legitimately rose above the ground's.) */
   assert(r.kindsOff.pattern === 0,
     `${r.kindsOff.pattern} faces are still filled with a texture when texture is off`);
   assert(r.kindsOn.pattern > 0, 'the materials never reached a fill');
-  assert(r.kindsOn.pattern <= r.kindsOn.cells,
-    `${r.kindsOn.pattern} textured fills against ${r.kindsOn.cells} ground squares ` +
-    `-- something other than the ground is textured`);
+  assert(r.kindsOn.ground > 0 && r.kindsOn.wall > 0,
+    `textures reached ${r.kindsOn.ground} ground faces and ${r.kindsOn.wall} wall faces --`
+    + ` one of the two places they are allowed never got one, so this is not a clean frame`);
+  assert(r.kindsOn.other === 0,
+    `${r.kindsOn.other} textured fills came from somewhere that is neither the ground nor`
+    + ` a wall -- something with a surface that should be a flat lit face`);
+  assert(r.kindsOn.ground + r.kindsOn.wall + r.kindsOn.other === r.kindsOn.pattern,
+    `the census lost track of ${r.kindsOn.pattern - r.kindsOn.ground - r.kindsOn.wall
+      - r.kindsOn.other} of ${r.kindsOn.pattern} textured fills`);
+  assert(r.fouled.other === 1 && r.fouled.pattern === r.fouled.ground + r.fouled.wall + 1,
+    `a texture painted from neither door was counted as ${r.fouled.other}, not 1`
+    + ` -- the census cannot see what it is looking for`);
   assert(r.kindsOn.plain > r.kindsOn.pattern,
     `${r.kindsOn.plain} plain fills against ${r.kindsOn.pattern} textured -- ` +
     'most of the picture should be flat colour now');
+});
+
+/* ---- the pictures dropped in by hand -------------------------------------- *
+ * Every material can be either GENERATED or DRAWN, and a folder with pictures
+ * in it makes that material drawn. Three tests say the whole pipeline is real:
+ * the first that ONE SQUARE METRE WEARS ONE PICTURE (not a block of them), the
+ * second that they are scattered over the ground rather than laid out in a
+ * lattice, the third -- the worst-looking question -- that any of it reached the
+ * screen, answered by pixels rather than by a flag.
+ *
+ * The first nearly shipped as a claim that could not fail. v0.30.0 composed the
+ * nine pictures of dirt into one three-metre tile -- a 3x3 block of them -- and a
+ * test that asked "are the pictures' colours in the tile" is answered YES by a
+ * block, because a block of them holds all of them. What a block is not is ONE
+ * PICTURE PER SQUARE, and that is what is asserted here. The second half of the
+ * same lesson: measuring how far the tile sits from a picture does NOT catch a
+ * block either (a block's colours are all of the pictures' colours, so it sits at
+ * distance 0 from every one of them) -- it catches only what it was written for,
+ * that the ground wears the dropped-in picture and not the generated one. Each
+ * claim is named for the thing it can catch. */
+
+await test('the pictures dropped into textures/ become the material', async () => {
+  const r = await page.evaluate(() => {
+    const px = Math.max(8, Math.round(CFG.patternPx));
+    const pal = (c) => {
+      const g = c.getContext('2d');
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      const set = new Set();
+      let h = 2166136261;
+      for (let i = 0; i < d.length; i += 4) {
+        set.add(d[i] + ',' + d[i + 1] + ',' + d[i + 2]);
+        h = Math.imul(h ^ d[i], 16777619) ^ Math.imul(h ^ d[i + 1], 2246822519)
+          ^ Math.imul(h ^ d[i + 2], 3266489917);
+      }
+      return { hash: (h >>> 0), colours: Array.from(set).map((s) => s.split(',').map(Number)) };
+    };
+    /* An Image has to be painted down before its pixels can be read. */
+    const asCanvas = (img) => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      return c;
+    };
+    /* How far a palette sits from another, in RGB levels: the mean and the worst
+       distance from a colour in the first to the NEAREST colour in the second. */
+    const dist = (a, b) => {
+      if (!a.length || !b.length) return { mean: -1, worst: -1 };
+      let sum = 0, worst = 0;
+      for (const q of a) {
+        let best = 1e9;
+        for (const s of b) {
+          const d = (q[0] - s[0]) ** 2 + (q[1] - s[1]) ** 2 + (q[2] - s[2]) ** 2;
+          if (d < best) best = d;
+        }
+        best = Math.sqrt(best);
+        sum += best;
+        if (best > worst) worst = best;
+      }
+      return { mean: +(sum / a.length).toFixed(1), worst: +worst.toFixed(1) };
+    };
+
+    const t = window.__test.textures();
+    const known = Object.keys(t.files).sort().filter((k) => t.files[k]);
+    const rows = known.map((name) => {
+      const tiles = Render.matPictures(name).map(pal);
+      const srcs = (Textures.imgs[name] || []).filter(Boolean)
+        .map((img) => pal(asCanvas(img)).colours);
+      return {
+        name,
+        files: t.files[name], decoded: t.decoded[name],
+        tiles: tiles.length,
+        kinds: Render.matPictures(name).map((c) => c.width + 'x' + c.height),
+        distinct: new Set(tiles.map((c) => c.hash)).size,
+        /* Each tile against ITS OWN picture, and against the next one round --
+           printed so a failure says which way the tiles went wrong. */
+        own: tiles.map((c, i) => dist(c.colours, srcs[i] || []).mean),
+        ownWorst: Math.max(...tiles.map((c, i) => dist(c.colours, srcs[i] || []).worst)),
+        other: tiles.map((c, i) => dist(c.colours, srcs[(i + 1) % srcs.length] || []).mean),
+      };
+    });
+
+    /* The control: the tile the GENERATOR makes for the same material, while the
+       pictures are switched off, against the same picture. What the ground would
+       wear if nothing had been dropped in -- so a "the picture is the surface"
+       measure has something it must be able to tell it from. */
+    window.__test.pictures(false);
+    const gen = known.map((name) => ({
+      name,
+      tiles: Render.matPictures(name).length,
+      drawn: Render.drawn(name),
+      dist: dist(pal(Render.matTile(name)).colours, pal(asCanvas(
+        (Textures.imgs[name] || []).filter(Boolean)[0])).colours),
+    }));
+    window.__test.pictures(true);
+
+    /* And a material nobody has dropped a picture into: nothing composed, and the
+       game does not believe it is drawn. */
+    const bare = Object.keys(t.files).sort().filter((k) => !t.files[k]);
+    const bareRow = bare.length ? {
+      name: bare[0],
+      files: t.files[bare[0]], decoded: t.decoded[bare[0]],
+      tiles: Render.matPictures(bare[0]).length,
+      drawn: Render.drawn(bare[0]),
+    } : null;
+
+    return { ready: t.ready, on: t.on, done: t.done, wants: t.wants,
+             materials: t.materials, px, rows, gen, bareRow };
+  });
+
+  assert(r.ready === true, `the pictures never finished decoding: ${r.done} of ${r.wants}`);
+  assert(r.materials.length > 0,
+    'no material has a single picture in it -- there is nothing to check, which is not the'
+    + ' same as it working');
+  assert(r.done === r.wants, `${r.done} of ${r.wants} pictures decoded`);
+  assert(r.on === true, 'the pictures switch came back off');
+
+  for (const m of r.rows) {
+    const tag = m.name + ': ' + m.decoded + ' of ' + m.files + ' pictures decoded';
+    assert(m.decoded === m.files, tag + ' -- and ' + (m.files - m.decoded) + ' did not');
+    /* ONE PICTURE PER SQUARE METRE. A block of them is one tile a block wide,
+       which is what v0.30.0 shipped and what the person rejected. */
+    assert(m.tiles === m.decoded,
+      `${m.name} has ${m.decoded} pictures and the renderer made ${m.tiles} tile(s) out of` +
+      ' them -- a square metre may not wear a BLOCK of pictures');
+    assert(m.kinds.every((k) => k === r.px + 'x' + r.px),
+      `${m.name}'s tiles are ${m.kinds.join(', ')} for a pattern of ${r.px}x${r.px}` +
+      ' -- a tile bigger than one square metre is several pictures in a block');
+    assert(m.own.every((d) => d <= 1) && m.ownWorst <= 2,
+      `${m.name}'s tiles are not its own pictures: mean distance ${m.own.join('/')},` +
+      ` worst ${m.ownWorst} -- each tile must BE its picture, not a blend of them`);
+    if (m.tiles > 1) {
+      assert(m.distinct === m.tiles,
+        `${m.name} has ${m.decoded} pictures and only ${m.distinct} different tiles --` +
+        ' some pictures are being ignored');
+    }
+  }
+
+  /* The control. If the generated tile were anywhere near the picture, everything
+     above would be satisfied by a game that had never used the picture at all. */
+  for (const g of r.gen) {
+    assert(g.tiles === 0 && g.drawn === false,
+      `${g.name} still composes ${g.tiles} picture tile(s) with the pictures switched off`);
+    assert(g.dist.mean >= 25 && g.dist.worst >= 80,
+      `the generated ${g.name} tile sits ${g.dist.mean} levels from the picture (worst` +
+      ` ${g.dist.worst}) -- it is too close for "what reached the ground was the picture"` +
+      ' to mean anything');
+  }
+
+  assert(r.bareRow && r.bareRow.files === 0,
+    `every material has pictures in it, so "a material nobody drew" was never tested`);
+  assert(r.bareRow.tiles === 0 && r.bareRow.drawn === false,
+    `a material with no pictures in its folder composed ${r.bareRow.tiles} tile(s)`);
+});
+
+/* The other half of what the person asked for -- "use them randomly" -- which no
+ * single tile can show. v0.30.0 laid the pictures out in a block; v0.31.0's fix is
+ * that a square metre wears the picture its OWN COORDINATES pick, so the thing to
+ * prove is that the picks are not a lattice. A lattice repeats at a fixed step,
+ * and that is a measurement rather than an impression: walk a patch of ground and
+ * ask what a square agrees with the square `step` away. Laid out in a block, the
+ * answer is 1.0 the moment the step reaches the block's width -- or at step
+ * (1,0) if the tile were a single column. Scattered, it sits near 1/n, which is
+ * what the same patch looks like if the picks were thrown at random.
+ *
+ * Only the materials with more than one picture can be asked: with one picture
+ * every square agrees with every other by arithmetic, and the answer would be a
+ * tautology dressed as a pass. */
+await test('the ground wears the pictures scattered, not laid out in a block', async () => {
+  const r = await page.evaluate(() => {
+    const n24 = 24;
+    const mats = (window.__test.textures().materials || [])
+      .filter((k) => Render.matPictures(k).length > 1);
+    const rows = mats.map((name) => {
+      const n = Render.matPictures(name).length;
+      const sc = window.__test.scatter(name, n24, n24);
+      const w = sc.w, h = sc.h, picks = sc.picks;
+      const tally = new Array(n).fill(0);
+      for (const v of picks) tally[v]++;
+      /* The best a LATTICE could do: for every step and direction up to twelve
+         squares, how often a square and the one that far away wear the same
+         picture. The worst-behaved lattice scores 1.0; a scatter scores ~1/n. */
+      let bestStep = null, bestAgree = 0;
+      for (let d = 1; d <= 12; d++) {
+        for (const dir of [[d, 0], [0, d], [d, d]]) {
+          let same = 0, tot = 0;
+          for (let y = 0; y + dir[1] < h; y++) {
+            for (let x = 0; x + dir[0] < w; x++) {
+              tot++;
+              if (picks[y * w + x] === picks[(y + dir[1]) * w + (x + dir[0])]) same++;
+            }
+          }
+          const agree = same / tot;
+          if (agree > bestAgree) { bestAgree = agree; bestStep = dir.join(','); }
+        }
+      }
+      /* Neighbours, which is where a block is most obvious: side by side inside a
+         block, every square agrees with the one next to it. */
+      let neigh = 0, tot = 0;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (x + 1 < w) { tot++; if (picks[y * w + x] === picks[y * w + x + 1]) neigh++; }
+          if (y + 1 < h) { tot++; if (picks[y * w + x] === picks[(y + 1) * w + x]) neigh++; }
+        }
+      }
+      /* And whole rows or columns of one picture, which is what a picker that has
+         stopped picking looks like. */
+      let monoRow = 0, monoCol = 0;
+      for (let y = 0; y < h; y++) {
+        if (new Set(Array.from({ length: w }, (_, x) => picks[y * w + x])).size === 1) monoRow++;
+      }
+      for (let x = 0; x < w; x++) {
+        if (new Set(Array.from({ length: h }, (_, y) => picks[y * w + x])).size === 1) monoCol++;
+      }
+      return { name, n, distinct: new Set(picks).size,
+               tally, min: Math.min(...tally), max: Math.max(...tally),
+               want: (w * h) / n,
+               neighAgree: +(neigh / tot).toFixed(3), chance: +(1 / n).toFixed(3),
+               bestStep, bestAgree: +bestAgree.toFixed(3), monoRow, monoCol,
+               squares: w * h };
+    });
+    return { rows, squares: n24 * n24 };
+  });
+
+  assert(r.rows.length > 0,
+    'no material has more than one picture, so a scatter cannot even be asked about');
+  for (const m of r.rows) {
+    assert(m.distinct === m.n,
+      `${m.name}: ${m.distinct} of ${m.n} pictures are used anywhere on ${m.squares}` +
+      ' squares of ground');
+    /* A lattice is what this replaced: 1.0 at its own step. The margin between
+       that and what a scatter scores is the whole test. */
+    assert(m.bestAgree <= 0.5,
+      `${m.name}: squares ${m.bestStep} apart wear the same picture ${m.bestAgree} of the` +
+      ` time (chance is ${m.chance}) -- the ground is laid out in a pattern, not scattered`);
+    assert(m.neighAgree < 0.75,
+      `${m.name}: a square agrees with the one beside it ${m.neighAgree} of the time --` +
+      ' that is a block of pictures, which is exactly what was rejected');
+    assert(m.monoRow === 0 && m.monoCol === 0,
+      `${m.name}: ${m.monoRow} whole rows and ${m.monoCol} whole columns wear one picture`);
+    assert(m.min > m.want * 0.25 && m.max < m.want * 4,
+      `${m.name}: the pictures are used ${m.min}..${m.max} times on ${m.squares} squares,` +
+      ` against ${m.want} each if they were even -- the picker favours some pictures`);
+  }
+});
+
+await test('the pictures are what you see on the ground', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    for (let i = 0; i < 20; i++) window.__test.frame(60);
+    /* Which materials in this frame came from a dropped-in picture rather than
+       from the generator, and how many ground faces wore one. */
+    const drawn = (window.__test.textures().materials || []).filter((k) => Render.drawn(k));
+    const on = window.__test.pictures(true);
+    window.__test.redraw();
+    const kindsDrawn = window.__test.fillKinds();
+    const picksDrawn = Render.consumed.picks;
+    window.__test.keep();
+    window.__test.pictures(false);
+    window.__test.redraw();
+    const kindsGen = window.__test.fillKinds();
+    const picksGen = Render.consumed.picks;
+    const diff = window.__test.diff();
+    window.__test.pictures(true);
+    window.__test.redraw();
+    return { on, drawn, kindsDrawn, picksDrawn, kindsGen, picksGen, diff,
+             pixels: Render.w * Render.h };
+  });
+
+  assert(r.drawn.length > 0,
+    'no material in this frame is drawn from a dropped-in picture -- switch the frame on'
+    + ' first, or there is nothing here to measure');
+  assert(r.on === true, 'the pictures switch came back off');
+
+  /* Pixels, not a flag: the same frozen moment painted both ways. The ground is
+     most of a frame, and most of the ground wears a material, so a picture that
+     reached the screen moves a large part of the picture -- and one that was
+     decoded and then ignored moves none of it. */
+  assert(!r.diff.error, r.diff.error || 'nothing was kept');
+  assert(r.diff.differ > r.pixels * 0.05,
+    `only ${r.diff.differ} of ${r.pixels} pixels differ (${r.diff.deep} of them by more` +
+    ` than 8 levels, worst ${r.diff.worst}) -- the dropped-in pictures are claimed to be` +
+    ' on the ground and the picture barely notices');
+  assert(r.diff.worst > 8,
+    `the worst a pixel moved is ${r.diff.worst} levels -- that is a hairline, not a surface`);
+
+  /* And the amount of picture should be about the amount of ground: a census of
+     the frame rather than a sample of some corner of it. */
+  assert(r.kindsDrawn.pattern > 0 && r.kindsGen.pattern > 0,
+    `patterned fills: ${r.kindsDrawn.pattern} with pictures, ${r.kindsGen.pattern} without`);
+
+  /* HOW MANY DIFFERENT PICTURES actually reached the ground while that frame was
+     painted. One picture per material would be a game wearing a single picture
+     over the whole floor -- which is what the rejected block was made of -- and it
+     would pass every other assertion here. */
+  assert(r.picksGen === 0,
+    `${r.picksGen} picture picks were counted with the pictures switched off`);
+  assert(r.picksDrawn > 1,
+    `only ${r.picksDrawn} distinct picture(s) reached the ground in this frame -- the` +
+    ' pictures are all there and the floor is wearing one of them');
 });
 
 await test('a crawler is built from rounded parts, not boxes', async () => {
@@ -1808,6 +3008,9 @@ await test('the pointer finds the frontmost shape all over the picture (v0.22.0)
       let last = -1;
       for (let k = 0; k < b.length; k++) {
         const it = b[k];
+        /* A square the picture skipped is not an answer either. This is the same
+           question pickAt() asks, and the only way the two can agree. */
+        if (Render.cutOut(it)) continue;
         let yes = false;
         if (it.kind === 'cell') {
           if (it.solid) {
@@ -1861,6 +3064,64 @@ await test('the pointer finds the frontmost shape all over the picture (v0.22.0)
   assert(r.wrong.length === 0,
     `${r.wrong.length} of ${r.points} points answered differently from a walk in `
     + `the paint direction: ${r.wrong.join('; ')}`);
+});
+
+/* Nothing the picture left out can be named by the pointer. A square that is
+ * cut out of the way is behind something solid -- it is not on the screen even
+ * though it is in the list of shapes -- so answering with one would put the
+ * outline and the tooltip on a thing nobody can see, and would put them there
+ * in the middle of the picture rather than at its edge. This is the reported
+ * bug's own direction of failure, measured: the pointer walked over a grid of
+ * the whole picture, on 24 pictures, counting every ask that answered with a
+ * square the picture did not paint. */
+await test('nothing the picture left out can be picked (v0.34.0)', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test;
+    t.pause(); t.unpoint();
+    const wasCut = t.cfg.cutSolid;
+    const o = { pictures: 0, asks: 0, onCut: 0, onNothing: 0, cutCells: 0,
+                worlds: new Set() };
+    for (const seed of [1, 3, 7]) {
+      t.seed(seed);
+      t.step(3001);
+      t.record(true);
+      for (const up of [false, true]) {
+        t.tilt(up);
+        for (let q = 0; q < 4; q++) {
+          t.rotate(q ? 1 : 0); t.redraw();
+          const cut = new Set();
+          for (const it of Render.batch) {
+            if (it.kind === 'cell' && it.cutaway) cut.add(it.i);
+          }
+          o.cutCells += cut.size;
+          o.pictures++;
+          o.worlds.add(seed + ':' + (up ? 'up' : 'flat') + ':' + t.camera().quarter);
+          for (let y = 4; y < Render.h - 4; y += 10) {
+            for (let x = 4; x < Render.w - 4; x += 10) {
+              const hit = t.point(x, y);
+              o.asks++;
+              if (hit < 0) o.onNothing++;
+              else if (cut.has(hit)) o.onCut++;
+            }
+          }
+          t.unpoint();
+        }
+      }
+    }
+    t.record(false); t.tilt(false);
+    return { ...o, worlds: o.worlds.size, wasCut };
+  });
+  assert(r.pictures === 24 && r.worlds === 24,
+    `${r.pictures} pictures were asked, reaching ${r.worlds} different ones`);
+  assert(r.asks > 3000,
+    `only ${r.asks} pixels were asked for an answer, which is not a walk over`
+    + ' the picture');
+  assert(r.cutCells > 0,
+    'not one square was cut out of the way in any of the 24 pictures, so there'
+    + ' was nothing to answer with wrongly');
+  assert(r.onCut === 0,
+    `${r.onCut} answers were a square the picture did not paint, so the pointer`
+    + ' can name something nobody can see');
 });
 
 /* ---- v0.13.0: rooms are places, built out of words --------------------- */
@@ -2226,6 +3487,103 @@ await test('the stonework is mapped ONTO the wall, not pasted across the screen'
     assert(!same, 'the stonework lands identically at every camera turn');
   });
 
+await test('every wall carries a material, not just the built ones', async () => {
+  const r = await page.evaluate(() => {
+    window.__test.seed(1);
+    const t = window.__test;
+    const s = Game.state;
+    for (let i = 0; i < 20; i++) t.frame(60);   /* settle on the camp */
+
+    const shot = () => {
+      s.geomDirty = true; s.viewDirty = true;
+      Render.build(s); Render.draw(s);
+      return Render.bctx.getImageData(0, 0, Render.w, Render.h).data.slice();
+    };
+    /* Which tiles in shot are blocks, and how many of each were drawn. */
+    const blocks = {};
+    const solid = Render.consumed.kinds;
+    for (const k in solid) if (TILE(k).footing === 'block') blocks[k] = solid[k];
+
+    const on = t.mappedWalls(true);
+    const mapped = shot();
+    const kindsOn = t.fillKinds();
+    t.mappedWalls(false);
+    const flat = shot();
+    const kindsOff = t.fillKinds();
+    t.mappedWalls(true);
+    /* And the whole picture with the blocks' own material taken away, which is
+       what it would look like if a wall had none at all. */
+    const was = {};
+    for (const k in blocks) { was[k] = TILE(k).pattern; window.__test.data.tiles[k].pattern = ''; }
+    Render.patCache = {};
+    const bare = shot();
+    for (const k in was) window.__test.data.tiles[k].pattern = was[k];
+    Render.patCache = {};
+
+    let differ = 0;
+    for (let i = 0; i < mapped.length; i += 4) {
+      if (mapped[i] !== flat[i] || mapped[i + 1] !== flat[i + 1]
+        || mapped[i + 2] !== flat[i + 2]) differ++;
+    }
+    let barePx = 0;
+    for (let i = 0; i < mapped.length; i += 4) {
+      if (mapped[i] !== bare[i] || mapped[i + 1] !== bare[i + 1]
+        || mapped[i + 2] !== bare[i + 2]) barePx++;
+    }
+    return { on, kindsOn, kindsOff, differ, barePx, blocks,
+             pixels: Render.w * Render.h };
+  });
+
+  assert(r.on === true, 'the eyes are not open');
+  /* The wall sides are the difference: every block side the frame paints takes
+     one more patterned fill with the walls done the new way than the old. */
+  assert(r.kindsOn.walls > 50,
+    `only ${r.kindsOn.walls} block sides in the picture -- nothing to test`);
+  /* Every material fill in the picture is on something that wears one, and there
+     is exactly one of each: a square of ground with a material on top, a wall's
+     face, and the wall's own band where the material runs on up into the fade.
+     The assertion that used to stand here (`pattern === cells + walls`) was a
+     caption about the look of v0.24.0 and stopped being true twice over -- a
+     block's top was a LID wearing the material until v0.37.0 made it rock, so
+     one pattern per block went away (`body` counts them), and since v0.37.0 the
+     material reaches the screen once more per wall side, in the band (`banded`).
+     A caption is not a measurement, so this one is read off the frame. */
+  const k = r.kindsOn;
+  assert(k.ground === k.cells - k.body - k.capsOff,
+    `${k.ground} material fills on the ground against ${k.cells} squares drawn, `
+    + `${k.body} of them painting the rock flat on top and ${k.capsOff} with `
+    + 'nothing on top at all');
+  assert(k.wall === k.walls + k.banded,
+    `${k.wall} material fills on walls against ${k.walls} painted wall sides and `
+    + `${k.banded} of them carrying the material on up into the faded band`);
+
+  /* The old way, which is what `mappedWalls(false)` paints: no material on a wall
+     at all, so every side fades through its own colour instead and the textured
+     fills are the ground squares and nothing else. That arm is the control and it
+     can fail -- it fails if a wall's material comes back by some other route. */
+  assert(r.kindsOff.wall === 0,
+    `${r.kindsOff.wall} material fills were on a wall with the wall's material `
+    + 'switched off -- the old way was not the old way');
+  assert(r.kindsOff.pattern === r.kindsOff.ground
+         && r.kindsOff.ground <= r.kindsOff.cells,
+    `${r.kindsOff.pattern} textured fills, ${r.kindsOff.ground} of them on the `
+    + `ground, against ${r.kindsOff.cells} ground squares drawn, with the walls `
+    + 'switched off -- the old way was not the old way');
+  assert(r.kindsOff.band > 0,
+    'not one wall side faded through its own colour with the material switched '
+    + 'off, so the flat band this look is the fallback for has gone');
+  assert(Object.keys(r.blocks).length > 0, 'no block in shot at all');
+
+  /* And it reaches the screen: taking the blocks' material away repaints a lot
+     of the picture, which it could not do if the sides were flat colour. */
+  assert(r.barePx > r.pixels * 0.05,
+    `taking the material off ${JSON.stringify(r.blocks)} changed only `
+    + `${r.barePx} of ${r.pixels} pixels, so the walls were barely on the screen`);
+  assert(r.differ > 1000,
+    `doing the walls the old way changed only ${r.differ} pixels -- the flat `
+    + 'picture and the mapped one are the same');
+});
+
 await test('the masonry actually reaches the screen', async () => {
   const r = await page.evaluate(() => {
     window.__test.seed(1);
@@ -2267,12 +3625,13 @@ await test('the ground\'s material lies ON the ground, not across the screen',
       window.__test.seed(1);
       const t = window.__test;
       const s = Game.state;
-      const turns = [];
+      const turns = [], misses = [];
       for (let q = 0; q < 4; q++) {
         s.cam.quarter = q; s.cam.yaw = s.cam.yawTarget = q * Math.PI / 2;
         camRefresh(s);
         const m = t.groundFaceMap({ footing: 'walk', slope: SLOPE_FLAT });
         if (m) turns.push({ turn: q, m: m });
+        else misses.push(`turn ${q}: ${t.mapMiss}`);
       }
       s.cam.quarter = 0; s.cam.yaw = s.cam.yawTarget = 0;
       camRefresh(s);
@@ -2281,11 +3640,12 @@ await test('the ground\'s material lies ON the ground, not across the screen',
       t.mappedGround(false);
       const flat = t.groundFaceMap({ footing: 'walk', slope: SLOPE_FLAT });
       t.mappedGround(true);
-      return { turns: turns, flat: flat, ships: t.mappedGround() };
+      return { turns: turns, flat: flat, ships: t.mappedGround(), misses: misses };
     });
     assert(r.ships, 'the game paints the ground flat across the screen');
     assert(r.turns.length === 4,
-      `only ${r.turns.length} of 4 turns found a floor to measure`);
+      `only ${r.turns.length} of 4 turns found a floor to measure -- `
+      + r.misses.join('; '));
     for (const f of r.turns) {
       const m = f.m;
       /* One tile of material must be exactly one metre of floor -- along the
@@ -2705,7 +4065,7 @@ await test('the window holds only ground somebody is near (v0.21.0)', async () =
 
 await test('no square of ground stands higher than the tallest the pieces may build (v0.21.0)', async () => {
   const r = await page.evaluate(() => {
-    let most = -Infinity, seen = 0;
+    let most = -Infinity, hi = -Infinity, seen = 0;
     for (let seed = 1; seed <= 20; seed++) {
       window.__test.seed(seed);
       /* A fresh match opens holding only the piece the camp stands in, so look
@@ -2715,15 +4075,56 @@ await test('no square of ground stands higher than the tallest the pieces may bu
       for (const c of window.__test.state.world.cells) {
         seen++;
         if (c.h > most) most = c.h;
+        if (TILE(c.tile).footing !== 'block' && c.h > hi) hi = c.h;
       }
     }
     const t = window.__test.cfg;
-    return { most, seen, tallest: t.maxElev + t.rockHeight };
+    return { most, hi, seen, tallest: t.maxElev + t.rockHeight,
+             cliff: t.maxElev, rock: t.rockHeight };
   });
   assert(r.seen > 20 * 3136, `only ${r.seen} squares were looked at`);
-  assert(r.most === r.tallest,
+  /* The bound the picture works out how far a piece can reach from -- and
+     whether a piece is on the screen at all -- is built from max_elevation +
+     rock_height. A square above it would leave a piece culled before it was
+     drawn, which is a hole in the world, so the bound has to hold. */
+  assert(r.most <= r.tallest,
     `the tallest square stood ${r.most} metres up, and the picture works out how far a `
     + `piece can reach on the assumption that ${r.tallest} is the most it can be`);
+  /* And the ground itself is never above the cliff the world is built to. The
+     rock is brought down to suit whatever floor it stands beside (v0.35.0), so
+     the tallest rock is exactly two metres above the highest floor -- which is
+     also the check that nothing walked the FLOORS up instead. */
+  assert(r.hi <= r.cliff,
+    `a square a crawler can stand on was ${r.hi} metres up, and the ground is not `
+    + `meant to go higher than ${r.cliff}`);
+  assert(r.most === Math.min(r.tallest, r.hi + r.rock),
+    `the tallest rock stood ${r.most} m beside ground ${r.hi} m up, which calls for `
+    + `${Math.min(r.tallest, r.hi + r.rock)} m`);
+});
+
+await test('bringing the rock down leaves every square a crawler can use alone (v0.35.0)', async () => {
+  const r = await page.evaluate(() => window.__test.rockAudit([1, 7, 23]));
+  assert(r.worlds === 2 * r.cases, `${r.worlds} worlds were built, not ${2 * r.cases}`);
+  assert(r.pieces > 6 * r.cases, `only ${r.pieces} pieces were looked at`);
+  assert(r.ground > 2000 * r.cases,
+    `only ${r.ground} squares of ground were compared, which is too few to judge`);
+  assert(r.moved === 0 && r.retiled === 0 && r.rerolled === 0 && r.reproomed === 0,
+    `${r.moved} squares of ground moved, ${r.retiled} changed tile, `
+    + `${r.reproomed} changed room and ${r.rerolled} changed the way they lean:\n`
+    + '         ' + JSON.stringify(r.worst));
+  assert(r.lowered > 1000,
+    `only ${r.lowered} columns of rock came down, so nothing really happened`);
+  /* The two bounds that say the change is the change that was wanted, measured
+     against the same build with it switched off (lesson 21): the rock used to
+     stand at the plateau almost everywhere, and now it stands two metres above
+     whatever floor is nearest, so the plateau is the exception rather than the
+     rule. */
+  assert((r.topOld[7] || 0) > r.rockOld * 0.9,
+    `only ${r.topOld[7] || 0} of ${r.rockOld} columns of rock were at the plateau `
+    + 'with the change switched off, so the two runs are not the two ways of '
+    + 'building the same world and this proves nothing');
+  assert((r.topNew[7] || 0) < r.rockNew / 4,
+    `${r.topNew[7] || 0} of ${r.rockNew} columns of rock are still up at the plateau`);
 });
 
 await test('the page raised no errors while all that happened', async () => {

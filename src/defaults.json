@@ -11,11 +11,6 @@
       "unit": "px/m",
       "note": "LOCKED SCALE: how many pixels tall one metre is. Everything in the game is drawn against this, so a 1.6 m crawler is 52 px tall. Changing it rescales the entire world."
     },
-    "render.occluder_fade": {
-      "value": 0.28,
-      "unit": "alpha",
-      "note": "How solid a block stays when it is standing between you and the tile you are inspecting. 1 = never fades, 0 = disappears entirely."
-    },
     "render.side_shade_left": {
       "value": 0.78,
       "unit": "x",
@@ -201,15 +196,10 @@
       "unit": "ticks",
       "note": "How long a crawler takes between efforts. 60 ticks is a second."
     },
-    "render.cutaway_fade": {
-      "value": 0.3,
-      "unit": "alpha",
-      "note": "How solid a wall of rock stays when it is standing between you and a floor behind it. This is the see-through fourth wall. 1 = never fades and rooms hide behind their own near walls; 0 = those walls vanish entirely."
-    },
     "render.cutaway_depth": {
       "value": 1,
       "unit": "m",
-      "note": "How close a wall has to be to the floor it is hiding before it turns translucent. Small numbers fade only the near wall of a room, which is what you want; large numbers fade half the labyrinth into a haze."
+      "note": "How close rock has to be to the floor it is hiding before it stands in the way. Small numbers cut away only the near wall of a room, which is what you want; large numbers cut away half the labyrinth at once."
     },
     "render.tile_h_low": {
       "value": 32,
@@ -450,6 +440,21 @@
       "value": 1,
       "unit": "pieces",
       "note": "How many pieces of ground are kept ready BEYOND what you can see, and beyond every crawler and every camp site. This ring is what stops a crawler reaching ground that has not been made yet. Every piece kept is a piece's worth of rooms held in memory and walked over by the picture, so a bigger ring is heavier: raise it only if new ground ever appears too late."
+    },
+    "render.cut_solid": {
+      "value": 0,
+      "unit": "alpha",
+      "note": "How solid the rock standing in front of a room stays. 0 means it is not painted at all and the room is seen straight through the gap; 1 means it is drawn like any other rock. Anything in between is the haze the game used to have."
+    },
+    "render.wall_fade_m": {
+      "value": 1,
+      "unit": "m",
+      "note": "How far down from its top edge a wall fades away to nothing. The top of every wall fades into whatever the picture put behind it, which is what turns the edge where a wall's lid used to be into a soft step. 0 paints walls solid to the top; large numbers erase them."
+    },
+    "render.cut_stump_m": {
+      "value": 1,
+      "unit": "m",
+      "note": "How much of a block that is hidden behind the wall in front stays standing, once `cut_solid` has taken the rest of it away. 0 deletes the whole square, and the floors behind a hidden column begin half a step short of its foot, so the gap shows a strip of nothing at the bottom of the column -- measured at 13,119 pixels of hole over 16 views before this. A metre is a foot of rock you can see a room over and covers it by construction: at 32 pixels to the metre a crawler is 52 pixels tall, so this is a kerb, not a wall."
     }
   },
   "geometry": {
@@ -471,10 +476,10 @@
   },
   "names": {
     "ui.hint_desktop": {
-      "text": "drag to pan  \u00b7  scroll to zoom  \u00b7  Q/E turn, R raises  \u00b7  space pauses, , and . change speed"
+      "text": "drag to pan  ·  scroll to zoom  ·  Q/E turn, R raises  ·  space pauses, , and . change speed"
     },
     "ui.hint_touch": {
-      "text": "drag to pan  \u00b7  pinch to zoom  \u00b7  the buttons turn, raise, pause and change speed"
+      "text": "drag to pan  ·  pinch to zoom  ·  the buttons turn, raise, pause and change speed"
     },
     "ui.label_elevation": {
       "text": "elevation"
@@ -489,10 +494,10 @@
       "text": "can be walked on"
     },
     "ui.footing_block": {
-      "text": "solid \u2014 blocks movement"
+      "text": "solid — blocks movement"
     },
     "ui.footing_ramp": {
-      "text": "ramp \u2014 climbs one metre"
+      "text": "ramp — climbs one metre"
     },
     "ui.nothing_there": {
       "text": "nothing there"
@@ -2314,22 +2319,22 @@
   },
   "speeds": {
     "normal": {
-      "name": "1\u00d7",
+      "name": "1×",
       "multiplier": 1,
       "note": "Real time. One tick is a sixtieth of a second. The first row is always normal speed."
     },
     "fast": {
-      "name": "2\u00d7",
+      "name": "2×",
       "multiplier": 2,
       "note": "Twice as fast."
     },
     "faster": {
-      "name": "4\u00d7",
+      "name": "4×",
       "multiplier": 4,
       "note": "Four times. About right for watching a camp go up."
     },
     "fastest": {
-      "name": "8\u00d7",
+      "name": "8×",
       "multiplier": 8,
       "note": "Eight times. Add a row here for a faster one, or delete one you never use."
     }

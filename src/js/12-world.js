@@ -730,6 +730,20 @@ function generatePiece(seed, cx, cy) {
      and the piece counts it as sealed. */
   for (const m of mouths) if (!digDoorway(m)) world.sealed++;
 
+  /* Then the ramps are checked, once, now that nothing else can move -- see
+     repairSlopes(). It is the last thing done in local squares because every
+     rule that can break a ramp runs before it. */
+  world.slopeFix = SLOPES_REPAIRED
+    ? repairSlopes(world, rooms)
+    : { aimed: 0, flatted: 0, passes: 0, left: 0, rock: 0 };
+
+  /* And last of all, the rock comes down to a height that suits the ground it
+     is standing in. Rock is never walkable, so nothing any rule above decided
+     can depend on this -- see lowerRockTops(). */
+  world.rockFix = ROCK_LOWERED
+    ? lowerRockTops(world, rockTop)
+    : { lowered: 0, raised: 0, tallest: rockTop };
+
   /* Every rule above has been applied in local squares, so the piece is now
      moved to where it belongs: its address times its size is added onto every
      square, every room, and every doorway. From here on `at()` speaks world
@@ -776,6 +790,211 @@ function surfaceHeight(cell) {
 
 const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
+/* ---- a ramp is a promise, and the promise is checked ---------------------
+ * A ramp is not a shallow slope. It is the ONLY place two levels meet, and the
+ * whole of what it means is "the square I lean toward is one metre up". The
+ * moment that square is not, the ramp is a WEDGE: the picture shows a slope and
+ * the map refuses the step off the top of it.
+ *
+ * A slope ending in ROCK is not that, and is not a defect. THEIR WORDS, v0.33.2:
+ * "I don't mind slopes leading up to walls. happens in caves and rubble all the
+ * time." A bank of rubble that fetches up against a face is the labyrinth, and
+ * the map is honest about it -- you walk up the ramp, and the rock does not let
+ * you through. So a ramp whose square a metre up is SOLID is left exactly as it
+ * is, and nothing is moved out of its way either: the block that landed there
+ * was placed by blockRoom long after the ramp was dug, and a rule that keeps it
+ * away reshapes the room around it (v0.33.0 tried that, and reverted it).
+ *
+ * What IS repaired is the other half -- a ramp leaning at OPEN ground that is
+ * not a metre up: a drop into a corridor, a ledge, another ramp at the same
+ * height. There is nothing there to explain the refusal; the ground is open and
+ * the map says no. Two things are done to one of those, and only those:
+ *
+ *   re-aim   it at a FLAT square exactly one metre up, if it has one. Flat
+ *            ground cannot move, so a re-aimed ramp cannot come undone.
+ *   flatten  it to the floor it was cut from, if it has none.
+ *
+ * THE REPAIR MAY NEVER TAKE A STEP AWAY (lesson 21, the doorways). Both halves
+ * can only remove an edge that was ALREADY impassable -- if the square the ramp
+ * leaned at were a metre up and clear, the edge would be walkable and the ramp
+ * would not have been touched -- and flattening leaves a square at its own
+ * height, which can only ADD edges to the neighbours at that height.
+ * __test.slopeAudit() counts every step a crawler can really take with the
+ * repair off and then on IN ONE BUILD. The sweep throws no dice, so those two
+ * runs are the same world and the difference between them is exactly the repair.
+ *
+ * Measured over 30 seeds, 90 worlds, 270 pieces, 10,244 ramps (2026-09-16): 145
+ * of them no longer climbed -- 118 leaning into solid rock (left alone; that is
+ * the case they asked for), 26 leaning at open ground below a metre up and 1 at
+ * a ledge. The sweep repairs those 27 and leaves 0 wedges. */
+let SLOPES_REPAIRED = true;      /* the sweep, at the end of every piece */
+
+/* The rock comes down to suit the ground it stands in (lowerRockTops), so a
+ * wall is two metres wherever it is rather than seven.
+ *
+ * Rock is not a square anybody can stand on, so the promise is easy to state
+ * and worth stating exactly: NOTHING WALKABLE MOVES. Same height, same tile,
+ * same room, same steps -- the world a crawler can use is identical, and only
+ * the rock around them changes. Kept as a switch so that claim can be measured
+ * against the same build with it turned off, which is the only way to prove a
+ * change of this kind stayed inside its own box. */
+let ROCK_LOWERED = true;         /* the rock tops, at the end of every piece */
+
+/* Which way a ramp climbs, as one step of the grid. */
+function slopeDir(slope) {
+  if (slope === SLOPE_XUP) return [1, 0];
+  if (slope === SLOPE_XDN) return [-1, 0];
+  if (slope === SLOPE_YUP) return [0, 1];
+  if (slope === SLOPE_YDN) return [0, -1];
+  return null;
+}
+
+/* What a square is floored with when a ramp in it is taken out: the room's own
+   floor, or failing that whatever the ground around it is made of. */
+function floorNear(at, cell, rooms) {
+  if (cell.room >= 0 && rooms && rooms[cell.room]) return rooms[cell.room].floor;
+  const count = new Map();
+  for (const s of STEPS) {
+    const nb = at(cell.x + s[0], cell.y + s[1]);
+    if (!nb || nb.slope || TILE(nb.tile).footing === 'block') continue;
+    count.set(nb.tile, (count.get(nb.tile) || 0) + 1);
+  }
+  let best = 'stone_floor', bestN = 0;
+  count.forEach(function (n, tile) { if (n > bestN) { bestN = n; best = tile; } });
+  return best;
+}
+
+/* Repair every ramp of one piece that no longer climbs. Works in the piece's
+   own local squares, before its address is added onto them. A ramp leaning at a
+   square outside the piece is left alone: this pass cannot see next door, and
+   guessing about ground it cannot read is how a step gets taken away. A ramp
+   leaning at SOLID ROCK is left alone as well -- a slope that fetches up against
+   a face is a cave, and they asked for it. */
+function repairSlopes(world, rooms) {
+  const at = world.at;
+  const fix = { aimed: 0, flatted: 0, passes: 0, left: 0, rock: 0 };
+  /* What the square this ramp leans at is: true when the step is really there,
+     false when the ground is open and refuses it, 'rock' when it is solid, and
+     'out' when it is outside this piece. */
+  const climbs = function (c) {
+    const d = slopeDir(c.slope);
+    if (!d) return null;
+    const nb = at(c.x + d[0], c.y + d[1]);
+    if (!nb) return 'out';
+    if (TILE(nb.tile).footing === 'block') return 'rock';
+    return canStep(c, nb, d[0], d[1]);
+  };
+  for (let pass = 0; pass < 8; pass++) {
+    let changed = 0;
+    for (const c of world.cells) {
+      if (!c.slope || TILE(c.tile).footing === 'block') continue;
+      const good = climbs(c);
+      if (good === null || good === 'out' || good === 'rock' || good) continue;
+      const d = slopeDir(c.slope);
+      let aimed = false;
+      for (const s of STEPS) {
+        if (s[0] === d[0] && s[1] === d[1]) continue;   /* the way that failed */
+        const q = at(c.x + s[0], c.y + s[1]);
+        if (!q || q.slope || TILE(q.tile).footing === 'block') continue;
+        if (q.h !== c.h + 1) continue;
+        c.slope = slopeFor(s[0], s[1]);
+        c.tile = 'stone_ramp';
+        fix.aimed++; changed++; aimed = true;
+        break;
+      }
+      if (aimed) continue;
+      c.slope = SLOPE_FLAT;
+      c.tile = floorNear(at, c, rooms);
+      fix.flatted++; changed++;
+    }
+    fix.passes = pass + 1;
+    if (!changed) break;
+  }
+  for (const c of world.cells) {
+    if (!c.slope || TILE(c.tile).footing === 'block') continue;
+    const good = climbs(c);
+    if (good === 'rock') { fix.rock++; continue; }
+    if (good === null || good === 'out') continue;
+    if (!good) fix.left++;
+  }
+  return fix;
+}
+
+/* How tall a column of rock stands: `world.rock_height` above the floor nearest
+ * it, and never above the plateau it is born at.
+ *
+ * Every column used to be born at ONE height for the whole piece --
+ * world.max_elevation plus world.rock_height -- which laid a single flat
+ * plateau over the labyrinth at 7 m and left every wall the same afternoon's
+ * worth of rock: the height you happened to be standing at, subtracted from 7.
+ * Mostly three metres, sometimes seven, and always with its top on show. Their
+ * words: "we should not see the top of wall blocks... make most walls 2m tall
+ * instead of the current 3m". So a column of rock now takes its height from the
+ * ground it is actually standing beside, found by one flood outwards from every
+ * floor square at once, and the rock follows the rooms in and out instead of
+ * roofing them all at one altitude. A room in a deep place has low rock round
+ * it and keeps its view; a room up high stands under rock as tall as ever.
+ *
+ * It runs LAST, after the halls, the walls, the doorways and the ramps, and it
+ * is safe there for one reason: a column of rock is not a square anybody can
+ * stand on, so no rule above it can have depended on how tall it was. Nothing
+ * walkable moves by a millimetre -- height, tile, room or otherwise -- which is
+ * the promise the doorways are held to as well.
+ *
+ * Never TALLER than the plateau, either. Two bounds in the renderer are worked
+ * out from max_elevation + rock_height -- how far the picture reaches, and
+ * whether a piece is on the screen at all -- and a column that came out taller
+ * than those would leave a piece culled before it was drawn: a hole in the
+ * world. Clamping to the plateau means both bounds go on being over-estimates,
+ * which is all they ever needed to be.
+ */
+function lowerRockTops(world, rockTop) {
+  const n = CFG.chunkTiles, cells = world.cells;
+  const floor = new Int16Array(n * n).fill(-1);
+  const queue = new Int32Array(n * n);
+  let head = 0, tail = 0;
+  const block = (c) => TILE(c.tile).footing === 'block';
+  /* The HIGHEST floor goes first, so that a column of rock standing between two
+     floors of different heights belongs to the taller of them. Order matters
+     here and nowhere else: a cell one step from a room at 5 m and one step from
+     a room at 0 m must come out at 7 m, or the 5 m room is left standing in a
+     trench with two metres of rock beside it. Seeding tallest-first means the
+     7 m answer is always the one that arrives first. */
+  for (let h = CFG.maxElev; h >= 0; h--) {
+    for (let i = 0; i < cells.length; i++) {
+      if (cells[i].h !== h || block(cells[i])) continue;
+      floor[i] = h; queue[tail++] = i;
+    }
+  }
+  /* Anything walkable whose height is not a whole metre in range still has to
+     feed the flood -- it simply does not get a say about a tie. */
+  for (let i = 0; i < cells.length; i++) {
+    if (floor[i] >= 0 || block(cells[i])) continue;
+    floor[i] = Math.max(0, Math.round(cells[i].h));
+    queue[tail++] = i;
+  }
+  while (head < tail) {
+    const i = queue[head++], lvl = floor[i];
+    const x = i % n;
+    if (x > 0 && floor[i - 1] < 0) { floor[i - 1] = lvl; queue[tail++] = i - 1; }
+    if (x < n - 1 && floor[i + 1] < 0) { floor[i + 1] = lvl; queue[tail++] = i + 1; }
+    if (i >= n && floor[i - n] < 0) { floor[i - n] = lvl; queue[tail++] = i - n; }
+    if (i + n < n * n && floor[i + n] < 0) { floor[i + n] = lvl; queue[tail++] = i + n; }
+  }
+  const fix = { lowered: 0, raised: 0, tallest: 0 };
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i];
+    /* ROCK only. A floor's height is the whole world's business -- rooms, halls,
+       ramps and every promise made above this call depend on it -- so the one
+       thing this must never do is touch a square somebody can stand on. */
+    if (floor[i] < 0 || !block(c)) continue;
+    const want = Math.min(rockTop, floor[i] + CFG.rockHeight);
+    if (want < c.h) { fix.lowered++; c.h = want; } else if (want > c.h) { fix.raised++; c.h = want; }
+    if (c.h > fix.tallest) fix.tallest = c.h;
+  }
+  return fix;
+}
+
 /* Does this column of rock stand between the camera and a floor behind it?
  *
  * Straight out of the projection: a column of height H covers the cell k steps
@@ -784,17 +1003,26 @@ const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
  * `tileH` on how steeply you are looking down. That is the whole fourth-wall
  * problem, answered in a handful of steps per column rather than by comparing
  * every block with every other.
- */
+ *
+ * The rule is the projection and nothing else; what happens to the rock that
+ * answers yes is a matter of taste and lives in the renderer. It hands back a
+ * yes or a no. It used to hand back the HEIGHT of the floor it hides, for a look
+ * that wanted to leave a low wall standing where the rock had been -- that look
+ * was not taken, so the height, the `margin` that went with it and the `lifeAt`
+ * that narrowed the question are all gone. A number nothing reads is a builder
+ * with no consumer, and it is how a dial drifts away from its meaning. */
 function hidesFloorBehind(world, cell, back, tileH) {
   if (TILE(cell.tile).footing !== 'block') return false;
   const perStep = tileH / CFG.rise;
   /* Only the near wall. Rock that hides a room from further back than this is
-     left solid -- fading all of it turns the whole labyrinth into a haze. */
+     left solid -- opening all of it turns the whole labyrinth into a haze. */
   const reach = Math.min(CFG.cutawayDepth,
                          Math.ceil(cell.h / Math.max(perStep, 0.001)));
   for (let k = 1; k <= reach; k++) {
     const far = world.at(cell.x + back[0] * k, cell.y + back[1] * k);
     if (!far) break;
+    /* A block hides nothing, and the search runs PAST one rather than stopping
+       at it -- so the room beyond a wall of rock is still seen. */
     if (TILE(far.tile).footing === 'block') continue;
     if (cell.h >= far.h + k * perStep) return true;
   }
