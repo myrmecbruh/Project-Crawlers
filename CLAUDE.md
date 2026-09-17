@@ -1267,7 +1267,8 @@ game is drawn at less than full strength.
   worth keeping are lessons 26 and 31.
 - **A face may only be cut away while the block hiding it paints solid**
   (`hideL = clipWalls && nbrL >= 0 && alphaOf[nbrL] === 1`), **and only as far as
-  that block actually PAINTS** (`Math.min(mine, this.drawnM(nbr))`, v0.40.0). The
+  that block actually PAINTS** (`cutMeet()`, v0.40.0; the depth step and the fade
+  metre, v0.42.0). The
   draw counts what
   that guard does: `kept` when the block is see-through and the face comes back,
   `lost` when a face stays cut away anyway -- a hole. Both are in
@@ -1302,18 +1303,35 @@ Four things, and one rule underneath them:
   transparent, the texture stops. texture should continue up the wall and merely
   become transparent until invisible."* **The material runs the whole height; only
   its alpha changes.** `banded` in the census is how that stays true.
-- **A strip of the face survives at the top edge** (`wallLips: true`,
-  `lipShown()`, `lipQuad()`), so a wall whose neighbour has been cut away does not
-  lose its own outline.
+- **A strip of the face survives along the FAR edge** (v0.42.0: `backBands: true`,
+  `backBand()`; the v0.36.0 `wallLips` / `lipShown()` / `lipQuad()` set is gone).
+  With the lid off, a square's top diamond is covered by the block BEHIND it, whose
+  own near wall runs down from the edge they share -- until that neighbour is lower
+  (a floor, a step down, a wall a metre short) and the strip between the two top
+  edges is bare backdrop: a black wedge along the back edge of the rock, at every
+  corner where two low neighbours meet. `backBand()` paints that strip as this
+  block's own far face, cut down to `drawnM(neighbour)`, and it **refuses when the
+  neighbour reaches as high** (`!(low < mine)`), which is most of the rock in the
+  labyrinth. It is **not** a lid: nothing is drawn across a wall that has something
+  as tall standing behind it.
 - **A wall buried in the rock next door is not painted** -- the v0.18.0
   `clipFaces()`. *"do not render sides of wall blocks that can never be seen"*.
 
 ### The rule under all of it: the clip must ask what the coverer PAINTS
 
 **`drawnM(cell)` is the only answer to "how many metres of this block reach the
-picture"**, and `clipFaces()` and `sideShown()` both ask it of the **neighbour**:
-`Math.min(mine, this.drawnM(nbr))`. It hands back the world height, or the foot of
-rock, or **0** for a square that paints nothing -- zero is a height too.
+picture"**, and `clipFaces()` and `sideShown()` both ask it of the **neighbour**
+through **`cutMeet(nbr, mine, stepM)` = `max(0, min(mine, drawnM(nbr) - hide))`**,
+where `hide` is **0** when the neighbour's own top is painted (`capShown(nbr)`) and
+**`stepM + CFG.wallFadeM`** when it is not. A face keeps a **depth step** more than
+the meeting, because with no lid there is no longer anything covering the stagger
+between the two top edges -- and **a metre more than that**, because the top metre
+of the neighbour is dissolved upward to nothing and what shows through it has to be
+ROCK. `drawnM()` hands back the world height, or the foot of rock, or **0** for a
+square that paints nothing -- zero is a height too. Measured in the file's own
+words: *"Painting MORE than we must is always safe, because the block in front is
+painted after this one -- so the only way this can be wrong is by hiding too much,
+never by hiding too little."*
 
 It used to read `nbr.h`, the world's own height, and that was **the corner holes**.
 A hidden block's `h` is six metres and the number of metres it paints is one, so a
@@ -1338,6 +1356,67 @@ the picture** a lattice.
 
 **The honest cost, and it is in the code:** the bottom metre of anything standing
 directly behind a hidden block is covered. One number settles it either way.
+
+### A square the cut has cut keeps its top face -- `capShown()`'s one exception
+
+`capShown()` is the single question four things ask -- the picture, `backBand()`
+(hence `build()`'s `lid`), `clipFaces()`/`cutMeet()`, and the halo round a selected
+thing -- and it used to answer "a wall's top is not painted", full stop. **A square
+the cut has cut down to a foot of rock is not a wall**, and on that square the rule
+was leaving the near half of the top diamond bare: the block BEHIND it is level
+with the foot at best, and `backBand()` refuses at level (`!(low < mine)`), so its
+own wall paints nothing there, and the faces in front stop at the foot. Bare
+backdrop in the middle of its own top diamond -- **"black notches at wall
+corners"**, the notches they kept pointing the cursor at. The bare thing is a lens
+12 px wide and 20 px tall in the middle of the top diamond, and it is always the
+SAME shape, because it is the near half of one square's top.
+
+`files/mark-holes.mjs`, the same command run against each build (48 views, buffer
+534x348, a pixel is a hole when the backdrop shows through and the border flood
+cannot reach it):
+
+    v0.42.0   3472 hole px in 30 of 48 views, worst view 372 px, biggest hole 124 px
+    v0.43.0    264 hole px in 15 of 48 views, worst view  29 px, biggest hole   1 px
+    the view they were reported against   248 px (biggest 124 px)  ->  0 px
+
+**All 15 changed views are raised views**; seed 2 and seed 3 have no bare pixel
+left in any of their 32 views, and seed 1's sixteen are pixel for pixel unchanged.
+The leftover in the worst view is 29 lone pixels, each with paint on all eight
+sides.
+
+The fix is **one clause in `capShown()`** (`|| it.stumped === true`, the item
+branch) plus **`|| stub > 0` in `build()`'s `lid`**. The second is not tidiness:
+`lid` is what decides whether the far-fill bands paint, and a square that paints
+its own top has nothing left for them to fill. **No new paint code**: `draw()`
+already sends a block's top to the flat-rock arm, so a stump's top comes out as
+the raw cross-section of the rock in the block's own side colour, counted as
+`body` and no longer as `capsOff`.
+
+**The obvious second half of the clause -- `|| this.stumpOf(it) > 0` in the CELL
+branch, so a stump also counts as a painted top when a NEIGHBOUR asks -- was built
+and dropped.** The argument for it is good: a square whose top is painted covers
+the stagger between itself and the face in front of it, so `cutMeet()` could cut
+that face a metre and a half deeper than it otherwise would. It buys nothing and
+costs paint. Over 48 views, one build each way (`files/probe-cutmeet.mjs`): the
+deeper cut painted **8,504 wall pixel-faces** where the plain answer painted
+**9,175**, and the bare backdrop was **225 px against 211 px** -- one view apart,
+one seam's worth either way, and no notch in either. Cutting a face deeper than the
+last look cut it, for nothing, is the one direction the renderer calls unsafe, so
+the cell branch answers for a stump exactly as it answered in v0.42.0.
+
+**`files/hole-diff.mjs` is new, and it is what makes "strictly better" sayable.**
+The hole census says how many bare pixels each picture has; this says *which* ones.
+It sweeps two builds over the same worlds and views and reports every view whose set
+of bare-in-the-world pixels changed, each arriving pixel explained. **48 views: 35
+identical pixel for pixel, 13 changed, 2730 bare pixels gone, 9 arrived** -- and the
+nine are lone pixels with **paint on all eight sides**, the shrunken remains of the
+same notch (that one view went 29 -> 38 bare pixels), not a new opening.
+
+**And it has one trap, which cost a whole run:** the explanation for an arriving
+pixel has to be gathered WHILE that pixel's own view is on the screen. Asked for
+after the sweep, it describes whatever view the sweep finished on, so the first
+version of the instrument confidently explained nine pixels with squares from a
+different picture.
 
 ### It cost the harness its own ruler, and that is why the suite was quiet
 
@@ -1368,8 +1447,12 @@ rather than from the look it was written for:
 
 `files/probe-voids.mjs` is the picture's own census: a pixel is a hole when the
 backdrop shows through and the flood from the border cannot reach it. Its negative
-controls are `--caps` (lids back on: the holes close, **0.06%**), `--lips=0` (the
-strip left out: **35.85%**) and `--stump=0` (a clean hole again).
+controls are `--caps` (lids back on, so every hole closes), `--backbands=0` (the
+strip along the far edge left out -- the lattice arm), `--fade=0` (walls solid to
+their tops) and `--stump=0` (the foot of rock gone: a clean hole again).
+`files/mark-holes.mjs` marks the biggest hole on a picture you can look at and
+writes the numbers out; `files/hole-diff.mjs` compares two builds and says *which*
+pixels changed (see above).
 
 ---
 ## The machinery, and why each piece exists

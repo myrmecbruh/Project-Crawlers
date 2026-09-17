@@ -8,6 +8,202 @@ them on an old build.
 
 ---
 
+## v0.44.0 — the rock in front of you is rock again
+
+Their words, in the chat before this one: **"enable backface culling"**, and then
+**"give me the latest build"**. What they were looking at was the fourth wall --
+the near side of the rock standing between the camera and the crawler, which this
+renderer has cut away since v0.34.0 so the room stays legible. Asked for that and
+given the build, the previous session flipped the dial **inside the open browser
+page only** and reported it as done: `CFG.cutSolid = 1` on the live page, no file
+written, no build, nothing they could keep. The order arrived here as a build with
+no change in it.
+
+**One number, and it was already a dial.** `render.cut_solid` (the `knobs` tab)
+went 0 → 1 in both the sheet and `src/defaults.json`. Nothing in the renderer
+moved. `stumpOf()` already answered "no foot" above zero, `cutOut()` already
+refused to hide anything at or above zero, and `alphas()` already read the dial as
+the alpha of a cut square -- so the whole of this release is one value, and the
+machinery it drives stays exactly where it was, tests and all. `cell.cutaway`
+still marks the same squares (`markCutaway`, `10-state.js`), so the light, the
+sight rule, the pointer and the camp go on seeing the world they saw.
+
+**What it costs, measured before it was committed to.** `files/probe-cutlook.mjs`,
+seeds 1, 7, 777 and 2, the view settled: **the floor on screen falls from 38.3% of
+the canvas to 26.5%** (seed 1), 54.2% → 48.8% (777), 53.1% → 35.2% (7). The
+crawlers are the surprise: **399 of 13,885 of their own pixels were covered before
+and 2,599 are covered now -- 2.9% up to 18.7%**, worst single crawler 29% → 96%,
+and on two of the four seeds one crawler is 86-96% hidden by the rock between them
+and the camera. A crawler behind a tall wall is now genuinely behind it.
+
+**The clip does not get the saving back.** `files/probe-cutclip.mjs` runs the
+suite's own nine cases at 1160x780 with both dial values inside ONE build: rock
+**solid** 5,876 → 3,820 faces painted (65.0%), 26,917,888 → 9,287,680 pixels
+(34.5%), 2,056 wall faces buried by the rock next door; rock **cut away** 5,690 →
+3,686 faces (64.8%), 24,108,032 → 8,939,520 pixels (37.1%), 2,004 buried. Solid
+rock paints **186 more faces and 348,160 MORE pixels** than the cut look, because
+a square the cut used to throw away now paints its own faces and its own top. The
+clip is still worth having -- it takes a wall out in 8 of the 9 cases, and with
+`wallFade` off, 9 of 9 -- but this look is the more expensive of the two, and it
+is the more expensive one on purpose.
+
+**The tests were reworked, not switched off, because the machinery they cover is
+still here and a hidden feature rots.** Three looks are now exercised inside one
+build, since the dial can be moved at run time and a change that hides a rule is
+no reason to stop checking the rule:
+- the census and the `nothing you point at or select is ever drawn see-through`
+  pair assert the shipped look (`cutSolid` 1: nothing is hidden, nothing is left
+  behind), and the census additionally builds a small **`cutSolid = 0`** battery --
+  seeds 1 and 7, two tilts, two turns -- so the cut look is still photographed;
+- `a block the cut has cut away is not the block that was there` runs three arms
+  per case, `ship` / `gap` / `bare`: the shipped look may leave nothing out **and**
+  keep no foot; the foot look must leave nothing out either and must keep a foot;
+- `nothing the picture left out can be picked` walks three looks over 24 pictures
+  and the whole pointer: shipped (nothing left out), the dial down with the foot on
+  (**0 squares left out**, and the feet are the ones named), and the v0.37.0 look
+  (`> 0` left out, which is the claim the test was written for).
+
+**And the mistake this fixed was in a test, and it was not the picker.** That last
+test had gone red on v0.43.0 and stayed red, and the reason was that its premise
+had been taken out of the game by the uncommitted work: with `cut_solid` 0 and
+`cut_stump_m` 1 **every** cut square keeps a one-metre foot, so there is nothing
+invisible left in the world to be picked wrongly, and the set of "squares the
+picture left out" was empty **by construction** -- the test was asserting a claim
+about a look that had stopped existing. Under the shipped look the same claim is
+true for a different reason (nothing is hidden at all), and the look it was written
+for is now built on purpose, one dial move away, inside the test.
+
+**One control in the wall-hole test was measuring the wrong thing.** `cutting the
+buried walls opens no hole and moves a hairline only` guarded itself by demanding
+the clip paint strictly fewer faces **and** fewer pixels than the clip switched
+off. On seed 3 with the fade off it paints the same **336 faces** both ways and
+427,008 pixels against 692,224 -- a clip that is plainly working, rejected for
+having the same face count. The guard is now **faces or pixels**, with the arm-wide
+liveness check (`>= 8 px` was taken away, `> 500` cut faces, `> 4,000,000` cut
+pixels) standing behind it.
+
+**The black notches are gone, and not by being fixed.** `files/mark-holes.mjs`,
+the flood census, run at the shipped look -- seeds 1, 2 and 3, five pans, both
+tilts, four turns, **120 views**, 534x348: **180 void pixels and 18 hole pixels in
+total, 6 views of 120 with any hole at all, the worst single view 8 px.** v0.42.0
+left 3,472 px in 30 of its 48 views and v0.43.0 cut that to 264 px in 15 of 48;
+this look simply does not cut the buried walls, so the seam the notch lived in is
+not there to be seen through. That is a consequence of the look, not a repair of
+it -- and the counts are not comparable view for view, because the census grid
+grew from 48 views to 120.
+
+**What was asked for and then taken back.** Part-way through, the order "disable
+backface culling, if I didn't tell you to yet" arrived, and then **"sorry forget
+the new order about backface culling. finish what you were doing"**. No backface
+culling was changed anywhere, and this release is only the rock. For the record
+the only two culls in the renderer are `structure3d()` and `figure3d()`, and a rock
+block has never had one: a block's near faces are chosen by screen order and its
+own far faces are painted as `backBands`.
+
+---
+
+## v0.43.0 — the last of the black notches: a square the cut has cut keeps its top
+
+Their words, twice, pointing the cursor at it: **"there are still some 'holes'
+created by hiding entire corner wall blocks"**, and then the same black notches at
+the corners of the walls. v0.40.0 cut most of them away; what was left was the one
+case where **the only surface that could cover a bare strip was the square's own
+top face, and the renderer had been told not to paint it.**
+
+**A square the cut has cut down to a foot of rock is not a wall.** `capShown()` is
+the single question four things ask -- the picture, `backBand()`, the face clip and
+the halo round a selected thing -- and its answer for a wall was always "a wall's
+top is not painted", because something is meant to be standing in front of it. On
+a cut-down square there is **nothing** standing in front of the near half of its
+own diamond: the block behind it is level with the foot at best and `backBand()`
+refuses at level, and its own faces stop at the foot. So the near half of its top
+diamond was bare backdrop -- the notch, **124 pixels** in the view it was reported in.
+
+The fix is **one clause in `capShown()`** -- the ITEM branch's `|| it.stumped
+=== true`, plus **`|| stub > 0` in `build()`'s `lid`** -- and the second is not
+tidiness: `lid` is what decides whether the far-fill bands paint at all, and a
+square that paints its own top has nothing left for them to fill. **No new paint
+code**: a block's top already goes to the flat-rock arm, so the cut square's top
+comes out as the raw cross-section of the rock in the block's own side colour,
+counted as a body and no longer as a lid.
+
+**The obvious second half of that clause was built, measured, and thrown away.**
+A square whose top is painted covers the stagger between itself and the wall face
+standing in front of it, so if a stump also answered "my top is painted" when the
+NEIGHBOUR asks, `cutMeet()` could cut that face a metre and a half deeper than it
+otherwise would. It buys nothing and costs paint: over the same 48 views, one build
+each way (`files/probe-cutmeet.mjs`), the deeper cut painted **8,504 wall
+pixel-faces** where the plain answer painted **9,175**, and the bare backdrop was
+**225 pixels against 211** -- one view apart, one seam's worth either way, no notch
+in either. Cutting a face deeper than the last look cut it, for nothing, is the one
+direction this renderer calls unsafe, so the cell branch of `capShown()` answers
+about a stump exactly as it answered in v0.42.0.
+
+**Measured, this build against v0.42.0 with one instrument and the same 48 views**
+(`files/mark-holes.mjs`, the flood census -- a pixel is a hole when the backdrop
+shows through and the flood from the border cannot reach it; the same command, the
+same worlds, run against each build):
+
+| | hole pixels | views | worst single hole | worst view | the view it was pointed at |
+|---|---|---|---|---|---|
+| v0.42.0 | 3,472 | 30 of 48 | 124 px | 372 px | 248 px, biggest notch 124 px |
+| **v0.43.0** | **264** | **15 of 48** | **1 px** | **29 px** | **0 px** |
+
+**Every one of the 15 views that changed is a raised view** -- seed 2 and seed 3 do
+not have a single bare pixel left in any of their 32 views, and seed 1's sixteen
+views are pixel for pixel what they were in v0.42.0. That last view in the table is
+`seed 2, pan 0,0, raised`: **two bare patches, the bigger 124 pixels in a row 12
+wide and 20 tall, now nothing at all.** What is left anywhere in the world is a
+lone pixel: 29 of them in the worst view, each with **paint on all eight sides**.
+
+The counters move exactly as the design says they should, which is the proof the
+fix is the intended one and not a coincidence: **tops not painted 15 → 14**, wall
+faces 59 → 58, rock slabs 0 → 1 -- one square stopped being a lid and started being
+rock.
+
+**`files/hole-diff.mjs` is new, and it is what makes "strictly better" sayable.**
+The census says how many bare pixels a picture has; this says *which* ones. It
+sweeps two builds over the same worlds and views and reports every view whose set of
+bare-in-the-world pixels changed, with each departing pixel explained. **48 views:
+36 identical pixel for pixel, 12 changed, 2,730 bare pixels gone, and not one
+arrived** -- every patch that went was a patch of more than 64 pixels, so the
+change removed the notches and touched nothing small.
+
+**The test that was supposed to be guarding this claim was measuring nothing, and
+is re-founded.** Test 4, "cutting the buried walls opens no hole and moves a
+hairline only", counted a hole with `Render.pickAt() < 0` -- the pointer finding
+nothing at all under a pixel -- and that is **unreachable**: 0 of 14,352 sky
+samples across six cameras, so a count of zero from it meant nothing
+(`files/probe-sky.mjs`). The "hairline" it also counted is **identical in v0.42.0
+and v0.43.0 on all eleven of its cameras** (`files/probe-seams.mjs`), so it was
+never this change's to begin with. A hole is now **a patch you could see through**
+-- a region of bare backdrop holding a full 3x3 square of it -- measured on a
+**settled** world (`t.advance(2000)`: step the world, then lift the fetch budget
+and repaint, which is bit-for-bit what letting the game run 2,000 frames gives and
+takes a tenth of a second instead of a minute -- `files/probe-settlefast.mjs`). On
+settled worlds **no 3x3 window exists anywhere in any of the nine cameras** and the
+biggest leftover patch is 19 px of one-pixel speckle; the control, a wall with a
+deliberate gap in it, still has to show 380 px and a window, so a zero can only
+come from a picture that could have failed. The movement bound tightened from 12%
+of the picture to 6%.
+
+**v0.42.0 never existed as a build**, so the rest of the wall job lands here with
+it: the lids stay off (`wallCaps` false), a block paints a **strip along its own
+far edge** (`backBand()`, replacing `wallLips`/`lipQuad`, which are gone), the face
+clip asks `cutMeet(nbr, mine, stepM)` -- keeping a **depth step** more than the
+meeting and **a metre more than that**, because the top metre of the neighbour is
+dissolved upward to nothing and what shows through it has to be rock, not backdrop
+-- and `wallBody` stays false. `cutMeet()`'s two controls, `--fade=0` and
+`--backbands=0`, are both in `files/probe-voids.mjs`.
+
+**And the instrument had one trap, which cost a whole run.** The explanation for an
+arriving pixel has to be gathered **while that pixel's own view is on the screen**.
+Asked for after the sweep, it describes whatever view the sweep finished on -- so
+the first version of `hole-diff.mjs` confidently explained nine pixels using
+squares from a different picture, and the answer looked convincing.
+
+---
+
 ## v0.41.0 — a gradient is not a texture, and the ruler that had been lying about the walls
 
 Their words, three defects at once, with a screenshot:

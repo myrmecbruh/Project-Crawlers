@@ -84,6 +84,21 @@ noted against each line:
   top meter of all visible walls gradient fade to complete transparency"*. What is
   left of their question is only **set pieces** — whether some places should be
   allowed taller walls (question 5 below).
+- ~~**The front rock is cut away so you can see into the room.**~~ **Changed —
+  v0.44.0.** Cutting the near wall away was option B above and it stayed for ten
+  versions. It is a **knob**, `render.cut_solid` (`knobs` tab): nought cuts the
+  rock in the way away, **one draws it like any other rock**, and a value between
+  the two hazes it. It was flipped to one at their instruction, and what is on
+  the other side of the coin is measured rather than argued: with the rock drawn
+  solid **the crawlers' own pixels hidden by the world go from 2.9% to 18.7%**
+  over four seeds, with two of the four hiding a crawler 86% and 96% — a crawler
+  behind a tall wall is now completely out of sight — and the floor on screen in
+  the camp's own view falls from 38.3% to 26.5% (seed 1). See `CHANGELOG.md`
+  v0.44.0 for the numbers and `files/probe-cutsolid.mjs`, `files/probe-cutshare.mjs`,
+  `files/probe-cutlook.mjs` for how they were taken. **Nothing else changed**: the
+  squares are still marked as standing in the way (`cell.cutaway`), so the wall
+  clip, the hole census and the pointer's own rule are all still asked the same
+  questions and still answer them.
 
 ---
 
@@ -160,6 +175,11 @@ Rule 2 says ask and wait. These have been asked and are still open.
      directly behind a hidden block is covered.** Nobody has said whether that
      reads well. It is one number — `render.cut_stump_m`, `knobs` row 41 — so
      zero makes it a clean hole again and two makes a low parapet.
+     **MOOT SINCE v0.44.0, and left here as the record:** the question only
+     existed while the rock in the way was cut away, and the rock is now drawn
+     solid (`render.cut_solid` 1), so nothing is hidden and nothing is left
+     behind. `cut_stump_m` is still the number that would matter if the cutting
+     look ever came back.
    - **Slopes leading up to walls are deliberate and will stop being questioned.**
      Theirs: *"I don't mind slopes leading up to walls. happens in caves and
      rubble all the time."* A session re-reported this as a defect more than once;

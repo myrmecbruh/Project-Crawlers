@@ -49,39 +49,73 @@ const Render = {
      has height), and its top face is the slope a crawler climbs: deleting that
      would delete the route.
 
+     A square the cut has cut down to a foot of rock is the exception, and the
+     only one: its top is a surface the cut made and the only thing covering that
+     part of the square, so it is painted like any floor's -- flat rock, not a
+     lid. See capShown().
+
      This is the A/B control for the new look. True paints the old picture -- the
      yardstick the change is proved against, in one build, exactly as `clipWalls`
      and `stepGround` are. */
   wallCaps: false,
   /* WHAT IS PAINTED WHERE THE LID WAS: the rock itself, flat, with no material
-     on it, lit by the same light the block's own faces are lit by. So the top of
-     a wall is the rock the wall is cut out of rather than a stone lid, there is
-     nothing laid across it that reads as tiling, and a wall's face dissolves into
-     it at the top instead of into a cap.
+     on it, lit by the same light the block's own faces are lit by.
 
-     It has to be SOMETHING. A block inside a mass of rock has no faces of its
-     own painted -- `clipFaces()` culls a face whose neighbour in front is at
-     least as tall -- and what covered that square was the neighbour's own cap.
-     Caps gone and nothing in their place left the mass a LATTICE OF HOLES: the
-     campfire's neighbours going transparent, and the gaps at hidden corner
-     blocks, were both this, and hiding the walls by taking their tops away is
-     what made them. Flat rock closes it, without bringing the lid back.
+     IT IS OFF. This is the picture v0.41.0 shipped, and it is the wrong answer:
+     a slab of rock laid across the top of every wall is a lid again to anybody
+     looking at it, which is what "you put the tops back on the wall blocks" was.
+     A wall's top is not a surface, so nothing is painted on it.
 
-     False is the picture v0.37.0 shipped -- caps gone and nothing in their place
-     -- which is the negative control this is proved against, in one build. */
-  wallBody: true,
+     What fills that space now is the wall's own SIDES. A face is cut only down
+     to where the block in front really reaches -- and one depth step plus the
+     front block's own fade band above that -- so the deeper block's stonework is
+     painted where the lid used to be, and the front block's fade dissolves into
+     ROCK rather than into the backdrop. See cutMeet(). The bare strip along the
+     backs of the walls that the flat top was closing to begin with is what that
+     cut is for.
+
+     True paints the flat top; `wallCaps` true paints the old lit lid. Both are
+     controls, and both are proved against the shipped look inside one build. */
+  wallBody: false,
+  /* WHERE THE FAR HALF OF A LID TOO SMALL TO BE SEEN IS STILL WANTED: the two
+     faces of a block's BACK, cut down to where the square behind it reaches.
+
+     A square's top is a diamond, and the diagonal of it from the far corner to
+     the near one splits it in two. The NEAR half is above the block's own two
+     near faces, which are painted, so it is covered. The FAR half is above the
+     block's own back faces, which face the camera's own quarter and are therefore
+     never painted -- the rock standing BEHIND the square is what covered that
+     half, and while every block had a stone lid nothing showed through. With the
+     lids gone and the backs unpainted, the far half of the diamond is bare, and
+     that is the black wedge that shows at the back of a wall and along the top of
+     a step -- 48,197 pixels of it over the census's 240 views, against 16,952 for
+     the picture that still had lids on everything.
+
+     So each block paints its own two back faces, and only as far up them as the
+     square behind really reaches: `cutWall()` down to `drawnM()` of the neighbour,
+     which leaves exactly the strip the neighbour's top edge cannot cover and not
+     a pixel more -- the rest is underneath this block's own near faces, which are
+     painted after it. Rock, flat and untextured, lit by the shading of the face it
+     lies PARALLEL to, so it reads as the same stone as the wall it belongs to.
+
+     A BLOCK'S TOP, not a floor's: the far half of a floor's diamond is covered by
+     the floor itself, which is painted, so those squares are skipped.
+
+     False is the A/B control, and the hole counts above are proved against it in
+     one build -- see the census in files/probe-voids.mjs. */
+  backBands: true,
   /* THE TOP METRE OF A WALL FADES AWAY TO NOTHING, which is what turns the edges
      the caps used to draw into soft steps instead of a staircase of hard lines.
      The band WEARS THE WALL'S OWN MATERIAL and dissolves it -- the stonework runs
      on up the wall and goes see-through, rather than the material stopping dead
      at the bottom of the band. See wallBand() and paintSide(). `fadeBand()` is
      the flat fallback, for a wall whose material is switched off or is not mapped
-     onto faces at all. */
+     onto faces at all.
+
+     IT COSTS THE CUT A METRE. A block is cut down to where the block in front
+     reaches, and a fading face needs the rock it fades INTO to be there, so the
+     cut stops one fade band short of it. See cutMeet(). */
   wallFade: true,
-  /* THE STRIP A DELETED LID USED TO COVER, painted back -- see `lipShown()`.
-     True is the picture the game ships; false is the negative control that fills
-     the same frame with the holes the strips were needed for. */
-  wallLips: true,
   /* The fourth wall, and what became of it.
 
      Rock standing between the camera and a floor behind it is what stops a
@@ -1152,10 +1186,16 @@ const Render = {
            other line of this file -- its faces, its lid, its pick box and the
            clip against the block in front all come out of these four points. */
         const stub = this.stumpOf(cell);
+        /* The highest corner of the square AS DRAWN, which is not the same thing
+           as the square's own height `h`: a ramp that starts at the floor has no
+           height of its own and still rises a metre across itself, and the rock
+           in that metre is a wall. See `solid` below. */
+        let hi = 0;
         for (let c = 0; c < 4; c++) {
           const ch = cornerHeight(cell, c);
-          top[c] = this.project(s, x + CORNERS[c][0], y + CORNERS[c][1],
-                                stub > 0 ? Math.min(ch, stub) : ch);
+          const chd = stub > 0 ? Math.min(ch, stub) : ch;
+          if (chd > hi) hi = chd;
+          top[c] = this.project(s, x + CORNERS[c][0], y + CORNERS[c][1], chd);
         }
         this.bounds(top, box);
         if (box[2] < 0 || box[0] > this.w || box[1] > this.h) continue;
@@ -1177,22 +1217,45 @@ const Render = {
         const near = order[3], left = order[2], right = order[1];
         const bases = [baseA, baseB, baseC, baseD];
 
+        const wallM = this.drawnM(cell);
+        const solid = cell.h > 0 || hi > cell.h;
+        /* Whether this square's own top is painted at all. Where it is NOT (the
+           lid of a wall block, unless Render.wallBody or the square is a stump),
+           the far half of the square is left bare and something has to cover it
+           -- see Render.backBands and backBand() below. A floor's top is always
+           painted, so a floor never needs the help. Asked with the same words
+           the picture paints the top by, item and all, so the two cannot drift
+           -- `stub` is the one word that has to be here as well as there,
+           because a stump paints its own cut top (see Render.capShown) and
+           therefore has nothing left to fill. */
+        const lid = this.wallCaps || TILE(cell.tile).footing !== 'block'
+                 || (this.wallBody && solid) || stub > 0;
+        const backR = lid ? null : this.backBand(w, x, y, wallM, order[0], right, top, bases);
+        const backL = lid ? null : this.backBand(w, x, y, wallM, order[0], left, top, bases);
+
         b.push({
           kind: 'cell', i: i, cell: cell, top: top, depth: depth, light: light,
           left: [top[near], top[left], bases[left], bases[near]],
           right: [top[near], top[right], bases[right], bases[near]],
-          solid: cell.h > 0,
+          /* Anything with rock standing in it is solid, INCLUDING a ramp that
+             climbs out of the floor: its own `h` is 0 and its far corner is a
+             metre up, so the metre of rock under that corner is a wall face and
+             has to be drawn like one. That was the "missing floor at wall
+             corners" -- a h0 ramp's flank was being skipped as if it were
+             ground. */
+          solid: solid,
           /* Whether the square's top face is a wall's lid rather than ground you
              can stand on -- see Render.capShown(). Read off the tile's FOOTING,
              because a ramp's square has height too and its top is the slope the
              crawler climbs. */
           block: TILE(cell.tile).footing === 'block',
-          wallM: this.drawnM(cell),   /* how far the faces drop, in metres */
+          wallM: wallM,               /* how far the faces drop, in metres */
           /* The corner both faces hang from, and the far corner of each face, so
              the clip below can tell which of the four edges a face stands on.
              Then the wall cut down to the block in front: see clipFaces(). */
           near: near, cornerL: left, cornerR: right,
           nbrL: -1, nbrR: -1, cutL: null, cutR: null, cutML: 0, cutMR: 0,
+          backL: backL, backR: backR,
           cutaway: cell.cutaway === true,
           /* A block that is hidden behind the wall in front but keeps a foot of
              itself standing -- see stumpOf(). It paints solid all the way down
@@ -1279,40 +1342,72 @@ const Render = {
       /* A block with a ramp in it is drawn from its two lowest corners, which
          are not always the two faces it shows, so a ramp keeps its whole wall. */
       if (it.cell.slope !== SLOPE_FLAT) continue;
-      this.clipFaces(w, it, k, at);
+      /* A depth step, in metres: how far down the picture the top edge of one
+         block sits below the top edge of the block in front of it. Derived from
+         the camera every frame rather than written down -- `tileH` is 16 at the
+         low angle and 27 at the raised one, so a literal here would be wrong the
+         moment the view is tilted. See cutMeet(). */
+      this.clipFaces(w, it, k, at, s.cam.tileH / CFG.rise);
     }
 
     s.geomDirty = false;
     return b;
   },
 
+  /* How far up a face the square standing in front of it may hide it -- the ONE
+     answer the picture, the outline and the pointer all share, so the three
+     cannot disagree.
+
+     MEETING IS NOT COVERING. Where two blocks meet, and the face cut down to
+     where they meet, was right for as long as a wall wore a LID. A lid lies
+     across the top of its own square, so it covered the STAGGER between the two
+     blocks: our top edge sits `cam.tileH` pixels below the top edge of the block
+     one square in front of us, and the lid of that block -- painted after us --
+     covered every one of them. One pixel of stagger per pixel of ground: at the
+     low camera angle `tileH` is 16 and a metre is 32, so the lid covered a depth
+     step, which is what `tileH / rise` metres is.
+
+     The lids are gone, so the front block's own two near sides are all there is,
+     and those start at its top edge. Everything between its top edge and ours is
+     now bare -- which is why a face keeps a depth step more than the meeting.
+
+     AND A METRE MORE THAN THAT WHEN IT FADES. The top metre of a wall is
+     dissolved upward to nothing (paintSide), so what shows through it has to be
+     ROCK and not the backdrop. The block behind a fading top therefore keeps that
+     metre, and is seen through it: the rock continues up the wall and goes
+     see-through, which is the whole point of the fade.
+
+     A FLOOR OR A RAMP in front is not like a block at all: its top face IS
+     painted (`capShown`), it is never more than a step or two below us, and the
+     wall standing on the edge of a room must go on being cut exactly where it
+     was cut. So there the old rule stands, to the pixel.
+
+     `drawnM` rather than `cell.h`, because what a square promises from the world
+     and what it PAINTS are two different things once a hidden block is keeping
+     only a foot of itself standing. */
+  cutMeet(nbr, mine, stepM) {
+    const hide = this.capShown(nbr) ? 0 : stepM + CFG.wallFadeM;
+    return Math.max(0, Math.min(mine, this.drawnM(nbr) - hide));
+  },
+
   /* Cut a block's two side walls down to where the square standing in front of
      it reaches.
      *
      * A face stands on the edge it shares with that square. Where the square is
-     * a block at least as tall as this one -- which rock is, and rock is most
-     * of what is on screen -- the whole face is inside it: that block's own top
-     * and its two near sides are painted over the same edge a moment later, so
-     * not one of those pixels can be seen. What does show is cut down to where
-     * the two blocks meet, and a face cut away to nothing is not painted at
-     * all.
+     * a block tall enough to bury the face, the whole face comes out of the
+     * picture, and a face cut away to nothing is not painted at all. How much of
+     * it counts as buried is `cutMeet()` -- a depth step short of the meeting,
+     * because there is no lid any more to cover the stagger.
      *
-     * IT IS THE BLOCK'S TOP THAT DID THE COVERING, so once the tops are gone
-     * (`wallCaps`) the head of that face comes back into view and has to be
-     * painted -- the top metre of it, which is what `lipShown()` and `lip()` in
-     * draw() are for. Left out, it is a hole through the middle of the rock.
-     *
-     * Only a FLAT, full-height neighbour qualifies. A flat block is a plain box
-     * whose top and two near sides are exactly what it shows, so it certainly
-     * covers everything it hides. A ramp is drawn from its two lowest corners,
-     * which are not always the two faces it shows; a floor or a pit is too low
-     * to hide anything.
+     * ONLY A FLAT neighbour qualifies, and it has to be full-height: a ramp is
+     * drawn from its two lowest corners, which are not always the two faces it
+     * shows, and a floor or a pit is far too low to hide anything.
      *
      * The cut is only allowed while that block PAINTS SOLID, and that is not
-     * known until draw() -- fade it, because you are inspecting something
-     * behind it, and the whole face has to come back or the fade would open a
-     * hole. So both shapes are worked out here and draw() picks between them. */
-  clipFaces(w, it, k, at) {
+     * known until draw() -- fade it, because you are inspecting something behind
+     * it, and the whole face has to come back or the fade would open a hole. So
+     * both shapes are worked out here and draw() picks between them. */
+  clipFaces(w, it, k, at, stepM) {
     const cell = it.cell, x = cell.x, y = cell.y;
     for (let f = 0; f < 2; f++) {
       const other = f === 0 ? it.cornerL : it.cornerR;
@@ -1331,16 +1426,9 @@ const Render = {
          `wallM` and not `cell.h`, because a block that only keeps a foot of
          itself standing (`stumpOf`) is a one-metre block as far as this picture
          is concerned -- clipped against a metre of rock in front it would come
-         out as a sliver of no height at all.
-
-         AND SO IS THE BLOCK IN FRONT'S. `drawnM` is what it PAINTS, which is
-         its real height unless it is itself a hidden block keeping a foot, and
-         then a metre. `cell.h` there was the whole of the strip of bare rock
-         along the backs of the walls: the neighbour promised six metres of cover
-         from the world and then painted one, and the five it cleared were
-         painted by nobody. */
+         out as a sliver of no height at all. */
       const mine = it.wallM;
-      const meet = Math.min(mine, this.drawnM(nbr));
+      const meet = this.cutMeet(nbr, mine, stepM);
       if (f === 0) {
         it.nbrL = nk;
         it.cutML = mine - meet;
@@ -1362,6 +1450,48 @@ const Render = {
             { x: quad[3].x, y: quad[3].y - meet * CFG.rise }];
   },
 
+  /* THE STRIP OF ROCK A BLOCK SHOWS WHERE THE BLOCK BEHIND IT IS LOWER.
+
+     A wall has no lid any more (see this.wallBody), so a block paints its two
+     near faces and nothing else. What covers the rest of its square -- the whole
+     of its top diamond, both halves -- is the block BEHIND it, whose own near
+     wall runs down from the edge they share. That is why deleting the lid did
+     not leave a hole everywhere: the wall behind was already painting that space
+     and does not know the lid is gone.
+
+     It only works while the block behind reaches as high. Where it is lower --
+     a floor, a step down, a wall a metre short -- its wall stops short of this
+     block's top edge, and the strip between the two is bare backdrop: a black
+     wedge along the back edge of the rock, at every corner where two low
+     neighbours meet. That is exactly what "missing floor pieces at wall corners"
+     was.
+
+     The strip is the far face of THIS block, seen over the top of the one behind
+     it, and it is drawn as the same wall cut down to `drawnM(neighbour)` -- the
+     face from this block's own top edge down to the height its neighbour reaches,
+     so it fills the gap exactly and stops where the neighbour's wall begins.
+
+     NOTE WHAT THIS IS NOT: a lid. Nothing is drawn where the neighbour is as
+     tall as this block (`low < mine` refuses), which is most of the rock in the
+     labyrinth -- `Render.wallBody` painted a slab across EVERY wall and that is
+     the wrong answer. This paints only the far side of a block that has nothing
+     standing behind it, and that side is visible rock by anybody's reading.
+
+     Returns null when there is nothing to paint, so the common case costs two
+     world lookups and no quad. */
+  backBand(w, x, y, mine, anchor, other, top, bases) {
+    if (!this.backBands || !(mine > 0)) return null;
+    /* Which of the four edges the far corner and this one share, named by the
+       corner it runs from: the same rule the clip uses. */
+    const e = other === (anchor + 1) % 4 ? anchor : other;
+    const nbr = w.at(x + EDGE_STEP[e][0], y + EDGE_STEP[e][1]);
+    if (!nbr) return null;             /* no piece there: nothing to read */
+    const low = this.drawnM(nbr);
+    if (!(low < mine)) return null;    /* the neighbour's wall covers it all */
+    return this.cutWall([top[anchor], top[other], bases[other], bases[anchor]],
+                        top[anchor], top[other], low);
+  },
+
   /* One path, one fill. */
   poly(ctx, pts, fill) {
     this.path(ctx, pts);
@@ -1370,58 +1500,60 @@ const Render = {
   },
 
   /* IS THIS SQUARE'S TOP FACE PAINTED? A floor's always is -- that is the ground
-     you walk on. A ramp's always is too. A block's is not a lid any more, but the
-     rock is painted there instead (`wallBody`), so the answer is still yes for
-     every square in the picture: asked in one place because four things have to
-     agree about it -- the picture, the pick buffer, the pointer's own answer, and
-     the halo round a selected thing -- and a halo that rings a surface nobody
-     painted is a ring drawn round nothing.
+     you walk on. A ramp's always is too. A BLOCK'S IS NOT: a wall's top is a
+     surface nobody in the game ever stands on, so it comes out of the picture --
+     cap, material and all it cost (v0.42.0; `wallCaps` and `wallBody` are the two
+     controls that put a top back, and this answer has to be asked in one place
+     because four things depend on it: the picture, what fills the space the top
+     leaves, `clipFaces()`, and the halo round a selected thing -- a halo that
+     rings a surface nobody painted is a ring drawn round nothing).
 
-     Only the two control arms take a block's top out of the answer: `wallCaps`
-     (the old lit lid is painted, so the top is painted the old way) and
-     `wallBody` off (v0.37.0's picture, where a block's top really is a hole). */
-  capShown(it) { return this.wallCaps || !it.block || (this.wallBody && it.solid); },
+     IT TAKES A CELL AS WELL AS AN ITEM, and that is not tidiness: `cutMeet()` asks
+     this about the NEIGHBOUR, which has no item built for it yet -- `clipFaces()`
+     runs after the sort, long after the items were made.
 
-  /* WHETHER A FACE THAT IS NOT PAINTED STILL SHOWS A STRIP OF ITSELF.
+     AND A STUMP ANSWERS YES FOR ITSELF AND NO FOR ITS NEIGHBOUR. The other way
+     round was built and measured, because the argument for it is good: a square
+     whose top is painted covers the stagger between itself and the face standing
+     in front of it, so `cutMeet()` may cut that face a metre and a half deeper
+     than it otherwise would. It buys nothing and costs paint. Over 48 views, one
+     build each way (`files/probe-cutmeet.mjs`): the deeper cut painted 8504 wall
+     faces across the whole sweep where the old answer painted 9175, and the bare
+     backdrop was 225 pixels against 211 -- one view apart, one seam's worth
+     either way, and no notch in either. Cutting a face deeper than the last look
+     cut it, for nothing, is the one direction this file calls unsafe (see
+     `cutMeet`), so the deeper cut is not here: the cell branch below answers for
+     a stump exactly as it answered in v0.42.0.
 
-     A face is not painted at all where the block in front of it is at least as
-     tall (`cutML` 0): that block's own LID used to cover every pixel of it, and
-     with the lids gone (`wallCaps`) the top of the face comes back into view --
-     the block in front stands one tile nearer, so its top edge sits half a metre
-     lower down the screen, and the half metre between the two edges is this face
-     seen over the front block's shoulder. Left unpainted it is a hole straight
-     through the middle of the rock, which is what the picture had: measured at
-     900 px from the camp, 42% of the picture unpainted in 216 separate holes.
+     A SQUARE THE CUT HAS CUT IS NOT A WALL, and its top IS painted. Where a
+     hidden block keeps a foot of rock standing (`stumpOf`), the lid comes back
+     for that square alone, and for the same reason it was taken away: a lid is
+     wrong because a wall's top is a surface nobody stands on and a row of them
+     across the labyrinth read as tiling, and neither of those is true of a metre
+     of rock standing in the middle of a room. The CUT made that surface. It is
+     the raw cross-section of the rock, it is the one thing a player sees from
+     across a room, and it is the only thing that covers the near half of its own
+     square: the half behind the shared edge with the square BEHIND it, where
+     that square is level with the foot or lower -- which is every floor and
+     every other stump -- leaves `backBand()` with nothing to paint (`low < mine`
+     refuses at level) and the front faces standing below it. Measured with
+     `files/probe-voids.mjs --why`: bare backdrop, a lens 12 px wide and 20 px
+     tall in the middle of the top diamond. That is "black notches at wall
+     corners", and it is this face.
 
-     Only where the front block's top is a wall's LID: where it is a raised
-     FLOOR, that floor's own surface is painted and covers the strip itself. */
-  lipShown(nbr, b) {
-    return this.wallLips && nbr >= 0 && nbr < b.length && !this.capShown(b[nbr]);
+     Painting it where something else covers it too costs one fill and can hide
+     nothing, because the square in front of this one is painted after it (see
+     `drawnM`). */
+  capShown(it) {
+    if (this.wallCaps) return true;
+    if (it.block === undefined) {
+      const t = TILE(it.tile);
+      return t.footing !== 'block' || (this.wallBody && it.h > 0);
+    }
+    return !it.block || (this.wallBody && it.solid) || it.stumped === true;
   },
 
-  /* The strip itself: the top of the face, faded by the same rule as any other
-     wall, and no more of the face than the fade reaches. With the fade off it is
-     painted flat, because the strip is not a hole either way. */
-  lip(ctx, quad, colour) {
-    if (CFG.wallFadeM > 0) { this.fadeBand(ctx, quad, CFG.wallFadeM, colour); return 1; }
-    this.poly(ctx, this.lipQuad(quad), colour);
-    return 0;
-  },
 
-  /* The shape `lip()` paints, worked out in one place because the picture, the
-     pointer's own answer and the yardstick it is checked against all have to
-     agree about where the strip is. Half a metre is the least it can be, and
-     that is not a taste: the block in front stands one tile nearer, which puts
-     its top edge half a metre lower down the screen, and the strip between the
-     two edges is exactly that. A band of a face is this same shape, so both come
-     from `bandQuad()`. */
-  lipQuad(quad) {
-    return this.bandQuad(quad, Math.max(CFG.wallFadeM, 0.5) * CFG.rise);
-  },
-
-  /* A face's top edge with the same two sides `d` pixels further down: the shape
-     a fade is painted into, whether the fade is a flat colour or the material's
-     own. Worked out in one place for the same reason as `lipQuad()`. */
   bandQuad(quad, d) {
     const a = quad[0], c = quad[1];
     return [a, c, { x: c.x, y: c.y + d }, { x: a.x, y: a.y + d }];
@@ -1501,7 +1633,12 @@ const Render = {
      carrying the material, so `consumed` can count them and a test can prove the
      material reached the fade rather than arguing that it did. */
   paintSide(ctx, quad, metres, colour, fill, band) {
-    if (!this.wallFade || !(metres > 0)) { this.poly(ctx, quad, fill); return 0; }
+    /* A face NO TALLER THAN THE FADE BAND is painted whole, material and all.
+       There is no "top metre" of a one-metre face to fade -- the band would be
+       the whole face, and a gradient across all of it dissolves a stump of rock
+       into nothing, which is a hole in the wall rather than a fading one. The
+       band is the top of a wall, not a height. */
+    if (!this.wallFade || !(metres > CFG.wallFadeM)) { this.poly(ctx, quad, fill); return 0; }
     const m = Math.min(CFG.wallFadeM, metres);
     if (!(m > 0)) { this.poly(ctx, quad, fill); return 0; }
     const d = m * CFG.rise;
@@ -1560,7 +1697,13 @@ const Render = {
     const hideL = this.clipWalls && it.nbrL >= 0 && alphaOf[it.nbrL] === 1;
     const hideR = this.clipWalls && it.nbrR >= 0 && alphaOf[it.nbrR] === 1;
     return { l: hideL ? it.cutL : it.left, r: hideR ? it.cutR : it.right,
-             ml: hideL ? it.cutML : it.wallM, mr: hideR ? it.cutMR : it.wallM };
+             ml: hideL ? it.cutML : it.wallM, mr: hideR ? it.cutMR : it.wallM,
+             /* And the strip of rock this block shows along its far edges, where
+                the block behind is too low to cover it -- see backBand(). Null
+                for every block that has a wall of its own height behind it, which
+                is most of them, and null for a floor or a ramp, which paint their
+                own top and so are never bare up there. */
+             bl: it.backL, br: it.backR };
   },
 
   /* HOW FAR A SIDE OF A BLOCK STANDS, and no further: from that square's own cap
@@ -1570,14 +1713,16 @@ const Render = {
      Worked out from the WORLD -- how far the neighbour square's own rock is
      PAINTED, which is its real height except for a hidden block keeping a foot
      of itself -- so it can never be stretched by the picture deciding to fade or
-     skip something. How tall the side itself is comes from the item's `wallM`,
-     which is its own height unless it is a hidden block keeping only a foot of
-     itself (`stumpOf`). `f` is
+     skip something, and then by `cutMeet()`, which is the same answer the cut
+     uses: a side stops a depth step short of the meeting, because the lid that
+     used to cover that step is not painted any more. How tall the side itself is
+     comes from the item's `wallM`, which is its own height unless it is a hidden
+     block keeping only a foot of itself (`stumpOf`). `f` is
      0 for the left side and 1 for the right, matching `it.left` / `it.right`; the
      edge index is the same one `clipFaces()` names, so the two agree about which
      neighbour a side faces. Null means that side is not part of the silhouette
      at all. */
-  sideShown(w, item, f) {
+  sideShown(w, item, f, stepM) {
     const quad = f === 0 ? item.left : item.right;
     const cell = item.cell;
     if (!this.clipWalls || cell.slope !== SLOPE_FLAT) return quad;
@@ -1590,9 +1735,10 @@ const Render = {
     /* How far the side really stands, which is `wallM` -- the block's own height
        unless it is a hidden block keeping only a foot of itself, and then a
        metre. The block in front is asked the same way and with the same helper,
-       so the outline, the pick list and the picture cannot disagree about a
-       stumped block or about the block covering it. */
-    const meet = Math.min(item.wallM, this.drawnM(nbr));
+       `cutMeet()` -- the very one `clipFaces()` asks, so the outline, the pick
+       list and the picture cannot disagree about a stumped block, about the
+       block covering it, or about the depth step. */
+    const meet = this.cutMeet(nbr, item.wallM, stepM);
     return meet < item.wallM
       ? this.cutWall(quad, item.top[item.near], item.top[other], meet)
       : null;
@@ -1611,7 +1757,7 @@ const Render = {
      long spike -- which is what "highlight lines zig-zagging all over the place"
      was, and it came and went with which blocks happened to be see-through. A block is
      ringed by its cap and by the two sides as far as they really stand. */
-  shapeOf(w, item) {
+  shapeOf(w, item, stepM) {
     if (item.parts) {
       const out = [];
       for (let i = 0; i < item.parts.length; i++) {
@@ -1630,7 +1776,7 @@ const Render = {
        rule this was fixed from. Measured, it escapes the shapes that were painted
        in 37 of that test's 50 selections, by as much as 220px. */
     if (this.ringStored) return [item.top, item.left, item.right].filter(Boolean);
-    const l = this.sideShown(w, item, 0), r = this.sideShown(w, item, 1);
+    const l = this.sideShown(w, item, 0, stepM), r = this.sideShown(w, item, 1, stepM);
     if (l) out.push(l);
     if (r) out.push(r);
     return out;
@@ -1810,7 +1956,8 @@ const Render = {
     const ctx = this.bctx, b = this.batch;
     const kinds = {};
     let drawn = 0, people = 0, structures = 0;
-    let walls = 0, wallPx = 0, buried = 0, kept = 0, lost = 0, faded = 0, lips = 0;
+    let walls = 0, wallPx = 0, buried = 0, kept = 0, lost = 0, faded = 0;
+    let backs = 0, backPx = 0;
     let banded = 0;
     /* How many top faces were painted, how many of those were the rock of a wall
        rather than a surface somebody laid, and how many were left out because
@@ -1880,7 +2027,8 @@ const Render = {
          are looking at -- and its halo goes down first, at full strength. */
       if (focus && k === focusPos) {
         ctx.globalAlpha = 1;
-        this.halo(ctx, this.shapeOf(s.world, it), outlineColour, CFG.outlineWidth);
+        this.halo(ctx, this.shapeOf(s.world, it, s.cam.tileH / CFG.rise),
+          outlineColour, CFG.outlineWidth);
         outlined = true;
       }
       ctx.globalAlpha = alpha;
@@ -2015,33 +2163,90 @@ const Render = {
         const pic = sided && this.drawn(mat);
         const lfPic = pic ? lightShade(CFG.shadeLeft * lift, it.light) : undefined;
         const rfPic = pic ? lightShade(CFG.shadeRight * lift, it.light) : undefined;
+        /* THE STRIP OF ROCK THIS BLOCK SHOWS ALONG ITS FAR EDGES, where the block
+           behind it is too low to cover it -- see backBand(), which is the whole
+           story. Painted FIRST of this block's faces, because a strip reaches
+           down past the far edge and over the ground the two near faces are about
+           to cover; painted after them it would lie across the front of the
+           stonework. What it actually shows is the part our own faces do not
+           cover, which is the strip that was bare backdrop.
+
+           Flat and OPAQUE, on purpose. Opaque, because a strip that dissolved
+           would reopen the very gap it is here to shut. Flat only where the
+           strip has no drop of its own to map onto (see faceFill): otherwise the
+           material is MAPPED onto it exactly as it is onto the faces below it,
+           one tile to one metre, because a strip of plain colour along the top of
+           every wall's back edge is the same complaint as a texture that stops
+           where the fade begins.
+
+           Each strip is parallel to one of the two near faces and takes that
+           face's own shade, so the rock at the back of a block is lit as the
+           block is: the far edge running with the left face's edge takes the
+           left shade. */
+        const bkL = faced.bl, bkR = faced.br;
+        if (bkR) {
+          const brD = Math.max(0, (bkR[3].y - bkR[0].y) / CFG.rise);
+          const fill = sided && brD > 0 ? this.wall(lf, mat, bkR, brD, lfPic,
+            it.cell.x, it.cell.y, PICK_LEFT) : lf;
+          this.poly(ctx, bkR, fill);
+          backs++; backPx += this.area(bkR);
+        }
+        if (bkL) {
+          const blD = Math.max(0, (bkL[3].y - bkL[0].y) / CFG.rise);
+          const fill = sided && blD > 0 ? this.wall(rf, mat, bkL, blD, rfPic,
+            it.cell.x, it.cell.y, PICK_RIGHT) : rf;
+          this.poly(ctx, bkL, fill);
+          backs++; backPx += this.area(bkL);
+        }
         if (qL) {
-          const fill = sided ? this.wall(lf, mat, qL, mL, lfPic,
+          /* How far the face really drops at the corner it is drawn from, which
+             is what a mapped material is measured against -- one tile of
+             stonework to one metre of wall. It is `mL` for every block (the cut
+             raises the foot and shortens the metres together) and it is the DROP
+             for a ramp, whose own `h` is measured from the floor it climbs out
+             of and so can be a metre out. A face with no drop here is the thin
+             end of a triangle, and a map is not defined on one. */
+          const dL = Math.max(0, (qL[3].y - qL[0].y) / CFG.rise);
+          const fill = sided && dL > 0 ? this.wall(lf, mat, qL, dL, lfPic,
             it.cell.x, it.cell.y, PICK_LEFT) : lf;
           /* The band above the face wears the SAME picture of the material, from
              the same square and the same salt, and dissolves it -- which is the
              whole of what a person sees when they say the texture stops where the
-             fade starts. A square that only keeps a FOOT of rock is never faded:
-             the band is the top metre and would dissolve the entire foot, which
-             is the hole this look exists to close. */
-          const band = sided && CFG.wallFadeM > 0 && !it.stumped
+             fade starts. It is asked for only where there is opaque rock BENEATH
+             it (`mL` more than the band is worth): a band whose whole face is
+             band is a face painted at nothing at all, which is how a one-metre
+             stump used to disappear into a hole. */
+          const band = sided && mL > CFG.wallFadeM
             ? this.wallBand(lf, mat, lfPic, it.cell.x, it.cell.y, PICK_LEFT,
                             Math.min(CFG.wallFadeM, mL)) : null;
           const bit = this.paintSide(ctx, qL, mL, lf, fill, band);
           if (bit) faded++;
           if (bit === 2) banded++;
           walls++; wallPx += this.area(qL);
-          /* A point the block certainly painted: below the faded top edge, on
-             the diagonal of the face it just laid down. */
-          myAim = { x: (qL[0].x + qL[2].x) / 2, y: qL[0].y + (qL[2].y - qL[0].y) * 0.6 };
+          /* A point this block certainly painted AND that nothing in front of it
+             painted over -- because a face is now only ever cut PART of the way
+             down (`cutMeet`), and what it keeps below is exactly the strip the
+             block in front covers.
+             *
+             * How tall the strip that really shows is: the block in front stands
+             * one square nearer, which is `cam.tileH / 2` pixels down the picture
+             * -- 16 at the low angle, 27 at the raised one -- and it paints its
+             * own faces from there down. So a quarter of a depth step below the
+             * face's own top edge is inside the face and above every coverer,
+             * whether the face was cut or not. The middle of the face will not
+             * do any more: a cut face is two metres and more, and its lower half
+             * belongs to the block in front, which is the whole reason for the
+             * cut. */
+          myAim = { x: (qL[0].x + qL[1].x) / 2,
+                    y: (qL[0].y + qL[1].y) / 2 + s.cam.tileH / 4 };
         } else {
           buried++;
-          if (this.lipShown(it.nbrL, b)) { lips++; faded += this.lip(ctx, it.left, lf); }
         }
         if (qR) {
-          const fill = sided ? this.wall(rf, mat, qR, mR, rfPic,
+          const dR = Math.max(0, (qR[3].y - qR[0].y) / CFG.rise);
+          const fill = sided && dR > 0 ? this.wall(rf, mat, qR, dR, rfPic,
             it.cell.x, it.cell.y, PICK_RIGHT) : rf;
-          const band = sided && CFG.wallFadeM > 0 && !it.stumped
+          const band = sided && mR > CFG.wallFadeM
             ? this.wallBand(rf, mat, rfPic, it.cell.x, it.cell.y, PICK_RIGHT,
                             Math.min(CFG.wallFadeM, mR)) : null;
           const bit = this.paintSide(ctx, qR, mR, rf, fill, band);
@@ -2050,7 +2255,6 @@ const Render = {
           walls++; wallPx += this.area(qR);
         } else {
           buried++;
-          if (this.lipShown(it.nbrR, b)) { lips++; faded += this.lip(ctx, it.right, rf); }
         }
         /* THE TOP METRE OF A VISIBLE WALL FADES AWAY, right here rather than in
            a pass of its own, because the block in front of this one paints after
@@ -2066,18 +2270,30 @@ const Render = {
         if (it.nbrL >= 0 && alphaOf[it.nbrL] !== 1) { if (qL) kept++; else lost++; }
         if (it.nbrR >= 0 && alphaOf[it.nbrR] !== 1) { if (qR) kept++; else lost++; }
       }
-      /* THE TOP OF A WALL IS THE ROCK, NOT A LID. Everything else is painted as
-         it always was: the ground here is a floor's own surface, or a ramp's
-         slope, and both carry their material. A block's cap -- the stone lid it
-         laid across the top of the rock, material and all -- is not; what is
-         painted in its place is the rock itself, flat and untextured, lit like
-         the wall's own faces, so a wall's top is the stuff the wall is cut out of
-         and the face below dissolves into it rather than into a cap. See
-         `wallBody`.
+      /* THE TOP OF A WALL IS NOT PAINTED AT ALL. Everything else is painted as it
+         always was: the ground here is a floor's own surface, or a ramp's slope,
+         and both carry their material -- that is the ground you walk on. A block's
+         cap, the stone lid it laid across the top of the rock, is not, and NOTHING
+         takes its place. What fills that space is the rock's own SIDES: a face is
+         only cut down to where the block in front reaches, plus a depth step and
+         the front block's own fade band above that (`cutMeet`), so the wall behind
+         reaches up into the space the lid vacated and the one in front dissolves
+         into ROCK rather than into the backdrop.
 
-         It is a flat fill and NOT the ground's own painter, on purpose: a
-         material on a wall's top is a surface somebody laid, and laying one over
-         every rock in the labyrinth is the tiling this is here to remove. */
+         The two control arms put something back, and both are proved against this
+         look inside one build: `wallCaps` paints the old lit lid, material and
+         all, and `wallBody` paints the rock flat and untextured -- v0.41.0's
+         picture, which is the wrong answer: a slab of rock laid across the top of
+         every wall is a lid again to anybody looking at it.
+
+         ONE TOP DOES COME BACK, and it is the flat rock arm that paints it: a
+         square the cut has cut, keeping a foot of rock standing, has a top the
+         cut itself made and nothing else covers that part of it. `capShown` is
+         the single place that decides it, so this branch is where the cut face of
+         a stump is painted -- flat, because it is rock and not a surface anybody
+         laid, and in the block's own side colour so the kerb reads as the same
+         stone it was cut out of. It counts as `body` with the control arm's
+         slabs, and `capsOff` no longer counts it. */
       if (this.capShown(it)) {
         if (it.block && !this.wallCaps) {
           this.poly(ctx, it.top, litShade(def.side, CFG.shadeLeft * lift, it.light));
@@ -2118,11 +2334,19 @@ const Render = {
       /* Side walls only: how many were painted, how much picture they covered,
          and how many were buried in the block in front and not painted at all. */
       walls: walls, wallPx: Math.round(wallPx), buried: buried,
+      /* And the strips of rock a block shows along its far edges where nothing
+         as tall stands behind it, and how much picture they covered. Zero of
+         these with the lids off is a picture with black wedges in it, which is
+         what "missing floor pieces at wall corners" was; a lot of them is a
+         block being given its top back. `wallBody` is the flag that paints a
+         slab over every wall, and it is off: this count is the honest one. */
+      backs: backs, backPx: Math.round(backPx),
       /* The top faces of the picture: floors and ramps painted as surfaces
-         somebody laid, and `body` of them painted as the plain rock of a wall.
-         `capsOff` is what is left unpainted, which with the look the game ships
-         is nothing. The three together are every square that got as far as being
-         drawn. */
+         somebody laid, `body` of them painted as the plain rock of a wall
+         (`wallBody`, and the cut face of every stump), and `capsOff` of them not
+         painted at all -- which is every wall block in the frame, because a wall
+         has no top, and a stump is not a wall. The three together are
+         every square that got as far as being drawn. */
       caps: caps, capsOff: capsOff, body: body,
       /* How many wall faces painted a faded band across their top metre, and how
          many of those bands carried the face's own material rather than a flat
@@ -2130,10 +2354,6 @@ const Render = {
          reached nothing; bands > 0 with banded 0 is a wall whose stonework still
          stops at the bottom of the band. */
       faded: faded, banded: banded,
-      /* How many faces the block in front would have hidden came back as the
-         strip its deleted lid used to cover -- see lipShown(). Zero of these
-         with lids left off is rock with a hole through the middle of it. */
-      lips: lips,
       /* How many faces came back in full because the block that would have
          hidden them is cut away, and how many stayed out anyway -- which must
          be none. */
@@ -2201,19 +2421,18 @@ const Render = {
            function's blind spot rather than the two agreeing. */
         const faced = this.wallsPainted(it, this.alphas(s, b).list);
         const qL = faced.l, qR = faced.r;
+        /* The strips at the back, in the same order the picture paints them --
+           this is the yardstick the pointer is measured against, so it has to
+           cover what the picture covers. */
+        if (faced.br) this.poly(ctx, faced.br, col);
+        if (faced.bl) this.poly(ctx, faced.bl, col);
         if (qL) this.poly(ctx, qL, col);
         if (qR) this.poly(ctx, qR, col);
-        /* The strip of a culled face that still shows is painted, so it is
-           painted here too -- otherwise the yardstick would deny a pixel the
-           picture really did paint, and the battery would be measuring the
-           yardstick's blind spot rather than the two answers agreeing. */
-        if (!qL && this.lipShown(it.nbrL, b)) this.poly(ctx, this.lipQuad(it.left), col);
-        if (!qR && this.lipShown(it.nbrR, b)) this.poly(ctx, this.lipQuad(it.right), col);
       }
       /* Whatever covers a square's top in the picture covers it here too: a
-         wall's top is rock now rather than a lid, and it is in the picture, so it
-         is in the answer. The two must not disagree about that in either
-         direction, or the pointer would name a surface nobody can see. */
+         wall's top is not painted at all now, and the two must not disagree about
+         that in either direction, or the pointer would name a surface nobody can
+         see. */
       if (this.capShown(it)) this.poly(ctx, it.top, col);
     }
     return b.length;
@@ -2297,15 +2516,13 @@ const Render = {
              belong to this one square, so their order does not matter here. */
           const faced = this.wallsPainted(it, alphaOf);
           const qL = faced.l, qR = faced.r;
+          /* The strips of rock at the back of the block are painted, so they are
+             part of the answer: a pixel the picture fills with this block's own
+             rock belongs to this block (rule 8). */
+          if (faced.br && this.inShape(faced.br, px, py)) return this.hit(s, it.i);
+          if (faced.bl && this.inShape(faced.bl, px, py)) return this.hit(s, it.i);
           if (qL && this.inShape(qL, px, py)) return this.hit(s, it.i);
           if (qR && this.inShape(qR, px, py)) return this.hit(s, it.i);
-          /* A culled face still shows a strip of itself over the front block's
-             shoulder, and rule 8 has no exception for a strip: rock you can see
-             is rock you can point at. */
-          if (!qL && this.lipShown(it.nbrL, b) &&
-              this.inShape(this.lipQuad(it.left), px, py)) return this.hit(s, it.i);
-          if (!qR && this.lipShown(it.nbrR, b) &&
-              this.inShape(this.lipQuad(it.right), px, py)) return this.hit(s, it.i);
         }
         if (this.capShown(it) && this.inShape(it.top, px, py)) return this.hit(s, it.i);
         continue;

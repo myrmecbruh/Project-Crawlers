@@ -183,6 +183,26 @@ window.__test = {
   step(n) { for (let i = 0; i < (n || 1); i++) step(Game.state); return Game.state.tick; },
   frame(n) { for (let i = 0; i < (n || 1); i++) Game.frame(); return Render.consumed; },
 
+  /* The world the way a crawler meets it: fetched, and with a while of digging
+     behind it. `frame()` gets there too, but it PAINTS every one of those frames
+     and the painting is the whole cost -- 2,000 frames take about 40 seconds
+     that way and about a tenth of a second this way, and the two come out pixel
+     for pixel identical (`files/probe-settlefast.txt`). So the game is stepped
+     forward without drawing, and then the ground that has come into range is
+     fetched in a few fat passes instead of two pieces at a time. */
+  advance(n, passes) {
+    for (let i = 0; i < (n || 1); i++) step(Game.state);
+    const was = CFG.chunksPerFrame;
+    CFG.chunksPerFrame = 200;
+    for (let i = 0; i < (passes || 4); i++) {
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+      Game.render();
+    }
+    CFG.chunksPerFrame = was;
+    return Game.state.tick;
+  },
+
   /* What actually reached the buffer last draw. Never read Render.batch. */
   consumed() { return Render.consumed; },
   record(on) { Render.recordItems = !!on; Game.state.viewDirty = true; },
@@ -204,10 +224,11 @@ window.__test = {
 
   /* Paint the LID of a solid block, the way the game used to: a stone surface --
      material and all -- laid across the top of the rock. It is NOT what the game
-     ships. A wall's top is plain rock now (`wallBody`), and turning this on is
-     the picture as it was before v0.36.0, which is the yardstick the new look and
-     the rock are both proved against. Called with nothing it only reports which
-     way it is set, so a test can say which way the game ships. */
+     ships. A wall has NO top at all now -- what fills the space a lid would have
+     occupied is the wall's own sides reaching up into it -- and turning this on
+     is the picture as it was before v0.36.0, the yardstick the new look is proved
+     against. Called with nothing it only reports which way it is set, so a test
+     can say which way the game ships. */
   wallCaps(on) {
     if (on !== undefined) {
       Render.wallCaps = !!on;
@@ -217,27 +238,13 @@ window.__test = {
     return Render.wallCaps;
   },
 
-  /* Paint the strip of a wall face that a deleted lid used to cover, where
-     nothing else covers it. With the look the game ships no strip is ever laid:
-     the rock itself covers those faces whole, so this only bites with the rock
-     switched off (`wallBody(false)`) or the lids switched on. Off, with the rock
-     off, is the picture with a hole through the middle of the rock -- the
-     negative control the strips are proved against, in one build. Nothing to
-     rebuild: the strip is painted, not built. */
-  wallLips(on) {
-    if (on !== undefined) {
-      Render.wallLips = !!on;
-      Game.state.viewDirty = true;
-    }
-    return Render.wallLips;
-  },
-
-  /* Paint the rock where a wall's cap used to be -- the look the game ships.
-     On, the top of a wall is the stuff the wall is cut out of: flat, untextured,
-     and lit like the wall's own faces, so a wall's top is rock rather than a lid
-     and the face below dissolves into it. Off is the picture v0.37.0 shipped,
-     where a deleted lid left the rock mass a lattice of holes -- the negative
-     control the rock is proved against, in one build. */
+  /* Paint the rock where a wall's cap used to be: flat, untextured, lit like the
+     wall's own faces -- a slab laid over the top of every wall, which is v0.41.0's
+     picture (`wallBody: true`), NOT the look the game ships. It is the negative
+     control the shipped look is proved against inside one build: with a slab
+     across the top, no gap can exist between the face and the rock above it by
+     construction, so the difference between the two arms is exactly the cost of
+     having no lid. Called with nothing it only reports which way it is set. */
   wallBody(on) {
     if (on !== undefined) {
       Render.wallBody = !!on;
@@ -245,6 +252,23 @@ window.__test = {
       Game.state.viewDirty = true;
     }
     return Render.wallBody;
+  },
+
+  /* The strips of rock a block shows along its far edges, where the block behind
+     it is too low to cover it -- the way the game ships (`backBands: true`). With
+     them off, the far half of a wall block's square is bare backdrop wherever
+     nothing as tall stands behind it, which is a black wedge at every corner and
+     the "missing floor pieces at wall corners" the fix is for. Both arms in one
+     build is how the fix is proved rather than argued (lesson 21). Called with
+     nothing it only reports which way it is set. The strips are built with the
+     shapes, so changing it rebuilds them. */
+  backBands(on) {
+    if (on !== undefined) {
+      Render.backBands = !!on;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.backBands;
   },
 
   /* Fade away the top `metres` of every wall face, the way the game ships -- 1
@@ -1178,9 +1202,15 @@ window.__test = {
      made out of a picture somebody dropped in (Render.drawn), and two meanings
      for one word in one file is how a later session mis-reads a number. The
      frame's own counters come back beside the fills (`cells`, `walls`, `banded`,
-     `body`, `capsOff`) so a test can tie the two together -- how many squares
-     wear a material, and how many wall sides do -- without asking which frame
-     `Render.consumed` belongs to now. */
+     `backs`, `body`, `capsOff`) so a test can tie the two together -- how many
+     squares wear a material, and how many wall sides do -- without asking which
+     frame `Render.consumed` belongs to now.
+
+     This counts FILLS, and a count of fills is not the same as a share of the
+     picture: since v0.42.0 one wall side paints up to four of them (the face, the
+     band above it, and the strip of rock along each far edge). `fillMap()` is the
+     one to ask about size -- it paints the frame in five flat colours, one per
+     kind, and counts the pixels. */
   fillKinds(foul) {
     const s = Game.state, ctx = Render.bctx;
     const real = ctx.fill.bind(ctx);
@@ -1204,6 +1234,7 @@ window.__test = {
       try { return realFadeBand.apply(this, arguments); }
       finally { Render.poly = wasPoly; }
     };
+
     ctx.fill = function () {
       const f = this.fillStyle;
       if (f && typeof f === 'object') {
@@ -1233,7 +1264,93 @@ window.__test = {
     return { plain: plain, pattern: pattern, band: band, things: c.count,
              ground: ground, wall: wall, other: other,
              cells: c.count - c.people - c.structures,
-             walls: c.walls, banded: c.banded, body: c.body, capsOff: c.capsOff };
+             walls: c.walls, banded: c.banded, backs: c.backs,
+             body: c.body, capsOff: c.capsOff };
+  },
+
+  /* THE SAME CENSUS, ASKED IN PIXELS. `fillKinds()` counts fills, and since
+     v0.42.0 one wall side paints up to four of them (its face, the band above
+     it, and a strip of rock along each far edge), so a count of fills stopped
+     saying how much of the picture is wearing a material. This draws the very
+     same frame again with every fill replaced by one flat colour per kind -- a
+     plain fill, a material on the ground, a material on a wall, a gradient, and
+     a pattern that came through neither door -- and counts the pixels of each.
+     What is left over is the backdrop and the single antialiased pixel between
+     two faces, where the two colours have blended and the pixel belongs to
+     neither.
+
+     The numbers are shares of the CANVAS, so they answer the question a person
+     asks about a picture -- "how much of this is flat colour?" -- as a
+     proportion of the thing they are looking at. COUNT A GRADIENT AS FLAT: a
+     wall's material dissolving into its own colour is a surface of one colour
+     getting dimmer, and the whole point of it is that the wall does not stop
+     where the material does.
+
+     It leaves the picture painted in the map's colours, so draw the real one
+     again (`t.redraw()`) before asking the frame anything else.
+
+     `foul` paints one patterned triangle through no door at all, exactly as
+     `fillKinds(true)` does, so the pixel count can be shown to see what it is
+     looking for before a count of zero is believed. */
+  fillMap(foul) {
+    const s = Game.state, ctx = Render.bctx;
+    const real = ctx.fill.bind(ctx);
+    const realGround = Render.ground, realWall = Render.wall;
+    const realWallBand = Render.wallBand, realFadeBand = Render.fadeBand;
+    const from = new Map();      /* a fill object -> the door it came out of */
+    const door = (f, which) => { if (f && typeof f === 'object') from.set(f, which); return f; };
+    Render.ground = function () { return door(realGround.apply(this, arguments), 'ground'); };
+    Render.wall = function () { return door(realWall.apply(this, arguments), 'wall'); };
+    Render.wallBand = function () { return door(realWallBand.apply(this, arguments), 'wall'); };
+    Render.fadeBand = function () {
+      const wasPoly = Render.poly;
+      Render.poly = function (c, q, fill) {
+        if (fill && typeof fill === 'object') from.set(fill, 'wall');
+        return wasPoly.apply(this, arguments);
+      };
+      try { return realFadeBand.apply(this, arguments); }
+      finally { Render.poly = wasPoly; }
+    };
+    const INK = { plain: '#fe00fe', ground: '#00fe00', wall: '#0000fe',
+                  other: '#fefe00', band: '#00fefe' };
+    const pack = (r, g, b) => (r << 16) | (g << 8) | b;
+    const given = (hex) => pack(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16),
+                                parseInt(hex.slice(5, 7), 16));
+    const ofPixel = new Map();
+    for (const k in INK) ofPixel.set(given(INK[k]), k);
+    ofPixel.set(given(BACKDROP), 'backdrop');
+    ctx.fill = function () {
+      const f = this.fillStyle;
+      let k = 'plain';
+      if (f && typeof f === 'object') {
+        if (typeof f.addColorStop === 'function') k = 'band';
+        else k = from.get(f) === 'ground' ? 'ground' : from.get(f) === 'wall' ? 'wall' : 'other';
+      }
+      this.fillStyle = INK[k];
+      return real();
+    };
+    s.geomDirty = true; s.viewDirty = true;
+    Render.build(s); Render.draw(s);
+    if (foul) {
+      Render.poly(ctx, [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 0, y: 200 }],
+                  Render.matPattern('#ffffff', 'moss'));
+    }
+    ctx.fill = real;
+    Render.ground = realGround; Render.wall = realWall;
+    Render.wallBand = realWallBand; Render.fadeBand = realFadeBand;
+    const out = { plain: 0, ground: 0, wall: 0, other: 0, band: 0,
+                  backdrop: 0, mingled: 0, canvas: Render.w * Render.h };
+    const px = ctx.getImageData(0, 0, Render.w, Render.h).data;
+    for (let i = 0; i < px.length; i += 4) {
+      const k = ofPixel.get(pack(px[i], px[i + 1], px[i + 2]));
+      out[k === undefined ? 'mingled' : k]++;
+    }
+    /* What the two questions are actually asked about: flat colour (a fill with
+       no material on it, and a wall fading through its own colour) against
+       surface (a material on the ground or on a wall). */
+    out.flat = out.plain + out.band;
+    out.surface = out.ground + out.wall + out.other;
+    return out;
   },
 
   /* How many different colours appear along one line across the picture. A flat

@@ -442,9 +442,9 @@
       "note": "How many pieces of ground are kept ready BEYOND what you can see, and beyond every crawler and every camp site. This ring is what stops a crawler reaching ground that has not been made yet. Every piece kept is a piece's worth of rooms held in memory and walked over by the picture, so a bigger ring is heavier: raise it only if new ground ever appears too late."
     },
     "render.cut_solid": {
-      "value": 0,
+      "value": 1,
       "unit": "alpha",
-      "note": "How solid the rock standing in front of a room stays. 0 means it is not painted at all and the room is seen straight through the gap; 1 means it is drawn like any other rock. Anything in between is the haze the game used to have."
+      "note": "How solid the rock standing in front of a room stays. 0 means it is not painted at all and the room is seen straight through the gap; 1 means it is drawn like any other rock. Anything in between is the haze the game used to have. Turned up to 1 in v0.44.0: the gap through the near rock was what left a black notch wherever two hidden blocks met, and the player asked to stop seeing through it. What it costs, measured at the camp over 4 seeds and 13,885 crawler pixels -- 2.9% of a crawler is hidden with the rock cut away and 18.7% with it solid, and 2 of the 4 seeds hide one crawler 86-96%. Below 1 turns the notch hunt back on."
     },
     "render.wall_fade_m": {
       "value": 1,
