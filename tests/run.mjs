@@ -1530,6 +1530,456 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
     + ' picture and its bounds prove nothing');
 });
 
+/* THE ROCK ALONG A WALL'S FAR EDGES IS PAINTED ONLY WHERE THE CUT OPENS A GAP.
+ *
+ * A block paints its own two far faces as a strip of rock up each far edge, cut
+ * down to the height the square behind it reaches -- and only while the square
+ * behind is drawn short. Since v0.44.0 the game ships with the rock in front
+ * drawn SOLID (`render.cut_solid` 1): every square its own full height, nothing
+ * hidden and nothing left out, so there is no gap for a strip to fill and the
+ * strip can only paint over what is already there. From v0.45.0 they are refused
+ * at that setting (`Render.backBandsSolid`), and this is the proof that refusing
+ * them cannot open anything -- what the strips cover is measured, not argued
+ * (lesson 23).
+ *
+ * Four arms inside ONE build (lesson 21), a census rather than an argument, with
+ * the same detector and the same 20x20 punched control as the hole census above:
+ * the look that ships with the strips refused, the look that ships with them
+ * painted anyway (v0.44.0, `backBandsSolid`), the cut-away with them, and the
+ * cut-away without them.
+ *
+ * MEASURED, and the test's own case set first -- 24 views (three seeds, both
+ * angles, all four quarter turns, half of them dragged), the world given 2,000
+ * frames first, buffer 624x368, which is 5,511,168 pixels looked at twice:
+ *
+ *   shipped, strips painted (v0.44.0)  1,086 strips (1,955,840 px -- a third of
+ *                                      the frame), bare 11 px, in patches 3 across
+ *                                      or wider 0, biggest patch 0
+ *   shipped, strips refused (v0.45.0)  0 strips, bare 11 px, in patches 3 across
+ *                                      or wider 0, biggest patch 0
+ *
+ * -- the SAME SEE-THROUGH PIXELS, all 5,511,168 of them, in every one of the 24
+ * views, while 782,936 pixels (14.2%) changed colour, in all 24 views. Every
+ * pixel that moved is accounted for by a strip: the moved count is at most 31.5%
+ * of the cap the strips' own area sets, on the worst view of the 24.
+ *
+ * ...and the same measurement over a wider sweep, files/probe-backcull.mjs, 120
+ * views (three seeds, five dragged camera positions, both angles, all four
+ * quarters, buffer 534x348): strips painted, bare 18 px, 15 of them in holes, in
+ * 6 views, biggest hole 3; strips refused, bare 18 px, 15 in holes, in 6 views,
+ * biggest 3 -- identical to the last pixel, while a sixth of the frame stopped
+ * being repainted.
+ *
+ * ONE VIEW OF IT, in detail (files/probe-bbvis.mjs, seed 1, 534x348, 47 strips
+ * covering 87,040 px): refusing them moves 32,719 of 185,832 pixels (17.6%),
+ * worst single pixel 123/255, and NOT ONE PIXEL BECOMES SEE-THROUGH and not one
+ * stops being see-through. What moves is a flat near-black slab (#0a0a0a to
+ * #0e0f0e -- the block's own back face, which a camera looking down can never
+ * legitimately see) replaced by the rock behind it at the same shade or warmer
+ * (#1e1712, #261d16).
+ *
+ * THE CUT-AWAY IS WHERE THE STRIPS ARE WANTED, and it is the other half of the
+ * proof: at `cut_solid` 0 the squares in front ARE drawn short, so the place a
+ * strip fills is a place with nothing in it. Refusing them there adds 1,891
+ * pixels of bare backdrop, 1,839 of them enclosed by rock, over 16 of the 24
+ * views (the 120-view sweep: 969 pixels of bare added in 494 separate places, 944
+ * enclosed, the worst view 82 -> 161); it turns three more views into views with
+ * a window in them (1 -> 4), and grows the enclosed pixels more than half again
+ * (2,134 -> 3,973). So the gate is a GATE and not a deletion, and this test
+ * asserts the strips are still painted there.
+ *
+ * AND THAT IS WHAT MAKES THE IDENTITY MEAN ANYTHING. Without an arm where the
+ * strips do something, "refusing them changes no see-through pixel" would pass
+ * on a build that never painted a strip in its life (lesson 19), so both halves
+ * are asserted: the control arm really paints them, the cut-away really loses
+ * ground when they go, and only then does the identity say anything.
+ *
+ * THE CHANGE IS PAINT AND NOT COVER, and the picture really does move -- an
+ * "unchanged" claim over a change that never happens is a sentence about nothing
+ * (lesson 27), so `moved > 0` is asserted too. What moved is bounded by what was
+ * painted: the strips go on first for each block, so a pixel can only have moved
+ * if a strip was the last thing on it. The bound is twice the strips' own area,
+ * with 64 pixels of slack for the antialiased seam on top (lesson 17), and where
+ * a view painted no strip at all the bound is zero, exactly. It is loose by
+ * three times rather than tight on purpose: a bound nobody can fall through says
+ * nothing, and this one is only ever meant to catch movement where no strip was. */
+await test('the rock along a wall\'s far edges is painted only where the cut opens a gap (v0.45.0)', async () => {
+  const cases = [];
+  for (const seed of [1, 2, 7]) {
+    for (const up of [false, true]) {
+      for (let q = 0; q < 4; q++) {
+        cases.push({ seed: seed, up: up, quarter: q, drag: q % 2 ? [180, -140] : null });
+      }
+    }
+  }
+  const r = await page.evaluate((cases) => {
+    const t = window.__test;
+    t.pause();
+    t.unpoint();
+    const wasCut = t.cfg.cutSolid;
+    const wasBB = t.backBands();
+    const wasBBS = t.backBandsSolid();
+    const wasZoom = t.buffer().zoom;
+    /* The BUFFER, never the page: the census has to read the rectangle the frame
+       painted, and pickAt() answers in buffer pixels. Read LIVE too, because
+       `t.zoom()` resizes the buffer and a width taken once before the cases would
+       be the width of whichever case came first (see the hole census above). */
+    const grab = () => Render.bctx.getImageData(0, 0, Render.w, Render.h).data;
+    const BACK = [parseInt(BACKDROP.slice(1, 3), 16),
+                  parseInt(BACKDROP.slice(3, 5), 16),
+                  parseInt(BACKDROP.slice(5, 7), 16)];
+    /* Every pixel that IS the backdrop exactly, the flood from the border that
+       says which of them you could see through, and how many of the rest are in a
+       patch you could LOOK through (bare all round in a 3x3 square) -- the same
+       definitions, and the same reason for them, as the hole census above. A bare
+       pixel open to the edge of the picture is sky; one the flood cannot reach is
+       a hole. `full` off is the cheap half, which is all the cut-away's own arm
+       needs: its bare pixels and WHICH they are. */
+    const census = (px, full) => {
+      const w = Render.w, h = Render.h, n = w * h;
+      const isVoid = new Uint8Array(n);
+      let bare = 0;
+      for (let i = 0, k = 0; i < n; i++, k += 4) {
+        if (px[k] === BACK[0] && px[k + 1] === BACK[1] && px[k + 2] === BACK[2]) {
+          isVoid[i] = 1; bare++;
+        }
+      }
+      if (!full) return { bare: bare, isVoid: isVoid };
+      const seen = new Uint8Array(n);
+      const q = [];
+      const step = (i) => { if (isVoid[i] && !seen[i]) { seen[i] = 1; q.push(i); } };
+      for (let x = 0; x < w; x++) { step(x); step((h - 1) * w + x); }
+      for (let y = 0; y < h; y++) { step(y * w); step(y * w + w - 1); }
+      while (q.length) {
+        const i = q.pop(), x = i % w, y = (i / w) | 0;
+        if (x > 0) step(i - 1);
+        if (x < w - 1) step(i + 1);
+        if (y > 0) step(i - w);
+        if (y < h - 1) step(i + w);
+      }
+      const mark = new Uint8Array(n);
+      const in3 = (x, y) => {
+        for (let dy = 0; dy < 3; dy++) {
+          for (let dx = 0; dx < 3; dx++) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) return false;
+            if (!isVoid[ny * w + nx]) return false;
+          }
+        }
+        return true;
+      };
+      let sealed = 0, thick = 0, worst = 0;
+      for (let i = 0; i < n; i++) {
+        if (!isVoid[i] || seen[i] || mark[i]) continue;
+        let size = 0, wide = false;
+        const p = [i];
+        mark[i] = 1;
+        while (p.length) {
+          const j = p.pop(); size++;
+          const x = j % w, y = (j / w) | 0;
+          if (!wide && in3(x, y)) wide = true;
+          if (x > 0 && isVoid[j - 1] && !seen[j - 1] && !mark[j - 1]) { mark[j - 1] = 1; p.push(j - 1); }
+          if (x < w - 1 && isVoid[j + 1] && !seen[j + 1] && !mark[j + 1]) { mark[j + 1] = 1; p.push(j + 1); }
+          if (y > 0 && isVoid[j - w] && !seen[j - w] && !mark[j - w]) { mark[j - w] = 1; p.push(j - w); }
+          if (y < h - 1 && isVoid[j + w] && !seen[j + w] && !mark[j + w]) { mark[j + w] = 1; p.push(j + w); }
+        }
+        sealed += size;
+        if (wide) { thick += size; if (size > worst) worst = size; }
+      }
+      return { bare: bare, isVoid: isVoid, seen: seen, sealed: sealed,
+               thick: thick, worst: worst };
+    };
+    /* How many DIFFERENT pictures the sweep reached, over all three channels: a
+       probe that cannot say it looked at more than one world is not measuring
+       anything (lesson 27). */
+    const hash = (px) => {
+      let hv = 2166136261;
+      for (let i = 0; i < px.length; i += 4) {
+        hv ^= px[i]; hv = Math.imul(hv, 16777619);
+        hv ^= px[i + 1]; hv = Math.imul(hv, 16777619);
+        hv ^= px[i + 2]; hv = Math.imul(hv, 16777619);
+      }
+      return hv >>> 0;
+    };
+    /* Paint the same instant four ways. `cut_solid` is read again while the
+       shapes are built, so this asks for them again, and it is Game.render() and
+       never Game.frame() -- a frame steps the world, which would put the four
+       arms in four different instants and make the comparison meaningless. */
+    const paint = (cut, bb, bbs) => {
+      t.cfg.cutSolid = cut;
+      t.backBands(bb);
+      t.backBandsSolid(bbs);
+      const s = Game.state;
+      s.geomDirty = true;
+      s.viewDirty = true;
+      Game.render();
+      return Render.consumed;
+    };
+    /* Settle the world before looking at it: keep painting until no more ground
+       is made. `Game.render()` is what FETCHES ground, so a view that has just
+       been dragged or turned is a view with pieces still arriving, and the four
+       arms have to be painted on one world (lesson 24). */
+    const settle = () => {
+      const s = Game.state;
+      for (let k = 0; k < 12; k++) {
+        const n = s.world.cells.length;
+        s.geomDirty = true;
+        s.viewDirty = true;
+        Game.render();
+        if (s.world.cells.length === n) break;
+      }
+    };
+    const GROWN = 2000;
+    const out = [];
+    const pics = new Set();
+    const tot = {
+      cases: 0, moved: 0, movedViews: 0, deep: 0, worst: 0, worstAt: null,
+      voidDiff: 0,
+      solidViews: 0, solidBacks: [0, 0], solidBackPx: [0, 0],
+      solidBare: [0, 0], solidSealed: 0, solidThick: 0, solidWorst: 0,
+      solidSealedA: 0, solidThickA: 0, solidWorstA: 0,
+      cutViews: 0, cutBacks: [0, 0], cutBackPx: [0, 0],
+      cutBare: [0, 0], cutSealed: 0, cutThick: 0, cutWorst: 0,
+      cutSealedC: 0, cutThickC: 0,
+      cutOpen: 0, add: 0, addSealed: 0, addBiggest: 0, sub: 0,
+      controls: 0, control: 0, controlThick: 0
+    };
+    for (const c of cases) {
+      t.seed(c.seed);
+      t.advance(GROWN);
+      t.tilt(c.up);
+      if (c.quarter) t.rotate(c.quarter);
+      t.settle();
+      if (c.drag) t.pan(c.drag[0], c.drag[1]);
+      settle();
+      /* ARM 1: the look that ships with the strips painted anyway -- v0.44.0, and
+         the liveness half of the proof. ARM 2: the look that ships with them
+         refused, which is what ships from v0.45.0. */
+      const a = paint(1, true, true);
+      const pxA = grab();
+      const b = paint(1, true, false);
+      const pxB = grab();
+      /* ARM 3 and 4: the cut-away look, which is where the strips are wanted. */
+      const cc = paint(0, true, false);
+      const pxC = grab();
+      const d = paint(0, false, false);
+      const pxD = grab();
+      const w = Render.w, h = Render.h, n = w * h;
+      let moved = 0, deep = 0, worst = 0;
+      for (let i = 0, k = 0; i < n; i++, k += 4) {
+        const dr = Math.abs(pxA[k] - pxB[k]);
+        const dg = Math.abs(pxA[k + 1] - pxB[k + 1]);
+        const db = Math.abs(pxA[k + 2] - pxB[k + 2]);
+        const m = dr > dg ? (dr > db ? dr : db) : (dg > db ? dg : db);
+        if (m) {
+          moved++;
+          if (m > worst) worst = m;
+          if (m > 8) deep++;
+        }
+      }
+      const cA = census(pxA, true);
+      const cB = census(pxB, true);
+      const cD = census(pxD, true);
+      const cC = census(pxC, true);
+      /* THE CLAIM, in one count: pixels that are see-through in one of the two
+         shipped arms and not in the other. Refusing the strips may stop them
+         painting; it may not stop them COVERING. */
+      let voidDiff = 0;
+      for (let i = 0; i < n; i++) if (cA.isVoid[i] !== cB.isVoid[i]) voidDiff++;
+      /* What refusing the strips in the CUT-AWAY adds: pixels bare in the arm
+         without them that the arm with them had covered, and how many of those
+         are enclosed -- the only way a bare pixel costs anything, because one
+         open to the border is sky. `sub` is the other way round, and it must be
+         nothing: a strip may only ever cover ground, never take it away. */
+      let add = 0, addSealed = 0, sub = 0, addBiggest = 0;
+      for (let i = 0; i < n; i++) {
+        if (cD.isVoid[i] && !cC.isVoid[i]) { add++; if (!cD.seen[i]) addSealed++; }
+        else if (!cD.isVoid[i] && cC.isVoid[i]) sub++;
+      }
+      if (addSealed > addBiggest) addBiggest = addSealed;
+      /* The control, on one view per seed: the shipped picture with a 20x20 square
+         of backdrop painted into the middle of it, which the flood cannot reach
+         and this census must find -- all 400 pixels of it, 400 of them in a patch
+         you could look through. */
+      let ctl = null;
+      if (!c.up && !c.quarter) {
+        const punched = Uint8ClampedArray.from(pxB);
+        const cx = (w / 2) | 0, cy = (h / 2) | 0;
+        for (let y = cy; y < cy + 20; y++) {
+          for (let x = cx; x < cx + 20; x++) {
+            const k = (y * w + x) * 4;
+            punched[k] = BACK[0]; punched[k + 1] = BACK[1]; punched[k + 2] = BACK[2];
+          }
+        }
+        ctl = census(punched, true);
+      }
+      pics.add(hash(pxB));
+      const rec = {
+        seed: c.seed, up: c.up, quarter: c.quarter, drag: !!c.drag,
+        moved: moved, worst: worst, deep: deep, voidDiff: voidDiff,
+        solid: { backs: [a.backs, b.backs], backPx: [a.backPx, b.backPx],
+                 bare: [cA.bare, cB.bare],
+                 sealed: cB.sealed, thick: cB.thick, worst: cB.worst,
+                 sealedA: cA.sealed, thickA: cA.thick, worstA: cA.worst },
+        cut: { backs: [cc.backs, d.backs], backPx: [cc.backPx, d.backPx],
+               bare: [cC.bare, cD.bare], sealed: cD.sealed,
+               thick: cD.thick, worst: cD.worst,
+               sealedC: cC.sealed, thickC: cC.thick, worstC: cC.worst },
+        add: add, addSealed: addSealed, sub: sub,
+        control: ctl ? ctl.sealed : -1, controlThick: ctl ? ctl.thick : -1
+      };
+      out.push(rec);
+      tot.cases++;
+      tot.moved += moved;
+      if (moved > 0) tot.movedViews++;
+      tot.voidDiff += voidDiff;
+      tot.deep += deep;
+      if (worst > tot.worst) {
+        tot.worst = worst;
+        tot.worstAt = `${c.seed}${c.up ? '/raised' : ''}${c.quarter ? '/turn' + c.quarter : ''}`;
+      }
+      if (a.backs > 0) tot.solidViews++;
+      if (cc.backs > 0) tot.cutViews++;
+      tot.solidBacks[0] += a.backs; tot.solidBacks[1] += b.backs;
+      tot.solidBackPx[0] += a.backPx; tot.solidBackPx[1] += b.backPx;
+      tot.solidBare[0] += rec.solid.bare[0]; tot.solidBare[1] += cB.bare;
+      tot.solidSealed += cB.sealed;
+      tot.solidThick += cB.thick;
+      if (cB.worst > tot.solidWorst) tot.solidWorst = cB.worst;
+      tot.solidSealedA += cA.sealed;
+      tot.solidThickA += cA.thick;
+      if (cA.worst > tot.solidWorstA) tot.solidWorstA = cA.worst;
+      tot.cutBacks[0] += cc.backs; tot.cutBacks[1] += d.backs;
+      tot.cutBackPx[0] += cc.backPx; tot.cutBackPx[1] += d.backPx;
+      tot.cutBare[0] += cC.bare; tot.cutBare[1] += cD.bare;
+      tot.cutSealed += cD.sealed;
+      tot.cutThick += cD.thick;
+      if (cD.worst > tot.cutWorst) tot.cutWorst = cD.worst;
+      tot.cutSealedC += cC.sealed;
+      tot.cutThickC += cC.thick;
+      if (add > 0) tot.cutOpen++;
+      tot.add += add; tot.addSealed += addSealed; tot.sub += sub;
+      if (addSealed > tot.addBiggest) tot.addBiggest = addSealed;
+      if (ctl) {
+        tot.controls++;
+        tot.control += ctl.sealed;
+        tot.controlThick += ctl.thick;
+      }
+    }
+    /* Put everything back the way it was found, so no test after this one is
+       looking at a cut-away world with the strips switched off. */
+    t.cfg.cutSolid = wasCut;
+    t.backBands(wasBB);
+    t.backBandsSolid(wasBBS);
+    t.zoom(wasZoom);
+    t.tilt(false);
+    t.unpoint();
+    t.seed(1);
+    t.redraw();
+    return { out: out, tot: tot, pics: pics.size, wasCut: wasCut, wasBB: wasBB,
+             wasBBS: wasBBS, backCut: t.cfg.cutSolid, backBB: t.backBands(),
+             backBBS: t.backBandsSolid() };
+  }, cases);
+  const tot = r.tot;
+  /* The three dials went back where they were found: this test paints the world
+     four different ways, and leaving it in one of them would hand every test
+     after it a look nobody asked for. */
+  assert(r.backCut === r.wasCut && r.backBB === r.wasBB && r.backBBS === r.wasBBS,
+    `the dials came back as ${r.backCut}/${r.backBB}/${r.backBBS} where they`
+    + ` started at ${r.wasCut}/${r.wasBB}/${r.wasBBS}`);
+  assert(tot.cases === 24 && r.pics > 20,
+    `${tot.cases} views were looked at and they reached ${r.pics} different`
+    + ' pictures, so the seeds, angles, turns and drags are doing something');
+  /* THE CONTROL ARM MUST REALLY BE PAINTING THE STRIPS, or "refusing them changes
+     nothing" is a sentence about a build with nothing to refuse. */
+  assert(tot.solidBacks[0] > 100 && tot.solidViews > 4,
+    `the v0.44.0 arm painted ${tot.solidBacks[0]} strips (${tot.solidBackPx[0]} pixels)`
+    + ` over ${tot.cases} views, ${tot.solidViews} of which had any, so the identity`
+    + ' below is being asked of a picture that has strips in it');
+  /* ...and the look that ships must refuse every one of them, because nothing is
+     ever drawn short there and there is no gap for a strip to fill. */
+  assert(tot.solidBacks[1] === 0 && tot.solidBackPx[1] === 0,
+    `the look the game ships painted ${tot.solidBacks[1]} strips and`
+    + ` ${tot.solidBackPx[1]} pixels of them where nothing is drawn short`);
+  /* THE CLAIM, in total: refusing the strips takes no cover away. The see-through
+     pixels are the same pixels they always were -- and the same patches, counted
+     both as "enclosed by rock" and as "3 across or wider". What moves is paint. */
+  assert(tot.voidDiff === 0 && tot.solidSealed === tot.solidSealedA
+      && tot.solidThick === tot.solidThickA && tot.solidWorst === tot.solidWorstA,
+    `refusing the strips changed which pixels are see-through in ${tot.voidDiff}`
+    + ` places where the two pictures are meant to be see-through in exactly the`
+    + ` same ones (enclosed ${tot.solidSealedA} -> ${tot.solidSealed}, in patches 3`
+    + ` pixels across or wider ${tot.solidThickA} -> ${tot.solidThick}, biggest`
+    + ` patch ${tot.solidWorstA} -> ${tot.solidWorst})`);
+  /* AND THE PICTURE REALLY DID MOVE, so the identity above is being asked of two
+     different pictures rather than of a change that never happened. What moved is
+     bounded by what was painted: a strip goes on first for its block, so a pixel
+     can only have moved if a strip was the last thing on it. The allowance on top
+     is twice the strips' own area -- a strip is a few pixels wide, and its
+     antialiased outline is thicker than its middle (lesson 17). */
+  assert(tot.moved > 0 && tot.moved <= tot.solidBackPx[0] * 2 + 64 * tot.cases,
+    `refusing the strips moved ${tot.moved} pixels over ${tot.movedViews} of the`
+    + ` ${tot.cases} views (${tot.deep} of them by more than 8/255, worst`
+    + ` ${tot.worst}/255 on ${tot.worstAt}), where the ${tot.solidBackPx[0]} pixels`
+    + ` of strip painted can account for at most`
+    + ` ${tot.solidBackPx[0] * 2 + 64 * tot.cases} -- so either nothing moved at`
+    + ' all, or something moved that no strip was ever on');
+  /* AND THE HALF THAT MAKES THAT MEAN SOMETHING: in the cut-away look, where the
+     strips ARE wanted, the same change opens the ground. */
+  assert(tot.add > 0 && tot.addSealed > 0 && tot.cutOpen > 0,
+    `refusing the strips in the cut-away added ${tot.add} pixels of bare backdrop,`
+    + ` ${tot.addSealed} of them enclosed by rock, over ${tot.cutOpen} of the`
+    + ` ${tot.cases} views -- so this census cannot see the difference the strips`
+    + ' make in the look that needs them, and the identity above proves nothing');
+  /* The cull is a GATE, not a deletion: the cut-away keeps them, and the detector
+     can see the difference -- refusing them there turns three more of the 24 views
+     into views with a window in them (1 -> 4) and grows the enclosed pixels more
+     than half again (2,134 -> 3,973, in patches 3 across or wider 236 -> 382). */
+  assert(tot.cutBacks[0] > 100 && tot.cutViews > 4 && tot.cutBacks[1] === 0
+      && tot.cutSealed > tot.cutSealedC && tot.cutThick > tot.cutThickC,
+    `the cut-away look painted ${tot.cutBacks[0]} strips over ${tot.cutViews} of`
+    + ` the ${tot.cases} views with them and ${tot.cutBacks[1]} without, where`
+    + ` ${tot.addSealed} pixels of ground are behind nothing at all once they go;`
+    + ` enclosed pixels ${tot.cutSealedC} -> ${tot.cutSealed} and pixels in patches`
+    + ` 3 across or wider ${tot.cutThickC} -> ${tot.cutThick}, so refusing the`
+    + ' strips there has to make the holes BIGGER and it did not');
+  /* A strip may only ever cover ground: painting one may not make a pixel bare. */
+  assert(tot.sub === 0,
+    `painting the strips made ${tot.sub} pixels of bare backdrop where the same`
+    + ' picture without them had none, so a strip is taking ground away instead'
+    + ' of covering it');
+  /* And the look that ships, view by view: no window you could see through, and
+     the 20x20 punched control on the same view says the detector can see one. */
+  for (const q of r.out) {
+    const at = `seed ${q.seed}${q.up ? ' raised' : ''}`
+      + `${q.quarter ? ' turned ' + q.quarter : ''}${q.drag ? ' dragged' : ''}`;
+    /* Refusing the strips may not change WHICH pixels are see-through, and every
+       pixel that moved must lie inside what the strips painted -- which is a cap
+       of zero on a view that painted none of them. */
+    assert(q.voidDiff === 0,
+      `${at}: refusing the strips made ${q.voidDiff} pixels see-through that were`
+      + ' not, or hid that many that were');
+    const cap = q.solid.backPx[0] ? q.solid.backPx[0] * 2 + 64 : 0;
+    assert(q.moved <= cap,
+      `${at}: refusing the strips moved ${q.moved} pixels (worst ${q.worst}/255,`
+      + ` ${q.deep} by more than 8/255) where ${q.solid.backPx[0]} pixels of strip`
+      + ` were painted and ${cap} pixels can be accounted for`);
+    assert(q.solid.backs[1] === 0 && q.cut.backs[1] === 0,
+      `${at}: the arm with the strips refused still painted ${q.solid.backs[1]}`
+      + ` in the look that ships and ${q.cut.backs[1]} in the cut-away`);
+    assert(q.solid.thick === 0,
+      `${at}: the look that ships left ${q.solid.thick} pixels of bare backdrop in`
+      + ` patches 3 pixels across or wider (biggest patch ${q.solid.worst} pixels,`
+      + ` ${q.solid.sealed} pixels of it enclosed in all) -- that is a window you`
+      + ' could see through');
+    if (q.control >= 0) {
+      assert(q.control >= 380 && q.controlThick >= 380,
+        `${at}: a 20x20 square of backdrop painted into the middle of the picture`
+        + ` came back as ${q.control} pixels of hole, ${q.controlThick} of them`);
+    }
+  }
+});
+
 /* The wall behind a block you can see past is brought back whole. When a block
  * stops being painted at all, the wall of its neighbour that used to be covered
  * by it is painted to its full height instead -- so the hole the player would
@@ -4202,7 +4652,15 @@ await test('every wall carries a material, not just the built ones', async () =>
      the block behind is too low to cover it (`backs`, painted through the same
      `Render.wall` door as the faces since v0.42.0). The strips are why this
      identity read 1019 against 949 and failed: the count of patterned fills was
-     right and the sentence beside it was out of date. */
+     right and the sentence beside it was out of date.
+
+     Since v0.45.0 the third term is normally ZERO, because the strips are
+     painted only where the cut-away opens a gap and this test paints the game as
+     it ships. It stays in the identity rather than being dropped, so the sentence
+     goes on being true of both looks -- `backs` 0 here is a measurement of the
+     shipped look and not a term nothing reaches (rule: a builder with no
+     consumer, lesson 3). The v0.45.0 test above is the one that makes it a real
+     term, by painting the cut-away and requiring the strips there. */
   const k = r.kindsOn;
   assert(k.ground === k.cells - k.body - k.capsOff,
     `${k.ground} material fills on the ground against ${k.cells} squares drawn, `

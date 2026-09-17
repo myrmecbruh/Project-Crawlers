@@ -8,6 +8,109 @@ them on an old build.
 
 ---
 
+## v0.45.0 — the inside of a wall is not painted, and the strips that fill the cut stay
+
+Their words: **"make the interior faces of walls transparent (backface culling?)"**,
+and when offered the two ways it could go, **"i want backface culling applied."**
+
+v0.44.0 closed with the note that a rock block has never had a back-face cull:
+its near faces are chosen by screen order and its **own far faces are painted
+anyway**, as the strips this file calls `backBands`. So the request was not asking
+for a cull nobody had written; it was pointing at the thing that *was* painting
+the inside of the rock, and the first job was to find out what those strips are
+actually for. **They are for the cut-away and nothing else.**
+
+**The strips are what a downward camera sees instead of the inside of a block.**
+A square's top diamond has a far half whose only possible cover is the block
+standing behind it, whose own near wall rises out of the shared edge and reaches
+as high as it is tall. It stops reaching where the cut has drawn the block behind
+SHORT (`drawnM`) or taken it away altogether (`cutOut`) -- and there the far half
+is bare backdrop, the black wedge at the back of a wall and along the top of a
+step. The strip is that far half, painted as rock. **And the cut is the only thing
+in the renderer that ever draws anything short:** at `cut_solid` 1 `drawnM` is
+every square's own height and `cutOut` refuses everything, so the block behind
+always covers the strip by itself and the strip fills nothing.
+
+**Measured both ways inside one build, then, which is what settled it**
+(`files/probe-backcull.mjs`: three seeds, five dragged camera positions, both
+angles, all four quarters, the world given its 2,000 frames first, **120 views**,
+534x348, all four arms one instant, 120 of 120 distinct pictures):
+
+| | strips painted | pixels of rock they paint | bare backdrop | of it enclosed | views with a hole |
+|---|---|---|---|---|---|
+| shipped look, strips on (v0.44.0) | 4,313 | 8,276,992 | 18 px | 15 px | 6 of 120 |
+| shipped look, strips off (v0.45.0) | **0** | **0** | 18 px | 15 px | 6 of 120 |
+| cut-away, strips on | 3,791 | 9,646,080 | 648 px | 633 px | 36 of 120 |
+| cut-away, strips off | **0** | **0** | 1,617 px | 1,577 px | 39 of 120 |
+
+**The first two rows are the same picture to the last pixel** -- identical bare
+backdrop, identical enclosed count, the same 6 views with the same worst hole of
+3 pixels -- while **a sixth of the frame stops being repainted**. That is the
+whole of the cull they asked for, and it opens **nothing**: the strips at the
+shipped setting were painting over the block's own back faces, and what the camera
+sees where they go is the rock behind, which is what a camera looking down a wall
+from above is supposed to see. **The last two rows are why they are not simply
+deleted**: in the cut-away the place a strip fills is a place with nothing in it,
+and refusing them there adds **969 pixels of bare backdrop in 494 separate
+places**, 944 of them enclosed by rock, and takes the worst view from 82 pixels of
+hole to 161.
+
+**So the strips are a GATE and not a deletion.** A new code flag beside
+`backBands`, `Render.backBandsSolid` (false, and false is what ships), and one
+line in `backBand()`: the strip is refused when `cut_solid` is above zero and the
+flag is off. With the flag on they come back exactly as v0.44.0 painted them --
+which is how the cull is proved against the picture it replaced rather than
+argued at, inside one build with no rebuild between the arms. It is a **code
+flag and not a sheet dial** on purpose: it is not a feel decision, it is the
+consequence of whether the cut is in use, and `backBands` itself has sat beside
+it as a code flag all along. `render.cut_solid` stays the dial, and the two looks
+it switches between both now paint what they should.
+
+**The old number this release had to throw away.** The block above the strips
+quoted **48,197 pixels of bare far half over 240 views, against 16,952 for the
+picture that still had lids on everything** -- the measurement that justified
+adding the strips in the first place. It was taken with the cut in use, which is
+the look that shipped then. At the setting the game uses now it is **0**, and a
+strip painted there shuts no hole at all. A number is only true of the build and
+the look it was measured on, and that one had gone on being quoted after its look
+had gone.
+
+**The mistake in this release was in the test, and it was a claim that could
+never be true.** The first version of the new suite test asserted the picture was
+**unchanged** (`moved === 0`) by refusing the strips -- the shape of claim v0.44.0
+had used to justify keeping the dial where it was. It cannot hold: the strips
+really are pixels, refusing them really does paint something else there, and a
+test that demands zero change against a change that happens is a test that will
+be red forever. What is actually true, and now what is asserted, is the thing that
+matters: **the same see-through pixels, and nothing newly or no longer see-through.**
+
+**One test, four arms, 24 cases** (`seeds 1, 2, 7 × both angles × all four quarter
+turns`, half of them dragged, the world given 2,000 frames first, buffer
+624x368 -- **5,511,168 pixels looked at twice**): the v0.44.0 look, the shipped
+look, and the cut-away with and without the strips. Asserted: the control arm
+really paints them (**1,086 strips, 1,955,840 pixels -- 35.5% of the frame**);
+the shipped arm paints **0 strips and 0 strip pixels**; the see-through set is
+**identical in all 24 views** (`voidDiff === 0`) and so are the enclosed and wide
+counts; the picture really does move -- **782,936 pixels, 14.2% of the frame, in
+all 24 views**, worst single pixel 131/255 -- and every one of them is accounted
+for by a strip that was painted there, since the moved count must stay under twice
+the strips' own area plus 64 pixels a view for the antialiased seam (lesson 17),
+and exactly zero where a view painted no strip; the cut-away **keeps** them, and
+refusing them there turns three more views into views with a hole (1 -> 4) and
+grows the enclosed pixels more than half again (2,134 -> 3,973, in patches three
+across or wider 236 -> 382); and a 20x20 punched hole in the picture is still
+seen by the detector, so a census of zero means zero and not a broken ruler
+(lessons 2, 19).
+
+**What a person will see:** looking down at a wall from behind it, the inside of
+the rock is gone and the rock behind the wall shows through instead -- the same
+stone, very slightly lighter where the old near-black slab used to be. Nothing
+opens up, no hole appears anywhere, and the walls still look like walls from the
+side the game is played from. The strips are still there in the cut-away look, so
+if the rock in the way is ever cut away again that look still works.
+
+---
+
 ## v0.44.0 — the rock in front of you is rock again
 
 Their words, in the chat before this one: **"enable backface culling"**, and then

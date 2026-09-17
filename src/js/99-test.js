@@ -255,11 +255,10 @@ window.__test = {
   },
 
   /* The strips of rock a block shows along its far edges, where the block behind
-     it is too low to cover it -- the way the game ships (`backBands: true`). With
-     them off, the far half of a wall block's square is bare backdrop wherever
-     nothing as tall stands behind it, which is a black wedge at every corner and
-     the "missing floor pieces at wall corners" the fix is for. Both arms in one
-     build is how the fix is proved rather than argued (lesson 21). Called with
+     it is too low to cover it. ON (`backBands: true`), and they are painted only
+     where rock is drawn SHORT -- which is only while `cut_solid` is 0, so at the
+     shipped setting this flag paints nothing at all. Turning it off is the other
+     arm of the proof that nothing is opened by leaving them out. Called with
      nothing it only reports which way it is set. The strips are built with the
      shapes, so changing it rebuilds them. */
   backBands(on) {
@@ -269,6 +268,24 @@ window.__test = {
       Game.state.viewDirty = true;
     }
     return Render.backBands;
+  },
+
+  /* Paint those strips EVEN WHERE NOTHING IS DRAWN SHORT -- the picture v0.44.0
+     shipped, and NOT what the game ships now. It is the A/B the cull is proved
+     against inside one build (lesson 23): with the strips painted there, the
+     census of bare backdrop is identical to the census with them left out, to
+     the last pixel, so the paint was provably being wasted. Also the arm that
+     makes the other number honest -- with this on, switching `backBands` off
+     really does change the picture, so a suite that saw no difference would be
+     measuring a build that ignores the gate. Called with nothing it only reports
+     which way it is set. */
+  backBandsSolid(on) {
+    if (on !== undefined) {
+      Render.backBandsSolid = !!on;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.backBandsSolid;
   },
 
   /* Fade away the top `metres` of every wall face, the way the game ships -- 1

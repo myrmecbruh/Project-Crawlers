@@ -99,6 +99,25 @@ noted against each line:
   squares are still marked as standing in the way (`cell.cutaway`), so the wall
   clip, the hole census and the pointer's own rule are all still asked the same
   questions and still answer them.
+- ~~**`do not render the inside of wall blocks`** (their line, in the list above).~~
+  **Done — v0.45.0.** A rock block's own far faces were never culled: they were
+  painted, as the strips of rock along a block's far edges
+  (`Render.backBands`), because at the cut-away look those strips are the only
+  thing that can fill the far half of a block's top diamond where the block behind
+  is drawn SHORT or taken away altogether. **At the look the game now ships
+  (`render.cut_solid` 1) nothing is drawn short, so the block behind covers that
+  strip by itself and the strip fills nothing** — measured, not argued, over 120
+  views with the strips refused: **0 pixels of bare backdrop added, the census
+  identical to the last pixel (bare 18, of it 15 enclosed, 6 views, worst hole 3),
+  while a sixth of the frame stopped being repainted.** In the cut-away the same
+  removal adds 969 pixels of bare backdrop in 494 places, 944 of them enclosed, and
+  takes the worst view from 82 pixels of hole to 161 — so they are **kept for that
+  look** and refused at the shipped one, by a new code flag `Render.backBandsSolid`
+  (false). It is a code flag and not a sheet dial on purpose: it is the consequence
+  of whether the cut is in use, not a feel decision, and `backBands` has sat beside
+  it as one all along. See `CHANGELOG.md` v0.45.0 and `files/probe-backcull.mjs`;
+  the suite test that holds it is `the rock along a wall's far edges is painted only
+  where the cut opens a gap (v0.45.0)`, 24 views and four arms inside one build.
 
 ---
 

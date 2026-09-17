@@ -78,18 +78,45 @@ const Render = {
      controls, and both are proved against the shipped look inside one build. */
   wallBody: false,
   /* WHERE THE FAR HALF OF A LID TOO SMALL TO BE SEEN IS STILL WANTED: the two
-     faces of a block's BACK, cut down to where the square behind it reaches.
+     faces of a block's BACK, cut down to where the square behind it reaches --
+     and painted only where the rock in the way is drawn SHORT.
 
      A square's top is a diamond, and the diagonal of it from the far corner to
      the near one splits it in two. The NEAR half is above the block's own two
      near faces, which are painted, so it is covered. The FAR half is above the
      block's own back faces, which face the camera's own quarter and are therefore
-     never painted -- the rock standing BEHIND the square is what covered that
-     half, and while every block had a stone lid nothing showed through. With the
-     lids gone and the backs unpainted, the far half of the diamond is bare, and
-     that is the black wedge that shows at the back of a wall and along the top of
-     a step -- 48,197 pixels of it over the census's 240 views, against 16,952 for
-     the picture that still had lids on everything.
+     never painted -- what covers that half is the block standing BEHIND the
+     square, whose own near wall rises out of the edge the two share and needs no
+     help at all while it reaches as high. It stops reaching where the cut has
+     taken it down (`drawnM`) or taken it away altogether (`cutOut`), and there
+     the far half is bare backdrop: the black wedge at the back of a wall and
+     along the top of a step.
+
+     AND THE CUT IS THE ONLY THING THAT DRAWS ANYTHING SHORT. While `cut_solid`
+     is 1, `drawnM` is every square's own height and `cutOut` refuses everything,
+     so the block behind always covers the strip by itself and these faces fill
+     nothing. Painting them there is pure overpaint, and it is measured rather
+     than argued, both ways inside one build (`files/probe-backcull.mjs`: 120
+     views over three seeds, five dragged camera positions, both angles, all four
+     quarters, the world given its 2,000 frames first). Turning the strips OFF at
+     the shipped setting adds 0 pixels of bare backdrop, in 0 patches, and leaves
+     the census identical to the last pixel -- bare 18, of it 15 enclosed, biggest
+     patch 3 -- and over the same 120 views the two pictures are not merely alike:
+     re-run against THIS build, the arm with them asked for and the arm without
+     come out **0 pixels apart, 0 of 22,299,840 changed**, because the gate has
+     already refused them. The 8,276,992 pixels the strips used to paint there --
+     more than a third of the frame, drawn over by other rock -- are simply not
+     drawn. At
+     `cut_solid` 0 the same removal adds 969 pixels of bare backdrop in 494
+     separate places, 944 of them enclosed by rock, and takes the worst view from
+     82 pixels of hole to 161: those strips are load-bearing, and they are kept
+     for that setting.
+
+     THE FIGURE THIS BLOCK USED TO QUOTE -- 48,197 pixels of bare far half over
+     the census's 240 views, against 16,952 for the picture that still had lids on
+     everything -- was measured with the cut in use, which is the look that
+     shipped when the strips were added. At the setting the game now uses it is 0,
+     and a strip painted there shuts no hole at all.
 
      So each block paints its own two back faces, and only as far up them as the
      square behind really reaches: `cutWall()` down to `drawnM()` of the neighbour,
@@ -101,9 +128,18 @@ const Render = {
      A BLOCK'S TOP, not a floor's: the far half of a floor's diamond is covered by
      the floor itself, which is painted, so those squares are skipped.
 
-     False is the A/B control, and the hole counts above are proved against it in
-     one build -- see the census in files/probe-voids.mjs. */
+     False is the A/B control for the strips themselves, and `backBandsSolid` is
+     the control for the change that stopped painting them where nothing is drawn
+     short: with that on they come back exactly as v0.44.0 painted them, and the
+     two censuses come out equal -- the proof rather than the argument. */
   backBands: true,
+  /* PAINT THE STRIPS OF ROCK ALONG A BLOCK'S FAR EDGES EVEN WHERE NOTHING IS
+     DRAWN SHORT -- that is, even where the block behind covers them itself. This
+     is the picture v0.44.0 shipped, a sixth of the frame repainted for nothing,
+     and it is kept as the arm the cull is proved against inside one build.
+     `backBand()` refuses the strip unless `cut_solid` is 0 or this is on. False
+     is what ships. */
+  backBandsSolid: false,
   /* THE TOP METRE OF A WALL FADES AWAY TO NOTHING, which is what turns the edges
      the caps used to draw into soft steps instead of a staircase of hard lines.
      The band WEARS THE WALL'S OWN MATERIAL and dissolves it -- the stonework runs
@@ -1477,10 +1513,18 @@ const Render = {
      the wrong answer. This paints only the far side of a block that has nothing
      standing behind it, and that side is visible rock by anybody's reading.
 
-     Returns null when there is nothing to paint, so the common case costs two
-     world lookups and no quad. */
+     Returns null when there is nothing to paint -- no strips asked for, no rock
+     in this square, a neighbour that reaches as high, or (v0.45.0) a look in
+     which nothing at all is drawn short, see `Render.backBands` -- so the common
+     case costs two world lookups and no quad. */
   backBand(w, x, y, mine, anchor, other, top, bases) {
     if (!this.backBands || !(mine > 0)) return null;
+    /* AND NOTHING IS DRAWN SHORT UNLESS THE CUT IS IN USE (`drawnM`, `cutOut` at
+       `cut_solid` 0), so at the shipped setting there is nothing here to fill:
+       measured over the 120-view census in files/probe-backcull.mjs, turning the
+       strips off moves 0 pixels of bare backdrop and 16% of the frame stops being
+       repainted. See `Render.backBands`; `backBandsSolid` is the A/B. */
+    if (CFG.cutSolid > 0 && !this.backBandsSolid) return null;
     /* Which of the four edges the far corner and this one share, named by the
        corner it runs from: the same rule the clip uses. */
     const e = other === (anchor + 1) % 4 ? anchor : other;
@@ -1701,8 +1745,9 @@ const Render = {
              /* And the strip of rock this block shows along its far edges, where
                 the block behind is too low to cover it -- see backBand(). Null
                 for every block that has a wall of its own height behind it, which
-                is most of them, and null for a floor or a ramp, which paint their
-                own top and so are never bare up there. */
+                is most of them, and null for ALL of them while `cut_solid` is 1,
+                where nothing is drawn short; null for a floor or a ramp, which
+                paint their own top and so are never bare up there. */
              bl: it.backL, br: it.backR };
   },
 
@@ -2334,12 +2379,16 @@ const Render = {
       /* Side walls only: how many were painted, how much picture they covered,
          and how many were buried in the block in front and not painted at all. */
       walls: walls, wallPx: Math.round(wallPx), buried: buried,
-      /* And the strips of rock a block shows along its far edges where nothing
-         as tall stands behind it, and how much picture they covered. Zero of
-         these with the lids off is a picture with black wedges in it, which is
-         what "missing floor pieces at wall corners" was; a lot of them is a
-         block being given its top back. `wallBody` is the flag that paints a
-         slab over every wall, and it is off: this count is the honest one. */
+      /* And the strips of rock a block shows along its far edges where rock is
+         drawn SHORT -- see backBand() and Render.backBands. At the shipped
+         `cut_solid` 1 nothing is ever drawn short, so this is 0 and the picture
+         is right; the count is what makes the A/B honest (a cull arm whose
+         control painted nothing would pass on a picture that never had strips
+         in it), and on the cut-away look, where zero of these IS a picture with
+         black wedges in it -- which is what "missing floor pieces at wall
+         corners" was. A lot of them is a block being given its top back;
+         `wallBody` is the flag that paints a slab over every wall, and it is
+         off: this count is the honest one. */
       backs: backs, backPx: Math.round(backPx),
       /* The top faces of the picture: floors and ramps painted as surfaces
          somebody laid, `body` of them painted as the plain rock of a wall
