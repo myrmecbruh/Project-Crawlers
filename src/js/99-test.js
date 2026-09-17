@@ -301,6 +301,21 @@ window.__test = {
     return CFG.wallFadeM;
   },
 
+  /* Snap every wall face's foot to a whole metre -- the blocks line up, the way
+     the game ships. False is the picture as it was before, cut at whatever
+     height the arithmetic gave, which is the arm the new look is proved against
+     inside one build. Called with nothing it only reports which way it is set.
+     The cut is worked out while the shapes are built, so changing it has to ask
+     for them to be built again. */
+  voxelBlocks(on) {
+    if (on !== undefined) {
+      Render.voxelBlocks = !!on;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.voxelBlocks;
+  },
+
   /* How much of a block hidden behind the wall in front stays standing, the way
      the game ships -- 1 metre by default, read from the sheet. 0 deletes the
      whole square, which leaves the nothing at the bottom of a hidden column that
@@ -786,6 +801,97 @@ window.__test = {
              b: { x: it.left[1].x, y: it.left[1].y },
              d: { x: it.left[3].x, y: it.left[3].y },
              mappedB: put(px, 0), mappedD: put(0, px * it.wallM) };
+  },
+
+  /* HOW TALL EVERY WALL FACE THE PICTURE PAINTS STANDS, in metres, and how many
+     of them are NOT a whole number (v0.46.0).
+
+     Asked exactly the way `draw()` asks it -- `wallsPainted` against the alpha
+     plan of the frame's own batch -- so this counts the faces that reached the
+     canvas, not the faces that were merely built. A side counts only where the
+     picture has a polygon for it, which is what makes "every block stands a
+     whole number of metres" a claim about the picture rather than about the
+     arithmetic that fed it.
+
+     `frac` is the histogram of the fractions the odd faces stood, because a
+     number that is wrong in ONE way is a different mistake from one wrong in a
+     hundred and the histogram tells them apart. `stepM`, `fade` and `buried` are
+     reported so a test can work out WHY a face is not whole instead of knowing
+     it: the depth step of the view plus the fade band is the height a foot
+     lands at before anything rounds it, and `buried` counts the solid blocks
+     that have no face at all -- the ones inside the rock next door.
+
+     `taller` is how many of those faces stand MORE than the fade band, which is
+     the same set the drawing's own `faded` counter counts (`paintSide` fades
+     exactly while `metres > wallFadeM`). It is here so a test can hold this
+     ruler against a number the game was already keeping: two counts of one thing
+     that have to agree is how a new measurement is shown to be measuring.
+
+     `paintPx` is how much of the picture those faces cover, added up the same way
+     the drawing adds it up (`Render.area` of the very quad `wallsPainted` handed
+     back), so it is a third identity -- against `consumed.wallPx`. `oddPx` is
+     the area of the part-metre faces ALONE, which is what a change that only
+     makes a foot land lower can possibly repaint: every one of them gains the
+     fraction of a metre it was carrying, so a test can bound the seam by the
+     strips that moved rather than by a percentage nobody derived.
+
+     WHICH SQUARES IT WALKS IS THE DRAWING'S OWN RULE, square for square, and it
+     has to be: a census that selects by a rule of its own is measuring a
+     different picture, and `faces` against `consumed.walls` is then the only
+     thing that would ever say so. So a square cut away whole (`alphaOf` 0) is
+     skipped into `cut` -- the same count the drawing keeps under that name, and
+     the same rule for it, so it is a second identity a test can hold -- and the
+     case that caught this one: a square with NO
+     HEIGHT of its own is NOT skipped, because the picture paints it. A ramp
+     whose low end reaches the floor of the world has `wallM` 0 and still lays
+     two cheek faces on the canvas; `walls++` counts them and this did not, which
+     came out 2 faces short on seed 2 and 2 short on seed 777. ZERO METRES IS A
+     HEIGHT TOO, and it is a whole number of metres, so such a face is `whole`
+     and never odd. */
+  wallMetres() {
+    const s = Game.state;
+    s.geomDirty = true; s.viewDirty = true;
+    const b = Render.build(s);
+    const alphaOf = Render.alphas(s, b).list;
+    const out = { faces: 0, whole: 0, odd: 0, taller: 0, shortest: 0, tallest: 0,
+                  blocks: 0, buried: 0, cut: 0, frac: {}, sample: null,
+                  paintPx: 0, oddPx: 0,
+                  stepM: s.cam.tileH / CFG.rise, fade: CFG.wallFadeM };
+    for (let k = 0; k < b.length; k++) {
+      const it = b[k];
+      if (!(alphaOf[k] > 0)) { out.cut++; continue; }
+      if (it.kind !== 'cell' || !it.solid) continue;
+      out.blocks++;
+      const f = Render.wallsPainted(it, alphaOf);
+      const side = [[f.l, f.ml], [f.r, f.mr]];
+      let painted = 0;
+      for (let q = 0; q < 2; q++) {
+        if (!side[q][0]) continue;
+        const m = side[q][1];
+        painted++;
+        out.faces++;
+        out.paintPx += Render.area(side[q][0]);
+        if (m > CFG.wallFadeM) out.taller++;
+        if (!out.shortest || m < out.shortest) out.shortest = m;
+        if (m > out.tallest) out.tallest = m;
+        if (Math.abs(m - Math.round(m)) < 1e-9) { out.whole++; continue; }
+        out.odd++;
+        out.oddPx += Render.area(side[q][0]);
+        const key = (Math.round((m - Math.floor(m)) * 1000) / 1000).toFixed(3);
+        out.frac[key] = (out.frac[key] || 0) + 1;
+        if (!out.sample) {
+          out.sample = { wallM: it.wallM, cut: m, cellH: it.cell.h,
+                         stumped: !!it.stumped };
+        }
+      }
+      if (!painted) out.buried++;
+    }
+    /* The drawing rounds its own total once (`wallPx: Math.round(wallPx)`), so
+       this one rounds the same way -- otherwise the two counts agree to within a
+       pixel and never agree exactly, and an identity that cannot be stated
+       exactly is not an identity. */
+    out.paintPx = Math.round(out.paintPx);
+    return out;
   },
 
   /* Find a square of GROUND on screen and report where it is in the world, the

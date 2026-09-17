@@ -1980,6 +1980,440 @@ await test('the rock along a wall\'s far edges is painted only where the cut ope
   }
 });
 
+/* The range the three v0.46.0 tests are run over: five seeds, both camera
+ * angles, all four turns. Each world is walked on 2,000 steps before anything is
+ * looked at, so the match has grown the ground it holds first (lesson 24 -- when
+ * the thing a test measures acquires a history, the setup becomes a claim about
+ * that history), and the camera is settled before the census so the view cannot
+ * drift between the census and the repaint it is held against. */
+const VOXEL_CASES = [];
+for (const seed of [1, 2, 3, 7, 777]) {
+  for (const up of [0, 1]) for (let q = 0; q < 4; q++) VOXEL_CASES.push({ seed, up, q });
+}
+
+/* Every wall the picture paints stands a whole number of metres (v0.46.0).
+ *
+ * The picture is built out of metre blocks -- a square of rock is a column of
+ * them -- so a wall face that stops partway up one has a foot that belongs to no
+ * block. The foot used to stop wherever the neighbour's block left off, which at
+ * the raised angle is one depth step of the view further down (1.6875 m, `stepM`)
+ * plus a metre when the neighbour fades (`render.wall_fade_m`); the LOOK of that
+ * was 0.6875 of a metre of wall standing on nothing in particular, along every
+ * corner where a block met a block shorter than itself.
+ *
+ * v0.46.0 floors the foot. This is the test that says so: a census of every face
+ * that REACHED THE CANVAS, asked through the renderer's own `wallsPainted`
+ * against the frame's own alpha plan -- exactly the way `draw()` asks it -- and a
+ * count of how many of them are not a whole number of metres.
+ *
+ * FOUR IDENTITIES hold the census against numbers the game was already keeping,
+ * so this is not a new ruler measuring a new thing:
+ *     faces    === consumed.walls   (the same faces)
+ *     cut      === consumed.cut     (the same squares left out of the picture whole)
+ *     taller   === consumed.faded   (the same faces the fade band is painted on)
+ *     paintPx  === consumed.wallPx  (the same area, added up the same way)
+ *
+ * THE CONTROL IS THE SAME BUILD with `Render.voxelBlocks` off, which is v0.45.0
+ * to the pixel: the arm that should be whole and the arm that should not are one
+ * flag apart and no rebuild apart (lesson 21).
+ *
+ * Measured over these 40 cases, in the suite's own window (624x368, so 229,632
+ * pixels a view): 10,975 faces painted -- 3,375 of them at the raised angle and
+ * 7,600 at the low one -- and 1,545 of them standing a part of a metre before,
+ * 0 now. All 1,545 stood the SAME fraction, 0.6875 = frac(stepM + fade), which is
+ * one number, the raised angle's own step, and every one of them was at the
+ * raised angle: not one of the low angle's 7,600 faces was ever odd, because
+ * `stepM` is exactly 1.0 there. So the low angle is in the range as the case
+ * where the flag may change nothing at all, and it changed nothing. 9,430 faces
+ * were whole either way, over 8,858 blocks, and 3,129 blocks went on showing no
+ * face at all -- the rock inside the rock next door. The 40 cases reached 40
+ * different pictures of their own.
+ *
+ * AND THE CASE THIS CENSUS HAD TO BE TAUGHT: a square with NO HEIGHT of its own
+ * is not skipped. A ramp whose low end reaches the floor of the world has `wallM`
+ * 0 and still lays two cheek faces, so `walls++` counts them, and a census
+ * filtering on `wallM > 0` came out 2 faces short on seed 2 and 2 short on seed
+ * 777 -- the same 2 faces in each, found by
+ * walking such a square once with the drawing's rule and the census's rule side
+ * by side. ZERO METRES IS A HEIGHT TOO, and it is a whole number of metres. */
+await test('every wall the picture paints stands a whole number of metres (v0.46.0)', async () => {
+  const r = await page.evaluate((CASES) => {
+    const t = window.__test, out = [], worlds = new Set();
+    t.pause(); t.unpoint();
+    const wasFlag = t.voxelBlocks();
+    for (const c of CASES) {
+      t.seed(c.seed);
+      t.advance(2000);
+      t.tilt(!!c.up);
+      t.rotate(c.q);
+      t.settle();
+      t.unpoint();
+      t.voxelBlocks(false);
+      const off = t.wallMetres();
+      t.repaint();
+      const offC = t.consumed();
+      t.voxelBlocks(true);
+      const on = t.wallMetres();
+      t.repaint();
+      const onC = t.consumed();
+      worlds.add(`${off.faces}/${off.blocks}/${off.buried}`);
+      out.push({ seed: c.seed, up: c.up, q: c.q,
+                 stepM: off.stepM, fade: off.fade,
+                 offFaces: off.faces, onFaces: on.faces,
+                 offOdd: off.odd, onOdd: on.odd, offFrac: off.frac,
+                 offWhole: off.whole, onWhole: on.whole,
+                 offShort: off.shortest, onShort: on.shortest, onTall: on.tallest,
+                 offBlocks: off.blocks, onBlocks: on.blocks,
+                 offBuried: off.buried, onBuried: on.buried,
+                 offCensus: off.faces, offWalls: offC.walls,
+                 onCensus: on.faces, onWalls: onC.walls,
+                 offCensusCut: off.cut, onCensusCut: on.cut,
+                 offCut: offC.cut, onCut: onC.cut,
+                 offTaller: off.taller, offFaded: offC.faded,
+                 onTaller: on.taller, onFaded: onC.faded,
+                 offPaintPx: off.paintPx, offWallPx: offC.wallPx,
+                 onPaintPx: on.paintPx, onWallPx: onC.wallPx });
+    }
+    t.voxelBlocks(wasFlag);
+    return { out: out, worlds: worlds.size, wasFlag: wasFlag,
+             backFlag: t.voxelBlocks() };
+  }, VOXEL_CASES);
+  const tot = { offOdd: 0, onOdd: 0, offFaces: 0, onFaces: 0, raisedOdd: 0,
+                raisedFaces: 0, lowOdd: 0, lowFaces: 0, offBuried: 0, onBuried: 0,
+                offWhole: 0, offBlocks: 0 };
+  for (const q of r.out) {
+    const at = `seed ${q.seed}${q.up ? ' raised' : ''}`
+      + `${q.q ? ' turned ' + q.q : ''}`;
+    /* THE CLAIM: not one painted face stands partway up a block. */
+    assert(q.onOdd === 0 && q.onWhole === q.onFaces && q.onFaces > 0,
+      `${at}: ${q.onOdd} of the ${q.onFaces} faces the picture painted stand a`
+      + ` part of a metre (${q.onWhole} of them whole)`);
+    /* A whole number of metres INCLUDES ZERO, and the picture paints such faces:
+       a ramp whose low end is the floor of the world has two cheeks with nothing
+       above them. If the census skips them, `faces` comes up short against
+       `consumed.walls` on exactly the seeds that have one. */
+    assert(q.onShort >= 0 && q.onShort === Math.round(q.onShort)
+        && q.onTall === Math.round(q.onTall),
+      `${at}: the shortest face the picture painted stands ${q.onShort} m and the`
+      + ` tallest ${q.onTall} m, and neither is a whole number of metres`);
+    /* FOUR IDENTITIES: this census is counting the same things the drawing
+       counts, in the same breath. */
+    assert(q.offCensus === q.offWalls && q.onCensus === q.onWalls,
+      `${at}: the census found ${q.offCensus} -> ${q.onCensus} faces where the`
+      + ` drawing painted ${q.offWalls} -> ${q.onWalls}`);
+    assert(q.offCensusCut === q.offCut && q.onCensusCut === q.onCut,
+      `${at}: the census counted ${q.offCensusCut} -> ${q.onCensusCut} squares`
+      + ` left out of the picture whole where the drawing counted`
+      + ` ${q.offCut} -> ${q.onCut}`);
+    assert(q.offFaded === q.offTaller && q.onFaded === q.onTaller,
+      `${at}: the census found ${q.offTaller} -> ${q.onTaller} faces standing`
+      + ` more than the fade band where the drawing faded`
+      + ` ${q.offFaded} -> ${q.onFaded}`);
+    assert(q.offPaintPx === q.offWallPx && q.onPaintPx === q.onWallPx,
+      `${at}: the census added the faces up to ${q.offPaintPx} -> ${q.onPaintPx}`
+      + ` pixels where the drawing counted ${q.offWallPx} -> ${q.onWallPx}`);
+    /* AND THE PICTURE IS THE SAME PICTURE: the flag moves a foot, it does not add
+       a face or take one away, and it does not change which blocks show nothing
+       at all -- the ones inside the rock next door. */
+    assert(q.onFaces === q.offFaces && q.onBlocks === q.offBlocks
+        && q.onBuried === q.offBuried,
+      `${at}: snapping the feet changed the picture from ${q.offFaces} faces over`
+      + ` ${q.offBlocks} blocks to ${q.onFaces} over ${q.onBlocks}, with`
+      + ` ${q.offBuried} -> ${q.onBuried} blocks showing no face at all`);
+    /* AND THE ARM THAT IS NOT WHOLE IS NOT WHOLE IN ONE WAY: the same fraction on
+       every face. A second fraction would mean a foot landing somewhere the step
+       does not explain, which is a different bug wearing the same symptom. */
+    if (q.offOdd) {
+      const want = q.stepM + q.fade;
+      const frac = (Math.round((want - Math.floor(want)) * 1000) / 1000).toFixed(3);
+      const keys = Object.keys(q.offFrac);
+      assert(keys.length === 1 && keys[0] === frac,
+        `${at}: ${q.offOdd} faces stood a part of a metre in ${keys.length}`
+        + ` different fractions (${keys.join() || 'none'}) where the view's own`
+        + ` step plus the fade band is ${want} m, so a foot is landing somewhere`
+        + ' the step does not explain');
+    }
+    tot.offOdd += q.offOdd; tot.onOdd += q.onOdd;
+    tot.offFaces += q.offFaces; tot.onFaces += q.onFaces;
+    tot.offWhole += q.offWhole; tot.offBlocks += q.offBlocks;
+    tot.offBuried += q.offBuried; tot.onBuried += q.onBuried;
+    if (q.up) { tot.raisedOdd += q.offOdd; tot.raisedFaces += q.offFaces; }
+    else { tot.lowOdd += q.offOdd; tot.lowFaces += q.offFaces; }
+  }
+  /* The flag went back where it was found: this test paints the world both ways,
+     and leaving it in one of them would hand every test after it a look nobody
+     asked for. */
+  assert(r.wasFlag === true && r.backFlag === true,
+    `the metre blocks came back as ${r.backFlag} where they started at`
+    + ` ${r.wasFlag} -- the look that ships is the whole-metre one`);
+  assert(r.out.length === 40 && r.worlds >= 30,
+    `${r.out.length} views were looked at and they reached ${r.worlds} different`
+    + ' pictures of their own, so the seeds, angles and turns are doing something');
+  /* The arm that should not be whole is not whole, and not by a hair: this is the
+     control the identity above is asked of, and a control with nothing in it
+     proves nothing (lesson 19). */
+  assert(tot.offOdd > 300 && tot.offFaces === tot.onFaces && tot.onOdd === 0,
+    `the arm with the snap off painted ${tot.offOdd} faces standing a part of a`
+    + ` metre out of ${tot.offFaces} (the arm with it on painted ${tot.onOdd} out`
+    + ` of ${tot.onFaces}, and the two arms painted the same number of faces)`);
+  /* AND THE RANGE IS THE REASON: all of the part-metre faces were at the raised
+     angle, where one depth step of the view is not a whole number of metres, and
+     none were at the low angle, where the step is exactly one metre -- so the
+     low angle is in the list as the case where snapping may change nothing at
+     all, and it changed nothing. */
+  assert(tot.raisedOdd === tot.offOdd && tot.raisedOdd > 300 && tot.lowOdd === 0
+      && tot.lowFaces > 2000,
+    `the raised angle carried ${tot.raisedOdd} of the ${tot.offOdd} part-metre`
+    + ` faces over ${tot.raisedFaces} faces and the low angle carried`
+    + ` ${tot.lowOdd} over ${tot.lowFaces}, so the fraction being fixed is the`
+    + ' raised angle\'s own step rather than a rounding error everywhere');
+  console.log(`  ... ${r.out.length} views, ${tot.offFaces} faces painted:`
+    + ` part-metre faces ${tot.offOdd} -> ${tot.onOdd},`
+    + ` every one of them ${JSON.stringify(r.out.find((q) => q.offOdd).offFrac)}`
+    + ` of a metre, all at the raised angle (${tot.raisedOdd}),`
+    + ` ${tot.offBuried} -> ${tot.onBuried} blocks showing no face`
+    + ` [raised ${tot.raisedFaces} faces, low ${tot.lowFaces},`
+    + ` ${tot.offWhole} whole, ${tot.offBlocks} blocks]`);
+});
+
+/* Snapping every foot to a whole metre only ever paints MORE wall (v0.46.0).
+ *
+ * This is the shape lesson 21 asks for when a change may only add: never say "it
+ * only adds", say what the old build could not do, and let the numbers fit inside
+ * it. It is true by construction -- the cut is floored and the cut is never
+ * allowed above the block's own height, so `floor(meet) <= meet`, a face's
+ * painted height is `mine - meet`, and flooring therefore makes faces TALLER.
+ * Whether a face is painted at all turns on `meet < mine` where `mine` is a whole
+ * number of metres, and `floor(meet) < mine` exactly when `meet < mine`, so a face
+ * can be neither switched on nor switched off. That is the argument. Below is the
+ * measurement, taken A/B inside ONE build, which is what lesson 21 says to do
+ * with the argument.
+ *
+ * Measured over the same 40 cases, in the suite's own window (624x368, so 229,632
+ * pixels a view; 9,185,280 pixels looked at twice): 10,975 walls and 26,293,952
+ * pixels of wall either way, never one fewer of either and never a pixel less;
+ * 1,347 of the 9,185,280 pixels moved (0.0147%), the worst of them by 16/255 and
+ * 60 in all by more than 8/255; 28 of the 40 views came out byte for byte
+ * identical, so 12 moved at all, and the worst of those moved 0.083% of its
+ * picture -- the 1,545 part-metre faces stood on 3,682,496 painted pixels, which
+ * is where those pixels are. No view came near even a tenth of a percent of the
+ * picture.
+ *
+ * Two bounds, because they answer two different questions. The LOOSE one is
+ * derived: a pixel can only have moved if it lies under a strip one of the
+ * part-metre faces gained at its foot, so twice the area those faces painted --
+ * twice, because a moved foot line has an antialiased outline thicker than its
+ * middle (lesson 17) -- plus 64 pixels a view to allow that outline to extend a
+ * pixel past the face. The TIGHT one is the measurement with headroom written
+ * next to it: 0.15% of the picture, where the worst view used 0.083%. A bound that
+ * cannot fail is worth less than no ruler (lesson 19), which is why both are
+ * here: the loose one says nothing moved anywhere the feet could not reach, and
+ * the tight one would catch a change that moved a corner of the picture. */
+await test('snapping a foot to a whole metre only ever paints more wall (v0.46.0)', async () => {
+  const r = await page.evaluate((CASES) => {
+    const t = window.__test, out = [];
+    t.pause(); t.unpoint();
+    const wasFlag = t.voxelBlocks();
+    for (const c of CASES) {
+      t.seed(c.seed);
+      t.advance(2000);
+      t.tilt(!!c.up);
+      t.rotate(c.q);
+      t.settle();
+      t.unpoint();
+      t.voxelBlocks(false);
+      const off = t.wallMetres();
+      t.repaint();
+      const offC = t.consumed();
+      t.keep();
+      t.voxelBlocks(true);
+      const on = t.wallMetres();
+      t.repaint();
+      const onC = t.consumed();
+      const d = t.diff();
+      out.push({ seed: c.seed, up: c.up, q: c.q,
+                 offFaces: off.faces, onFaces: on.faces,
+                 offWalls: offC.walls, onWalls: onC.walls,
+                 offPx: offC.wallPx, onPx: onC.wallPx,
+                 offFaded: offC.faded, onFaded: onC.faded,
+                 oddPx: off.oddPx, odd: off.odd,
+                 differ: d.differ, pixels: d.pixels, worst: d.worst, deep: d.deep });
+    }
+    t.voxelBlocks(wasFlag);
+    return { out: out, wasFlag: wasFlag, backFlag: t.voxelBlocks() };
+  }, VOXEL_CASES);
+  const tot = { walls: 0, px: 0, faded: 0, moved: 0, deep: 0, worst: 0,
+                identical: 0, movedViews: 0, oddPx: 0, odd: 0, pixels: 0,
+                worstView: 0 };
+  for (const q of r.out) {
+    const at = `seed ${q.seed}${q.up ? ' raised' : ''}`
+      + `${q.q ? ' turned ' + q.q : ''}`;
+    /* THE CLAIM, at its plainest: turning the snap on never takes a wall, a pixel
+       of wall, or a faded face away, and never changes how many faces there are. */
+    assert(q.onFaces === q.offFaces && q.onWalls >= q.offWalls
+        && q.onPx >= q.offPx && q.onFaded >= q.offFaded,
+      `${at}: snapping the feet took the picture from ${q.offFaces} faces /`
+      + ` ${q.offWalls} walls / ${q.offPx} pixels of wall / ${q.offFaded} faded`
+      + ` to ${q.onFaces} / ${q.onWalls} / ${q.onPx} / ${q.onFaded}`);
+    /* The derived cap (lesson 21/17): everything that moved has to fit inside the
+       strips the part-metre faces gained, with room for their outlines. */
+    const cap = 2 * q.oddPx + 64;
+    assert(q.differ <= cap,
+      `${at}: snapping the feet moved ${q.differ} pixels (worst ${q.worst}/255,`
+      + ` ${q.deep} of them by more than 8/255) where the ${q.odd} faces that`
+      + ` stood a part of a metre painted ${q.oddPx} pixels and ${cap} pixels can`
+      + ' be accounted for -- so something moved that no foot could reach');
+    /* The tight bound: the measurement, with the headroom written next to it. */
+    assert(q.differ <= q.pixels * 0.0015,
+      `${at}: snapping the feet moved ${q.differ} of ${q.pixels} pixels, more`
+      + ` than the 0.15% of the picture this change is allowed (the worst view`
+      + ' measured used 0.083%)');
+    assert(q.worst <= 24,
+      `${at}: a pixel moved by ${q.worst}/255 where the worst measured is 16/255`
+      + ' and the palette steps the lighting in far larger jumps than that');
+    tot.walls += q.offWalls; tot.px += q.offPx; tot.faded += q.offFaded;
+    tot.moved += q.differ; tot.deep += q.deep; tot.pixels += q.pixels;
+    tot.oddPx += q.oddPx; tot.odd += q.odd;
+    if (q.differ > 0) tot.worst = Math.max(tot.worst, q.worst);
+    if (q.differ > 0) tot.worstView = Math.max(tot.worstView, q.differ / q.pixels);
+    if (q.differ === 0) tot.identical++;
+    if (q.differ > 0) tot.movedViews++;
+  }
+  assert(r.wasFlag === true && r.backFlag === true,
+    `the metre blocks came back as ${r.backFlag} where they started at`
+    + ` ${r.wasFlag}`);
+  assert(r.out.length === 40, `${r.out.length} views were looked at`);
+  assert(tot.movedViews >= 4 && tot.moved > 0,
+    `the picture did not move at all in ${r.out.length - tot.movedViews} of the`
+    + ` ${r.out.length} views and moved ${tot.moved} pixels in all, so the`
+    + ' identities above are being asked of a change that never happened');
+  /* AND MOST OF THE PICTURE IS PROVABLY UNTOUCHED: two thirds of these views come
+     out byte for byte identical, which is what a change that only moves a foot
+     below a block's own shadow should do. */
+  assert(tot.identical >= 24,
+    `only ${tot.identical} of the ${r.out.length} views came out byte-identical,`
+  + ' where 28 of them did when this was measured');
+  assert(tot.deep <= 80,
+  `${tot.deep} pixels moved by more than 8/255 in all, where 60 did when this`
+    + ' was measured');
+  console.log(`  ... ${r.out.length} views, ${tot.odd} part-metre faces standing`
+    + ` on ${tot.oddPx} painted pixels: ${tot.moved} of ${tot.pixels} pixels`
+    + ` moved (${(100 * tot.moved / tot.pixels).toFixed(4)}%), worst shade`
+    + ` ${tot.worst}/255, ${tot.deep} of them by more than 8/255,`
+    + ` ${tot.identical} views byte-identical, none taking a wall away`
+    + ` [${tot.walls} walls / ${tot.px} pixels of wall, either way,`
+    + ` ${tot.faded} faded faces, worst view`
+    + ` ${(100 * tot.worstView).toFixed(3)}%]`);
+});
+
+/* The top metre of a wall still fades away (v0.46.0).
+ *
+ * This is the half of v0.46.0 that was asked for in as many words: metre blocks
+ * for the walls, and the fade at the top of a wall left alone. It is the half
+ * that is easy to lose, because the fade and the snap are two answers about the
+ * same foot -- the fade is why a foot lands a whole metre lower near a block that
+ * is going to fade, and snapping floors what is left. A version that snapped the
+ * wrong end of the face, or that rounded the fade band away with the fraction,
+ * would pass every test above and quietly delete the fade.
+ *
+ * So this asks the question the player can see: does the picture still fade, and
+ * is the fade band still carrying the wall's own material rather than a flat
+ * colour? `consumed.faded` counts exactly the faces painted through the fade
+ * band and `consumed.banded` exactly the faces whose band carried the material,
+ * both as `paintSide` paints them, so neither number is a new opinion.
+ *
+ * Measured over the same 40 cases: 10,318 faded faces with the snap off and
+ * 10,318 with it on -- the same faces, to the face -- and all 10,318 of them
+ * carrying the material, in both arms, out of 10,975 faces painted. Every one of
+ * the 40 views had a faded face in it, which is the control that matters: a fade
+ * test on views with no walls taller than the band in them would pass on a build
+ * with no fade at all. The census agrees with the drawing in both arms, face for
+ * face. */
+await test('the top metre of a wall still fades away (v0.46.0)', async () => {
+  const r = await page.evaluate((CASES) => {
+    const t = window.__test, out = [];
+    t.pause(); t.unpoint();
+    const wasFlag = t.voxelBlocks();
+    const wasFade = t.wallFade();
+    for (const c of CASES) {
+      t.seed(c.seed);
+      t.advance(2000);
+      t.tilt(!!c.up);
+      t.rotate(c.q);
+      t.settle();
+      t.unpoint();
+      t.voxelBlocks(false);
+      const off = t.wallMetres();
+      t.repaint();
+      const offC = t.consumed();
+      t.voxelBlocks(true);
+      const on = t.wallMetres();
+      t.repaint();
+      const onC = t.consumed();
+      out.push({ seed: c.seed, up: c.up, q: c.q, fade: off.fade,
+                 offFaded: offC.faded, onFaded: onC.faded,
+                 offBanded: offC.banded, onBanded: onC.banded,
+                 offTaller: off.taller, onTaller: on.taller,
+                 offFaces: off.faces, onFaces: on.faces,
+                 offBuried: off.buried, onBuried: on.buried,
+                 offBlocks: off.blocks, onBlocks: on.blocks });
+    }
+    t.voxelBlocks(wasFlag);
+    return { out: out, wasFlag: wasFlag, backFlag: t.voxelBlocks(),
+             wasFade: wasFade, backFade: t.wallFade() };
+  }, VOXEL_CASES);
+  const tot = { offFaded: 0, onFaded: 0, offBanded: 0, onBanded: 0,
+                views: 0, offFaces: 0, onFaces: 0 };
+  assert(r.wasFade > 0 && r.backFade === r.wasFade,
+    `the fade band came back as ${r.backFade} m where the sheet has`
+    + ` ${r.wasFade} m, and a fade of nothing is not a fade`);
+  for (const q of r.out) {
+    const at = `seed ${q.seed}${q.up ? ' raised' : ''}`
+      + `${q.q ? ' turned ' + q.q : ''}`;
+    assert(q.fade === r.wasFade,
+      `${at}: the census was run against a fade band of ${q.fade} m where the`
+      + ` sheet has ${r.wasFade} m`);
+    /* THE CLAIM: the picture still fades, and snapping the feet changed not one
+       face of it. */
+    assert(q.offFaded > 0 && q.onFaded === q.offFaded,
+      `${at}: the picture faded ${q.offFaded} faces with the feet as they were`
+      + ` and ${q.onFaded} with them snapped, where every view measured has walls`
+      + ' taller than the fade band in it');
+    /* AND THE BAND IS THE WALL'S OWN MATERIAL, not a flat colour: every face that
+       went through the fade band carried the material to it. */
+    assert(q.onBanded === q.onFaded && q.offBanded === q.offFaded,
+      `${at}: ${q.onFaded} faces were painted through the fade band and`
+      + ` ${q.onBanded} of them carried the wall's own material (${q.offFaded}`
+      + ` / ${q.offBanded} with the feet as they were)`);
+    /* AND THE CENSUS SEES THE SAME FACES THE DRAWING PAINTED, in both arms --
+       otherwise "the fade is unchanged" is a claim about a list of faces nothing
+       checked. */
+    assert(q.offTaller === q.offFaded && q.onTaller === q.onFaded,
+      `${at}: the census found ${q.offTaller} -> ${q.onTaller} faces taller than`
+      + ` the fade band where the drawing faded ${q.offFaded} -> ${q.onFaded}`);
+    tot.offFaded += q.offFaded; tot.onFaded += q.onFaded;
+    tot.offBanded += q.offBanded; tot.onBanded += q.onBanded;
+    tot.offFaces += q.offFaces; tot.onFaces += q.onFaces;
+    if (q.offFaded > 0) tot.views++;
+  }
+  assert(r.wasFlag === true && r.backFlag === true,
+    `the metre blocks came back as ${r.backFlag} where they started at`
+    + ` ${r.wasFlag}`);
+  assert(tot.views === r.out.length && tot.offFaded > 1000,
+    `only ${tot.views} of the ${r.out.length} views had a wall taller than the`
+    + ` fade band in them (${tot.offFaded} faded faces in all), so this test is`
+    + ' not being asked of a picture with a fade in it');
+  /* THE WHOLE POINT, in one line: the same faces, to the face, in both arms. */
+  assert(tot.onFaded === tot.offFaded && tot.onBanded === tot.offBanded,
+    `snapping the feet changed the faded faces from ${tot.offFaded} to`
+    + ` ${tot.onFaded} and the material carried to the band from`
+    + ` ${tot.offBanded} to ${tot.onBanded}`);
+  console.log(`  ... ${r.out.length} views, a fade band of ${r.wasFade} m:`
+    + ` faded faces ${tot.offFaded} -> ${tot.onFaded}, all of them carrying the`
+    + ` wall's material (${tot.offBanded} / ${tot.onBanded}),`
+    + ` ${tot.offFaces} -> ${tot.onFaces} faces painted`);
+});
+
 /* The wall behind a block you can see past is brought back whole. When a block
  * stops being painted at all, the wall of its neighbour that used to be covered
  * by it is painted to its full height instead -- so the hole the player would

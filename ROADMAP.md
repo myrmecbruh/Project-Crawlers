@@ -119,6 +119,17 @@ noted against each line:
   the suite test that holds it is `the rock along a wall's far edges is painted only
   where the cut opens a gap (v0.45.0)`, 24 views and four arms inside one build.
 
+- **The picture draws the whole world it holds, whether or not anyone has been
+  there.** Asked for "voxels, and do not display ones that are unrevealed", the
+  buried half turned out to be **already built** — a block inside solid rock is
+  not painted and cannot be pointed at, since v0.34.0's cut — and **the unexplored
+  half is not built at all**. There is no memory of what has been seen anywhere in
+  `src/js`: nothing remembers a square, so there is no remembered copy to draw and
+  nothing to hide. `light` is worked out per square and floods only through what
+  does not block sight, which is the closest thing that exists, but it is rebuilt
+  from the sources each time and then thrown away — it is not knowledge. This is a
+  world-model job, not a renderer job, and it is question 6 below.
+
 ---
 
 ## Parked: what to build next
@@ -203,6 +214,30 @@ Rule 2 says ask and wait. These have been asked and are still open.
      Theirs: *"I don't mind slopes leading up to walls. happens in caves and
      rubble all the time."* A session re-reported this as a defect more than once;
      it is not one.
+6. **Ground nobody has explored or lit is still drawn as if it were known.** Theirs,
+   offered the two readings of "unrevealed": *"both — but buried blocks don't
+   really need to exist, right?"* The buried half is already the case (a block
+   inside solid rock has not been painted since v0.34.0); the explored half has
+   nothing behind it and is the genuinely unbuilt part of this request. It needs
+   answered before it can be built, because the three shapes it could take are
+   three different games and they are not a matter of taste a session can settle:
+   - **Absent** — the world simply is not there beyond what has been seen, so the
+     picture ends and the crawlers walk into nothing. Cheapest and the most like a
+     voxel game; also the emptiest, and it makes the whole plain of pieces look
+     like a curtain being pulled back.
+   - **Dark** — the ground is there and unlit, so it reads as shapes in the gloom
+     at `light.ambient`, the way the labyrinth already reads past the edge of a
+     carried light. Closest to what the game already does and to "sight *is* the
+     light"; the risk is that it looks like the darkness is merely unlit rather
+     than unknown.
+   - **Remembered** — what has been seen is kept, dimmed, and the map fills in
+     behind you; what has never been seen is absent. The most information and the
+     most machinery, and it makes the ground *held* into the ground *known*, which
+     is the same book-keeping `forget-and-remake` is about.
+   Whatever is chosen, the first question underneath it is **what counts as
+   seen** — the square a crawler stands in and the squares a carried light reaches
+   are the two candidates the build can already answer, and they are not the same
+   set.
 
 ---
 

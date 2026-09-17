@@ -152,6 +152,30 @@ const Render = {
      reaches, and a fading face needs the rock it fades INTO to be there, so the
      cut stops one fade band short of it. See cutMeet(). */
   wallFade: true,
+  /* EVERY METRE OF ROCK IS A BLOCK, AND THE BLOCKS LINE UP.
+
+     The solid ground of the labyrinth is a grid of one-metre cubes: a square
+     stands `h` whole metres of rock over its floor, so a wall face is a STACK OF
+     BLOCKS rather than a sheet cut off wherever the arithmetic happened to land.
+     With this on, `cutMeet()` snaps the cut DOWN to a whole metre, and because
+     the cut is measured from the block's own base, every wall in the picture
+     starts on a block boundary. Two walls of different heights step in whole
+     blocks instead of in slivers, and a face that is one block tall reads as one
+     block.
+
+     SNAPPING DOWN CAN ONLY PAINT MORE, AND PAINTING MORE IS ALWAYS SAFE -- the
+     argument `drawnM()` already makes: the block in front is painted after this
+     one and covers what it covers, so what the extra block-length reaches into
+     is exactly what was going to be painted over it anyway.
+
+     IT ALSO PUTS EVERY WALL'S FOOT ON A MATERIAL COURSE. One tile of the
+     material is one metre of wall, so a cut at a fraction of a metre cut the
+     stonework mid-course and left every wall in the picture with a part-height
+     row of stones along its foot.
+
+     False is the A/B arm: the picture as it was, cut at the exact height the
+     arithmetic gives, slivers and half-courses and all. */
+  voxelBlocks: true,
   /* The fourth wall, and what became of it.
 
      Rock standing between the camera and a floor behind it is what stops a
@@ -1423,7 +1447,13 @@ const Render = {
      only a foot of itself standing. */
   cutMeet(nbr, mine, stepM) {
     const hide = this.capShown(nbr) ? 0 : stepM + CFG.wallFadeM;
-    return Math.max(0, Math.min(mine, this.drawnM(nbr) - hide));
+    const meet = Math.max(0, Math.min(mine, this.drawnM(nbr) - hide));
+    /* Whole blocks only -- see `Render.voxelBlocks`. `mine` is a whole number of
+       metres (a square's height, or `cut_stump_m`), and the cut is never allowed
+       above it, so flooring can only ever move the foot DOWN. It can never raise
+       a face above its own block count, which is what keeps
+       `Math.floor` from inventing a metre of wall the block has not got. */
+    return this.voxelBlocks ? Math.floor(meet) : meet;
   },
 
   /* Cut a block's two side walls down to where the square standing in front of

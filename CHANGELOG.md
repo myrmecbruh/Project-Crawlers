@@ -8,6 +8,153 @@ them on an old build.
 
 ---
 
+## v0.46.0 — every metre of rock is a block, and a wall's foot lands on a course
+
+Their words: **"make each meter of material a voxel (like minecraft blocks) and
+not display ones that are unrevealed"**, with **"I still want the top meter of
+walls to have the gradient transparency fade"** -- and, offered the two readings
+of "unrevealed", **"both -- but buried blocks don't really need to exist,
+right?"**
+
+They asked for two things and there are three answers in this release, because
+one half of the request turned out to be already standing and the other half is
+not a rendering job at all.
+
+**Blocks inside solid rock were already not being painted, and already could not
+be pointed at.** v0.34.0's cut is what does it: `cutMeet()` cuts a column down to
+where the block in front of it reaches, and a column that is reached at its own
+base is refused whole (`cutOut`), so a square buried under the rock next door is
+never a polygon and never a pick. The suite has counted them for a while --
+`consumed.cut` and the per-block `buried` tally -- and the new census below adds
+a third count of the same thing, taken a different way, that agrees with the other
+two on every one of the 40 views. So the answer to *"buried blocks don't really
+need to exist, right?"* is **they already don't**: there is nothing there to
+switch off, and this release changes nothing about it.
+
+The half that is genuinely not built is **land nobody has explored or lit**. There
+is no memory of what has been seen anywhere in the game, so there is nothing to
+hide an image of. That is a world-model change and not a renderer change, and it
+is parked in `ROADMAP.md` with the question it needs answered first: whether
+unvisited ground should be absent, dark, or drawn from a remembered copy.
+
+### The foot of a wall was standing on nothing in particular
+
+The picture is built out of one-metre cubes -- a square stands `h` whole metres of
+rock over its floor -- but a wall face was a sheet cut off **wherever the
+arithmetic landed**. `cutMeet()` stops a near wall one depth-step of the view
+below the block behind it, plus a metre more where that block is going to fade, so
+that the rock it fades into is still there. At the raised angle one depth step is
+`stepM` = 27/16 = **1.6875 m**, and with the fade band at 1 m the foot landed at
+**2.6875 m** -- so along every corner where a block met a block shorter than
+itself, **0.6875 of a metre of wall stood on nothing at all**. It was not a
+rounding error that happened sometimes: it was one number, on every such face.
+
+`Render.voxelBlocks` (a code flag, not a sheet dial -- it is not a feel decision,
+it is whether the rock is a voxel model or not) floors the cut, and the flag reads
+`true` in the game. The change is one line in `cutMeet()`, and the whole reason it
+is safe is an argument `drawnM()` has been making since the cut was written: the
+block in front is painted after this one and covers what it covers, **so a block
+reaching further into what was going to be painted over it anyway can only ever
+paint more wall, never less.** Painting a foot lower puts the wall's own foot line
+on a material course as well -- one tile of masonry is one metre of wall, so a cut
+at a fraction of a metre had been cutting the stonework mid-course and leaving a
+part-height row of stones along the bottom of every wall.
+
+### What the change was measured at, A/B inside one build
+
+One build, one flag, no rebuild between the arms (lessons 5, 21): **40 views** --
+seeds 1, 2, 3, 7 and 777, each at both camera angles and all four quarter turns,
+the world given its 2,000 frames before it was looked at (lesson 24) -- at the
+suite's own window, 624x368, so **229,632 pixels a view, 9,185,280 pixels looked
+at twice**.
+
+| | the feet as they were (v0.45.0) | whole-metre feet (v0.46.0) |
+|---|---|---|
+| faces the picture painted | 10,975 | **10,975** |
+| of them standing a part of a metre | **1,545** | **0** |
+| blocks showing no face at all (inside the rock) | 3,129 | **3,129** |
+| walls painted | 10,975 | **10,975** |
+| pixels of wall painted | 26,293,952 | **26,293,952** |
+| faded faces | 10,318 | **10,318** |
+| pixels that differ between the two arms | -- | 1,347 (0.0147%) |
+
+**The 1,545 part-metre faces all stood the SAME fraction, 0.6875 = frac(stepM +
+fade), and every one of them was at the raised angle.** The low angle's depth step
+is exactly 1.0 m, so all 7,600 of its faces were already whole and the flag
+changed nothing there -- which is why the low angle is in the battery at all, as
+the case where the change is allowed to be a no-op and is one. The raised angle
+carried 3,375 faces and 1,545 of them were odd, so **46% of the raised angle's
+faces had a foot on nothing**, which is a good deal more than "a corner here and
+there" and is the reason the complaint is worth a release.
+
+**The change is proved additive, and the proof is two counts that have to agree.**
+A face's painted height is `mine - meet` where `mine` is a whole number of metres
+(the block's own height) and the cut is never allowed above it, so
+`floor(meet) <= meet` makes faces TALLER; and a face is painted at all exactly
+when `meet < mine`, which floor does not change, so a face can be neither
+switched on nor switched off. Asserted, per view: never one fewer wall, never one
+fewer pixel of wall, never one fewer faded face, and the same number of faces
+either way. Then the same view is bounded twice -- a loose bound **derived** from
+the strips that actually moved (twice the area the part-metre faces painted, plus
+64 pixels a view for the antialiased outline, lesson 17) and a tight bound of
+0.15% of the picture with the measurement next to it (**worst view 0.083%**, 28
+of the 40 views byte-identical, worst single pixel 16/255, 60 pixels in all moving
+by more than the 8/255 the game calls noticeable). The loose one says nothing
+moved anywhere a foot could not reach; the tight one would catch a change that
+moved a corner of the picture. Neither is decoration: 12 of the 40 views moved
+something, so the identities are being asked of a change that really happened.
+
+**And the fade is checked as a separate claim, because it is easy to lose with the
+snap.** The fade and the snap are two answers about the same foot -- the fade is
+*why* a foot lands a whole metre lower near a block that is about to fade, and the
+snap floors what is left -- so a version that snapped the wrong end of the face,
+or that rounded the fade band away with the fraction, would pass every test above
+and quietly delete the fade. **10,318 faded faces before, 10,318 after, the same
+faces to the face, and all 10,318 of them carrying the wall's own material rather
+than a flat colour, in both arms, with all 40 views holding a wall taller than the
+band.** The census that says so is held against the drawing's own counters, not
+trusted on its own: faces against `consumed.walls`, cut squares against
+`consumed.cut`, faded faces against `consumed.faded`, and painted area against
+`consumed.wallPx` -- four identities, per view, both arms, 40 of 40.
+
+### Two mistakes were made in this release, and both were in the ruler
+
+**The census had a selection rule of its own, and it was wrong.** The new harness
+door (`__test.wallMetres()`) walks the frame's batch and asks `wallsPainted` the
+same way `draw()` does -- but it also skipped any square with no height of its
+own, while the drawing counts them: **a ramp whose low end reaches the floor of
+the world has `wallM` 0 and still lays two cheek faces on the canvas.** On seeds 2
+and 777 that came out exactly 2 faces short per view, and it showed up as 2 lost
+against the drawing's own `walls` count and nothing else -- which is the fifth
+identity doing its job. The lesson is not new (lesson 2, a broken ruler) but the
+shape of it here is worth keeping: **zero metres is a height too, and it is a
+whole number of metres**, so such a face counts and is never odd.
+
+**The two counts agreed to within a pixel and never exactly, because the game
+rounds.** The drawing keeps `wallPx: Math.round(wallPx)`; the census did not, so
+the identity failed by 9 and 10 pixels across the battery for no reason at all.
+**An identity that cannot be stated exactly is not an identity** -- the census now
+rounds the same way, once, at the end.
+
+**And a number is only true of the picture it was measured on.** The session
+instrument that set these bounds measured them at 434x318 (138,012 pixels a view)
+by opening a 900x700 window; the suite opens 1280x800, so its picture is 624x368
+and it paints **twice as many faces** -- 10,975 against the instrument's 5,355,
+1,545 odd against its 502. Both are correct and neither was a broken ruler; the
+two windows are two different pictures, and the comments in the suite now quote
+the numbers the suite itself prints rather than the smaller window's.
+
+### What a person will see
+
+At the raised camera angle, the walls step in whole blocks instead of stopping
+partway up a block -- the sliver of wall that used to hang below a step is gone,
+and the bottom of a wall lands on a line of stones rather than through the middle
+of one. At the low angle, nothing changes at all: it was already whole. The top
+metre of a wall still fades away exactly as it did. Blocks buried inside other
+rock are still simply absent, as they have been since v0.34.0.
+
+---
+
 ## v0.45.0 — the inside of a wall is not painted, and the strips that fill the cut stay
 
 Their words: **"make the interior faces of walls transparent (backface culling?)"**,
