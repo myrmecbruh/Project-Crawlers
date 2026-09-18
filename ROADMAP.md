@@ -170,51 +170,355 @@ noted against each line:
 Offered as four options in September 2026. **They chose "the labyrinth goes on
 forever"**: the endless ground was built in v0.20.0 and the fetching of it as the
 crawlers walk in v0.21.0 (see `CHANGELOG.md` for the reasoning and `CLAUDE.md`
-for how it now works). The three below are what is left of that offer. The one
-piece of the endless world still outstanding is **throwing ground away again**,
-which is what keeps a long match from growing forever — it is noted against the
-labyrinth line above and is not one of these three.
+for how it now works). The three below are what is left of that offer; a fourth
+has been added since. The one piece of the endless world still outstanding is
+**throwing ground away again**, which is what keeps a long match from growing
+forever — it is noted against the labyrinth line above and is not one of these.
 
-### 1. Hunger, tiredness, warmth
-Crawlers start needing things. The fire stops being decoration and becomes the
-reason they survive the night; someone has to forage, cook and tend the sick.
-Puts five or six dead skills to work at once and makes failure cost something
-other than time.
+### 1. The six needs — **decided, planned, not built**
+Crawlers start needing things, and **six** of them: **Hunger, Comfort, Fatigue,
+Sanity, Filth and Camaraderie**, six rungs each, each readable off the figure at
+a glance. The fire stops being decoration and becomes the reason they survive the
+night, because it burns fuel and needs keeping fed; someone has to gather food,
+cook, keep warm and look after the ones who go down. It is the job that turns the
+camp from a diorama into somewhere things go wrong.
+
+**Their words for how it hangs together:** *"systems feed into each other.
+activity uses up calories, food and rest restore fatigue, deep cold or heat slows
+you down, etc."* — and the line that frames all of it: *"they are survivors -
+they work a lot at maintaining health and preventing catastrophic needs."* So
+this is upkeep that **mostly works**, and hardship is an *event* (a fire gone out,
+someone down far from camp), not a slow slide nobody can keep up with.
+
+**Which skills it brings in has to be counted, not guessed.** It definitely calls
+**Foraging** (gathering food), **Tinkering** (cooking and making), **Tending**
+(nursing whoever goes down) and **Grappling** (dragging a downed crawler home —
+that skill's own line is *"dragging people out of trouble whether they like it or
+not"*). **No skill carries the cold or the hunger**: the six needs deliberately do
+not use skills for that at all.
+
+**The shape:** six needs of six rungs on every crawler. Rung **3** is the one that
+matters — **they know it**, and a crawler at 3 drops what they are doing and heads
+for the larder, the bedroll or the fire on their own. Rung **0** is where someone
+can die, and at 0 it is **one real roll**, not a slide.
+
+**Each need is resisted by exactly one attribute** — chosen by them, one at a
+time, not accepted as a table:
+
+| Need | Resisted by | Read the link as |
+|---|---|---|
+| **Hunger** | **Might** | sheer body keeps them up once the food is gone |
+| **Comfort** | **Agility** | the cold takes fine control first |
+| **Fatigue** | **Endurance** | the body keeps going after the person stops |
+| **Sanity** | **Willpower** | fear and boredom, and holding on anyway |
+| **Filth** | **Intellect** | avoiding it by knowing better |
+| **Camaraderie** | **Presence** | others gather round them, so alone bites less |
+
+Every attribute is used exactly once: nothing doubled, nothing spare. **What moves
+a need is what the crawler is DOING** — *"performing actions make you hungry"* —
+not a clock. **What the attribute does is only resist the collapse:** it is the
+number thrown at the one roll below, and it does nothing else at all.
+
+**Four decisions shape everything else in it:**
+- **They are survivors.** Self-care happens on its own at rung 3; the player is
+  being warned, not managing meters.
+- **A need costs speed, capacity and time — never a die, and never skill.** Rule 1
+  means a starving crawler who rolled worse would fail more often, and therefore
+  **learn faster**. So being in need must never make anyone better. "Slower"
+  always means *more ticks or longer between attempts*, never a minus.
+- **Everything in it is decided, not invented.** No new skills, no new attributes,
+  no second set of rules.
+- **One named exception**, below, and it is written down as an exception.
+
+**The one roll — and rule 2's single exception.** The slow grind is plain
+arithmetic with **no dice in it at all**. When a need bottoms out and they are
+about to go down there is exactly **one** roll: **their attribute + 2d6 against
+about a dozen** — the game's own roll shape with the skill left out. Rule 2 says
+every roll comes from a skill, so this is the **one named exception**, and the
+reason is that **a need is a property of the body, not a thing anyone has
+practised.** It is safe because attributes carry no practice: the roll has nowhere
+to put a lesson, so it cannot teach anything, cannot be farmed, and cannot spread.
+
+**At 0 it does not stop there.** They go down where they stand, and someone has to
+carry them back — **if nobody comes, they die.** Brought back alive they are **laid
+up and need tending**, which costs the camp their work and costs whoever went out
+for them. And depending on how bad it was, a **permanent injury**: a wound or a
+scar that stays visible on the figure and comes with a dent in an attribute.
+**Death is the floor and a scar is the ceiling.** That was their call, and it makes
+an injury the only thing in the whole system that reaches the dice — a cost the
+player pays for a crawler they did not look after, which nobody can choose and so
+nobody can farm.
+
+**Watching is built in here.** The watch falls to whoever is **least tired**,
+decided among themselves — *"they will get tired at differing rates ... so they
+will decide to keep watch based on who is most tired"* — and it rotates by itself,
+because standing watch is not resting, so the watcher stops being the least tired
+one and hands over on their own. **No roster, no timetable, no shift screen.** A
+pinned "you keep the fire fed" beats tiredness rather than doubling it: one
+watcher, never two. Before creatures exist, watching is the fire staying lit and
+someone awake to notice a crawler going bad; it gets its teeth when creatures
+arrive, and nothing about it is rebuilt for that. **This is also the reason needs
+have to fall from activity rather than from a clock** — take that away and the
+watch stops rotating on its own.
+
+**Comfort is not only the fire**, and the first thing in the game that makes
+exploring *pay* is in here: **hot vents and magma found in certain rooms.** Built
+shelters stocked with fuel are the same idea done with hands, and come later with
+the materials work. Clothing insulates and can overheat you; torches are carried
+light and warmth at once; a hot meal pays Hunger and Comfort together.
+
+**Cut from the first version, or deliberately later.** Cut: waystations you build
+and stock (they need the materials work above); meat and anything else waiting on
+creatures; farming; and any permanent illness model — a lasting hurt is a
+consequence and a Tending job, not a disease system. **Deliberately later**: what
+pays back **Filth, Sanity and Camaraderie**. They are in the design and on the
+figure, and what clears them waits until the action-cost table exists and there is
+something real to look at.
 
 ### 2. Things that live down there
 Creatures, generated from tags rather than hand-authored (rule 6). Brings danger,
-makes carrying a light a real decision, gives Fighting and Wrangling a job. But
+makes carrying a light a real decision, gives Brawling and Grappling a job. But
 it is the combat fifth of the game, and rule 3 caps that at 20%.
 
+*Amended 16 Sept, after the skills review: this used to name **Fighting** and
+**Wrangling**, which are now **Brawling** and **Grappling**.*
+
 ### 3. Hands and work — crafting, cooking, repair
-Gather materials, cook a meal, sew a coat, mend a broken spade. Puts Crafting,
-Foraging and Tinkering to work and makes gear something you maintain. Depends on
-the gear-wears-out question below.
+Gather materials, cook a meal, sew a coat, mend a broken spade. Puts Tinkering,
+Foraging and Labouring to work and makes gear something you maintain.
+
+*Amended 16 Sept, after the skills review: this used to name **Crafting**, which
+has been folded into **Tinkering**, so the row now names the three skills that
+actually do the work. Whether **Labouring** is the right third name for "gather
+materials" — or whether that should be **Building** — is worth a decision rather
+than an assumption.*
+
+**Decided on 15 September 2026** — the gear-wear questions this was waiting on are
+all answered:
+
+- **Kit wears out, and it shows.** Their choice out of three was **both** "yes, and
+  it shows — kit gets worn with use, you can see it on the figure, and mending it
+  is a job" **and** "yes, and harder — kit wears, can snap or be lost down a hole,
+  and crawlers can hand kit to each other". "Kit lasts forever" was explicitly
+  turned down.
+- **Worn-out-ness is a short ladder of states** — clean, worn, chipped, cracked —
+  and each mend knocks it down one rung, so a thing lasts a few mends before it is
+  scrap. Chosen over a number out of ten, and over nothing visible.
+- **Worn kit is not dropped on the ground.** In their words: *"they can keep it in
+  inventory, store at camp for later repair during downtime. perhaps repairs offer
+  diminishing returns - max durability permanently decreases? Eventually they will
+  have to decide whether to repair or to salvage for parts and build anew."*
+- **Salvage returns real materials.** *"The actual stuff it was made of — leather,
+  iron, cloth — counted separately, so what you salvage decides what you can
+  build."* This is the hook that ties repair to making new things.
+- **Kit changes hands on its own, unless pinned.** They help themselves from the
+  camp store, and a particular thing can be pinned to a particular crawler *"so it
+  doesn't wander off"*. This is the same pin idea the needs job uses for jobs, and
+  it was decided here first.
+
+### 4. The job system — who does what, and in what order
+Their words: *"we will need to build a job priority system like Dwarf Fortress."*
+Shape decided: **both, layered.** First a **short camp-wide priority order** that
+everyone follows, with skills deciding *who* does each thing rather than *whether*
+it is allowed; per-crawler permits only later, and only if the camp turns out to
+feel too hands-off.
+
+**No priority numbers.** The order is the order: a new sheet tab where the row
+order *is* the priority, top row first — the same pattern the attributes and the
+figure already use, and the same "row order is meaningful, and the build asserts
+it" law that is already in `CLAUDE.md`.
+
+**What it must not become:** a grid of tick-boxes per crawler. The law says the
+player is a head coach, not a hand; Dwarf Fortress earns its spreadsheets because
+its pleasure *is* the bookkeeping, and this game's pleasure is watching crawlers
+make sensible choices.
+
+**Comes after the needs job**, because the needs job proves self-care works with no
+job system at all (rung 3 does it on its own), and the job system then gives the
+player levers once there is enough going on to need them. It is a foundation that
+creatures, materials, mending and foraging all plug into.
+
+### The order they picked
+
+Not a schedule — the roadmap says nothing in it is agreed or scheduled — but
+recorded so nobody has to ask again:
+
+**the last piece of the labyrinth (`forget-and-remake`) → the six needs → the job
+system → mending and materials → the hands-on interface → creatures.**
+
+---
+
+## Parked: decided, waiting on the build
+
+Nothing here is waiting on an answer; it is waiting on the work that will use it.
+Recorded so that no session re-asks a question that already has one. Like
+everything else in this file, **none of it is agreed or scheduled** — it is what
+the answers were.
+
+- **Gear may push an attribute past 6, on purpose.** Ruled: *"Let kit break the
+  scale — 7 or 8 is fine, and we rewrite the rule to say so."* A bare crawler still
+  runs 1 to 6 and the generator only ever rolls 1–6; **only kit breaks the scale**,
+  and the rule is rewritten rather than left to drift. Two things change together:
+  the sentence in rule 10, and the build's range check, which currently refuses a
+  range that climbs out of that scale.
+- **Rule 10 is two commitments, not one.** Ruled: *"#1, plus keep 'tactility' (i
+  want to be able to drag and drop stuff eventually, see chits and pips stack up,
+  move sliders etc)."* So low numbers *and* things you can handle. The second half
+  is a live aim for the interface, recorded now so a later job does not quietly
+  design it out, and it is worth stating in rule 10 itself.
+- **"Boardgame aesthetics" was a wording mix-up, and it never meant the look.**
+  Ruled: *"I meant small numbers and easily understood rules. not visuals, sorry I
+  used the wrong word."* It is rule 10, which is already settled — so the gloom, the
+  painted-miniature question and the grit overlay removed in v0.17.0 have nothing to
+  do with it. The live half of it is the tactility above.
+- **The bottom of the attribute scale is real, and enforced everywhere.** The sheet
+  has `attribute_min` and `attribute_max` and **nothing read them**, so gear could
+  already push an attribute to 0 today, and permanent injuries make that easier and
+  stackable. Rule 10 says the scale is 1 to 6, so the sheet was right and the code
+  was simply not listening. **Ruling: nothing reaches below 1** — no combination of
+  gear, load or injury. It is a clamp rather than a rule: nothing is refused and
+  nothing becomes invalid, exactly as carrying already works. The carrying ruling
+  below is what turns this from tidy into load-bearing: an overloaded crawler's
+  Agility is a number a load can push down, and the walking-speed curve has no row
+  for zero, so without the floor the crawler carrying the most would be the one the
+  game had no answer for. **The top of the scale is the opposite case** — 6 is a bare
+  crawler's ceiling, not kit's (see the first entry here).
+- **Pace reads Agility, and the drag it fights has a name: Encumbrance.** Pace comes
+  from Agility on a **nonlinear, diminishing-returns** curve — each point buys a
+  little less speed than the point before it, so a 6 is the quickest thing in the
+  labyrinth without being absurd. A load is a separate, named quantity:
+  **Encumbrance**, meaning the things carried past the free allowance that Might
+  sets. It is **resisted by Labouring** — the skill whose own sheet line already
+  begins *"Hauling, digging, clearing ground"*, and the skill the camp already rolls
+  when it clears ground. Labouring **shaves a share** of the drag rather than
+  cancelling a count of things, and it **never cancels it**: over the allowance there
+  is always a floor of slowdown, so the load stays visible even for a master. This
+  makes carrying the first pressure in the game answered by technique rather than by
+  the body, and the only resistance that can **grow**. **What is left is numbers, not
+  decisions** — the tick values in the curve, the share shaved at each level of
+  Labouring, and how big that floor is.
+- **The Pack already grants a Labouring bonus.** `bonus: "labouring:1"`, read by
+  `gearBonus()` today, so a Pack-wearer counts as Labouring 1 before they have hauled
+  anything. The item carries all three sides of its own trade-off: carries more,
+  slows you down, and teaches you the carrying skill. Two other items carry Labouring
+  too, at 2 and at 3 — there is a short ladder of carrying gear already in the sheet.
+- **A crawler carries up to Might things, and going over is allowed.** It costs, it
+  is not refused — the same principle `toolPenalty()` already states (*"Going without
+  is not forbidden -- it is just very hard, which keeps one rule instead of two"*).
+  Three things already written down become true at once: Might's note claims
+  *"Lifting, hauling"*; the gear header says *"a pack makes you stronger-backed and
+  slower"*; and the Pack's own data is `might:1, agility:-1`, which with capacity read
+  as Might **is** "carries more and slows you down", the trade-off its note has
+  claimed since it was written. The Pack is the only item in the game that shifts
+  Might, and `agility:-1` is already the sheet's word for burden — only the Pack and
+  the Jerkin use it, and the Charm's `presence:-1` is social. **Worn gear does not
+  count**, and **a purse counts as one thing however many coins are in it**, which is
+  why money went into a container. So the new machinery is one *source* of attribute
+  shift and one count of carried things on the actor — most of the work is reading
+  two numbers that were already there.
+- **The overload cost is all three levers.** An overloaded crawler is clumsier (an
+  Agility shift), walks slower (more ticks per step) and tires faster. One principle
+  reaching three visible places, not three mechanics.
+- **The Pack's note is now load-bearing.** *"Everything they own, on their back.
+  Carries more and slows you down: the trade-off is the point"* — nothing in the game
+  carries anything, so this note has been a promise since it was written, and it is
+  now the sentence that defines what carrying must do. Worth reading as a free design
+  spec rather than a new invention.
+- **The purse is carried, not worn.** No thirteenth slot, no surrendered trinket and
+  no wear-changing code: the purse waits on **carrying**, which is the stores work,
+  not on creatures. Two follow-ups ride with it — **how a carried thing is drawn**
+  (the figure draws by slot, and a carried thing has none), and **whether money can
+  be held with no pack and no belt at all**.
+- **`price` is a number, and prices may reach the tens.** The vast majority of items
+  sit under twelve coins, so a price above a dozen is not expensive, it is *notable*
+  — a free and useful property. The expected clash with rule 10 does not exist: its
+  refusal names four things only (*"an attribute range, skill cap, die or dice
+  count"*, `CLAUDE.md:150-156`), and the sheet already runs 9, 13, 13 and 45 without
+  objection. The chosen ceiling is the sheet's own *"difficulty of about a dozen"* —
+  `room.study_difficulty` is 13 — so prices land on the **target** scale rather than
+  the roll scale. **The lesson generalises: rule 10 is a law about rolls, not about
+  numbers.** Any future value that is not an attribute, skill, die or dice count — a
+  capacity, a weight, a light reach, the fire's sight cap — is free to be whatever the
+  fiction needs.
+- **Does the camp you built count as seen? Yes.** It obeys the memory rule like the
+  ground: what the crawlers built is drawn dimmed from memory, bright only where it is
+  lit now. And a light **is seen from far beyond the ground it lights** — unbroken
+  line of sight, up to a long cap. The sheet already states that half twice in its own
+  words (*"glow 1 means it is never darkened by the room, because it IS the light"*),
+  so this is that law asked a new question rather than a new law. One build note: **no
+  `light.*` knob is a reach today**, so the cap is a fifth one to add.
+- **The Slave Market is a ruin, not a shop.** Ruled: the word stays, the trade stops,
+  nothing in the room is for sale, and no living stock exists anywhere. That makes it
+  the **only** trade word that needs no creatures at all — stock, no staff, no second
+  body, no lit-room problem — because the salvage-dealer half of a shop is exactly the
+  `store_barrel` / `store_hoop` / `store_lid` parts the sheet already draws. So of all
+  the rooms that could be shops, the darkest one is the cheapest to build, and a first
+  coin sink already exists if one is ever wanted ahead of creatures. **A shop *with a
+  shopkeeper* is not a system beside creatures — it is the reason creatures exist**,
+  because a haggle needs an opponent with attributes of their own.
+- **The people word does not change tense.** A living trader in a named room arrived
+  **after the name was earned** — an occupant, not an owner — and the crawlers are the
+  same kind of newcomer. So the labyrinth is a ruin *with things currently living in
+  it*, not a frontier, and nothing about room generation changes: the 45% people roll
+  (`world.room_people_chance`) was always a history roll, and `nameRoom(rand)` takes
+  nothing but a random function, so the naming code has no access to the world and
+  never needs any. The line worth keeping: **history is what you read, occupants are
+  what you meet.** (It also means *"Abandoned Goblin Counting House"* with a goblin
+  trading in it is correct rather than contradictory.)
+- **Tags describe the place; an occupant carries its own.** Three tag surfaces already
+  exist and this ruling only says which is which: a room's tags go on the **floor**,
+  empty squares included (`45-ui.js:76-95`); the `worked` tag is already consumed to
+  face a room's rock with dressed blocks, under a comment about a place *"somebody
+  made"* (`13-rooms.js:485-510`); a crawler carries its own (`CRAWLER_TAGS`); and rule
+  6's creatures are meant to *"describe themselves the same way"*. **Occupancy never
+  renames a room** — a name is a record of what a place was, not a status. **One
+  obligation falls out of it:** an occupant's behavioural tags have to be *agreed*
+  rather than invented, because rule 2 says so and the build throws on an unknown tag
+  (`08-knobs.js:22-29`) — and today the occupant's list is only `person, crawler`,
+  which says what a thing **is** rather than how it **behaves**. That is a rule-6
+  question, not an economy one.
+- **The fifteen skill pairs were not actually theirs.** Answered 16 September: they
+  only ever picked the **six attribute names**; the fifteen pairs grew out of the grid
+  on their own. So the clause in rule 2 states a decision made *for* them and enforces
+  it with a self-check labelled `(rule 2)` — the same shape as the four promoted items
+  rule 2 warns about. The skills review left the grid intact anyway (all fifteen kept
+  their pairs), so this is about the law's wording rather than about the game.
+- **The skills have been reviewed — eight renames, three changed lines, and a trap
+  that makes it more than a text edit.** Every key and every pair is preserved. New
+  names: Clambering → **Focusing**, Wrangling → **Grappling**, Fighting → **Brawling**,
+  Performing → **Entertaining**, Enduring → **Persisting**, and the key `ranging` on
+  Agility+Endurance → **Maneuvering**; **Ranging** and **Crafting** retire (Crafting
+  folds into **Tinkering**), and **Sneaking** takes the Agility+Intellect pair Crafting
+  vacated. The trap: the movement skill has moved from Might+Agility to Agility+Endurance,
+  but **the code does not know that yet** — `MOVE_SKILL` is `'clambering'`, so every
+  difficult step is rolled as the throwing skill. Four things have to move together:
+  `MOVE_SKILL` (`14-actors.js:249`) to `'ranging'`; the **Rope Coil** (`clambering:1` →
+  `ranging:1`); the **Boots** (`clambering:2,ranging:2` — almost certainly `ranging:2`,
+  as there is now only one movement skill); and the **Tool Belt**
+  (`crafting:2,building:1` → recommended `tinkering:2`, since a work belt that helps you
+  sneak is not what its note says). Those four are the complete set — every skill key was
+  searched across `src`, so the rest of the rename is text.
+- **One line of the sheet was changed by a later ruling, and the loss is worth
+  knowing.** **Studying**'s note now reads *"Lore, mapmaking, deciphering, listening for
+  what is out there, and sitting with a problem until it gives."* — because noticing a
+  sound became a Studying roll. The words that went were *"a script, a mark, or a room"*,
+  and a room was Studying's only job in the game today.
 
 ---
 
 ## Parked: questions waiting on them
 
-Rule 2 says ask and wait. These have been asked and are still open.
+Rule 2 says ask and wait. These have been asked and are still open. Questions that
+**have** been answered since are not repeated here — they are in **Parked: decided,
+waiting on the build**, just above.
 
-1. **Gear can push an attribute past 6.** A crawler wearing the right kit shows
-   Endurance 7, and rule 10 says attributes run 1 to 6. Clamp it at 6, or let
-   gear break the scale on purpose?
-2. **Gear never wears out, breaks, gets lost or gets swapped.** A spade is as good
-   on day two hundred as on day one. Adding wear is a new mechanic, so it needs
-   asking for before it is built.
-3. **"Boardgame aesthetics" — what it means for the LOOK.** Rule 10 is settled for
-   the numbers (1–6, 2d6). Asked twice about the picture — painted miniatures on a
-   board, versus the gloom currently laid down — and never answered. The grit
-   overlay that was part of that answer is **gone** as of v0.17.0, at their
-   request; the generated materials on the ground stay.
-4. **Natural stone was reworked in v0.25.0 to look like a photograph they sent;
+1. **Natural stone was reworked in v0.25.0 to look like a photograph they sent;
    nobody has said whether it does.** The stone every wall of bare rock and the
    camp floor wears is now broad soft mottling rather than the fine hatching it
    was. **The other materials were not touched** — flagstone, dirt, moss, rubble
    and bones are all still as generated, and the same offer stands for each: send
    a picture of what it should be and it is one branch of `matTile()`.
-5. **The rock is too tall and you can see the top of it — the heights are done,
+2. **The rock is too tall and you can see the top of it — the heights are done,
    the LOOK is not.** Theirs: *"we should not see the top of wall blocks, right?
    also make most walls 2m tall instead of the current 3m to cut down on this
    issue. perhaps only taller walls in big dramatic set piece areas."*
@@ -247,7 +551,7 @@ Rule 2 says ask and wait. These have been asked and are still open.
      Theirs: *"I don't mind slopes leading up to walls. happens in caves and
      rubble all the time."* A session re-reported this as a defect more than once;
      it is not one.
-6. **Ground nobody has explored or lit is still drawn as if it were known.** Theirs,
+3. **Ground nobody has explored or lit is still drawn as if it were known.** Theirs,
    offered the two readings of "unrevealed": *"both — but buried blocks don't
    really need to exist, right?"* The buried half is already the case (a block
    inside solid rock has not been painted since v0.34.0); the explored half has
@@ -267,10 +571,58 @@ Rule 2 says ask and wait. These have been asked and are still open.
      behind you; what has never been seen is absent. The most information and the
      most machinery, and it makes the ground *held* into the ground *known*, which
      is the same book-keeping `forget-and-remake` is about.
-   Whatever is chosen, the first question underneath it is **what counts as
-   seen** — the square a crawler stands in and the squares a carried light reaches
-   are the two candidates the build can already answer, and they are not the same
-   set.
+   Whatever is chosen, **what counts as seen** is answered: it obeys the memory
+   rule like the ground, so what the crawlers built is drawn dimmed from memory and
+   bright only where it is lit now, and a light **is seen from far beyond the
+   ground it lights** — unbroken line of sight, up to a long cap. The sheet already
+   states that half twice in its own words (*"glow 1 means it is never darkened by
+   the room, because it IS the light"*), so this is that law asked a new question
+   rather than a new law. One build note: **no `light.*` knob is a reach today**,
+   so the cap is a fifth one to add, and its value is theirs to pick.
+
+4. **Six things about the job system**, which have to be asked rather than
+   invented: how many things sit on the short camp-wide list; what an idle crawler
+   does when the list is empty; whether a claimed job can be dropped and go back on
+   the list; how a standing order says "keep the fire fed" (it is conditional); how
+   far the player's urgent order reaches; and whether the camp-wide order has a
+   **"never"** position before per-crawler permits exist.
+5. **`forget-and-remake`** — the one piece of the endless labyrinth still
+   outstanding, noted against the labyrinth line above. It comes first in the order
+   they picked.
+6. **The action-cost table** — the engine under all six needs, and the thing the
+   whole job sits on: what each action costs, in what units, and whether the cost
+   lands **every tick it is happening or once when the work finishes**. *The watch
+   only rotates by itself if it lands per tick*, so this one is load-bearing.
+7. **What pays back Filth, Sanity and Camaraderie.** They are designed and on the
+   figure; what clears them is deliberately held until the action-cost table exists
+   and there is something real to look at.
+8. **Does 6 mean fine, or does 6 mean desperate?** *Hunger* and *Filth* name the
+   problem and read one way round; *Comfort* and *Sanity* name the state and read
+   the other. One scale has to win, and it should be chosen rather than inherited.
+9. **Six needs on one small figure at a glance** — carry only what is going wrong
+   and keep the good news in the panel, or group the body needs apart from the mind
+   and social ones.
+10. **How hard is it to hear something?** Direction is settled — hearing is a
+    Studying roll, and what the crawler is doing changes what they can hear — but
+    the number is not. It should be easier than reading a room (13), because a noise
+    announces itself and a room's history does not.
+11. **Plan-view sight versus a view with height.** The light flood runs over the
+    flat map while the picture is a tilted view down into a place with pits,
+    terraces and ramps, so the two can disagree — you may see the near face of a rock
+    the flood never reached. Accept the disagreement and let the flood define sight,
+    or build a true three-dimensional sight test. Cheap and consistent, or a research
+    project.
+12. **Four peoples with no tag, and the question is now smaller.** Goblin, Kobold,
+    Troll and Human are the only peoples carrying no tag. It used to matter twice —
+    no attitude for a shop, no flavour for a room — and the tag ruling above removed
+    the first, so what is left is **purely a room-flavour gap**. Under rule 2 a tag
+    is asked for, not invented.
+13. **The carrying leftovers that are not decisions.** Whether a crawler with Might
+    1 carrying one thing is what was intended; and the numbers themselves — the tick
+    values in the pace curve, the share Labouring shaves at each level, and how big
+    the floor under it is. Also worth a second look before it is written down:
+    whether **Encumbrance** is the word, and whether it becomes a new *scale* or
+    stays a quantity with no range of its own.
 
 ---
 
