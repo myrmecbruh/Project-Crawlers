@@ -124,6 +124,52 @@ const Render = {
      See `skinDropped` / `skinKept` in `consumed` -- a cull whose control dropped
      nothing would pass on a picture that never had buried rock in it at all. */
   wallSkin: true,
+  /* ONLY THE SIDES OF A WALL THAT FACE WALKABLE GROUND. A square of rock shows
+     two sides; each of them stands on the edge it shares with the square in
+     front of it, and that square is either ground a crawler can walk on or more
+     rock. Where it is more rock, the side is rock facing rock -- and it is not
+     there to be looked at.
+
+     WHAT IT WAS DOING THERE INSTEAD. The skin (`wallSkin` above) leaves buried
+     rock out of the picture, and the cut that shortens a side against the block
+     in front it only knew about blocks IN the picture: `clipFaces()` asks the
+     list what is in front of a face, and a square the skin threw away is not in
+     the list, so the answer came back "nothing" and the whole stored side -- from
+     the block's cap all the way down to the floor of the world, 8 m of it -- was
+     painted. Those faces are the flaps hanging over the black where the buried
+     rock used to be, the ones standing over the room behind a wall you are
+     looking at.
+
+     THREE ARMS, and the A/B is inside one build:
+
+       0  as v0.47.0 shipped it: a square the skin dropped counts as nothing in
+          front of a face, and the whole side is painted. The control.
+       1  a side with rock in front is cut to where that rock reaches -- a depth
+          step short of it and no further -- instead of keeping the extra metre
+          the fade would dissolve into. The flap is gone; what is left of the
+          side is the strip standing above the rock in front, which is still rock
+          facing rock.
+       2  a side with rock in front is NOT DRAWN AT ALL, and neither of them is
+          if both face rock. The rule as asked for, and it is the one the game
+          ships: **only a side with walkable ground in front of it is shown.** It
+          costs the picture something, and that is the price of the rule: where
+          the rock in front is LOWER than we are, the part of our side standing
+          above it was rock anybody could see, and that goes with the rest. Arm 1
+          is the setting that keeps those strips, and it is what to reach for if
+          the look ever wants them back.
+
+     THE ONE FACE THAT IS STILL HANDED BACK WHOLE is a side whose rock in front
+     is NOT PAINTED AT ALL -- the square the cutaway cut out of the picture. A
+     side cut short against a square that is not on the screen opens a hole in
+     the wall, which is what v0.34.0's `kept`/`lost` guard exists to stop, and
+     the cutaway counts for more than the rule does. It cannot happen in the look
+     the game ships: the cutaway only takes a square out whole at `render.cut_solid`
+     0, and the sheet ships that at 1 (see `Render.cutOut`), so the fade is not
+     switched on and every arm-2 side with rock in front is gone.
+
+     Armed from the tests with `__test.rockSides(n)`, and proved against arm 0 in
+     the same build. */
+  rockSides: 2,
   /* WHERE THE FAR HALF OF A LID TOO SMALL TO BE SEEN IS STILL WANTED: the two
      faces of a block's BACK, cut down to where the square behind it reaches --
      and painted only where the rock in the way is drawn SHORT.
@@ -1256,9 +1302,23 @@ const Render = {
     if (!m || m.length !== cells.length) m = this._rockScratch = new Uint8Array(cells.length);
     for (let k = 0; k < cells.length; k++) {
       const c = cells[k];
-      m[k] = c.h > 0 && TILE(c.tile).footing === 'block' ? 1 : 0;
+      m[k] = this.rockAt(c) ? 1 : 0;
     }
     return m;
+  },
+
+  /* IS THIS SQUARE ROCK -- the one word the skin, the cut and the fade all mean
+     by it, said once so the three cannot drift apart. Rock is a square that
+     stands up (`h > 0`) and whose tile is BLOCK FOOTING: the stuff the labyrinth
+     was cut out of.
+
+     IT IS NOT ASKED ABOUT SLOPE. A ramp is not rock -- its footing is a slope a
+     crawler walks up -- and rockMap() has always counted it that way, so a
+     question about the square itself must not quietly be a different question
+     about its slope. Every caller that cares whether the ground is flat tests
+     that separately, as it always did. */
+  rockAt(c) {
+    return !!c && c.h > 0 && TILE(c.tile).footing === 'block';
   },
 
   /* IS THERE ROCK ON ALL FOUR SIDES OF THIS SQUARE -- the one question the skin
@@ -1275,7 +1335,8 @@ const Render = {
 
      A NEIGHBOUR IS READ OUT OF THE PIECE'S OWN MAP where it is inside the piece
      (the overwhelmingly common case, and four array reads), and out of the world
-     only along the rim. */
+     otherwise -- which is every neighbour at all along the rim of the piece, where
+     there is no map entry to read. */
   buriedRock(w, piece, rock, x, y) {
     const n = piece.n, ox = piece.ox, oy = piece.oy;
     for (let e = 0; e < 4; e++) {
@@ -1284,8 +1345,7 @@ const Render = {
       if (lx >= 0 && ly >= 0 && lx < n && ly < n) {
         if (!rock[ly * n + lx]) return false;
       } else {
-        const nbr = w.at(nx, ny);
-        if (!nbr || nbr.h <= 0 || TILE(nbr.tile).footing !== 'block') return false;
+        if (!this.rockAt(w.at(nx, ny))) return false;
       }
     }
     return true;
@@ -1434,6 +1494,12 @@ const Render = {
              Then the wall cut down to the block in front: see clipFaces(). */
           near: near, cornerL: left, cornerR: right,
           nbrL: -1, nbrR: -1, cutL: null, cutR: null, cutML: 0, cutMR: 0,
+          /* Whether ROCK stands in front of each face -- see clipFaces(). Kept
+             apart from `nbrL`/`nbrR` because rock can be in front of a face
+             without being in the picture at all: the wall skin drops the buried
+             square before it is ever added, and -1 is what a face with nothing in
+             front of it looks like, so the two cannot share a field. */
+          rockL: false, rockR: false,
           backL: backL, backR: backR,
           cutaway: cell.cutaway === true,
           /* A block that is hidden behind the wall in front but keeps a foot of
@@ -1515,7 +1581,19 @@ const Render = {
     if (!at) at = this.cellAt = new Map();
     at.clear();
     for (let k = 0; k < b.length; k++) if (b[k].kind === 'cell') at.set(b[k].cell, k);
-    for (let k = 0; k < b.length - 1; k++) {
+    /* EVERY item, including the frontmost one. The last item used to be skipped
+       on the argument that nothing can be in front of it -- true of the PICTURE,
+       and not true of the question being asked: a side also asks whether rock
+       stands in front of it in the WORLD, whether that rock is painted or not
+       (see `rockSides`), and a rock block can be the last thing in the list
+       without being the last thing in the way. It happens as soon as the skin
+       takes the buried rock out: a block that was 275th of a list of 318 had 106
+       buried blocks taken out ahead of it and ended up standing at the front of
+       212, where the skip left its two rock-facing sides unanswered -- so it
+       painted its whole stored face down over the floor of the room behind it,
+       1,580 pixels of it. Nothing is in front of the last item, so the extra
+       call can only ever find that out; it is one call a frame. */
+    for (let k = 0; k < b.length; k++) {
       const it = b[k];
       if (it.kind !== 'cell' || !it.solid) continue;
       /* A block with a ramp in it is drawn from its two lowest corners, which
@@ -1526,7 +1604,7 @@ const Render = {
          the camera every frame rather than written down -- `tileH` is 16 at the
          low angle and 27 at the raised one, so a literal here would be wrong the
          moment the view is tilted. See cutMeet(). */
-      this.clipFaces(w, it, k, at, s.cam.tileH / CFG.rise);
+      this.clipFaces(s, w, it, k, at, s.cam.tileH / CFG.rise);
     }
 
     s.geomDirty = false;
@@ -1563,9 +1641,23 @@ const Render = {
 
      `drawnM` rather than `cell.h`, because what a square promises from the world
      and what it PAINTS are two different things once a hidden block is keeping
-     only a foot of itself standing. */
+     only a foot of itself standing.
+
+     AND ROCK IN FRONT IS NOT A FLOOR. A face whose neighbour square is walkable
+     ground is cut exactly as it always was. A face whose neighbour is ROCK is a
+     side with rock behind it, which is what `Render.rockSides` is about: it may
+     not keep the extra fade metre (nothing there is dissolving into anything --
+     see arm 1) and at the strictest it may not be drawn at all (arm 2). */
   cutMeet(nbr, mine, stepM) {
-    const hide = this.capShown(nbr) ? 0 : stepM + CFG.wallFadeM;
+    const capped = this.capShown(nbr);
+    const rock = !capped && this.rockAt(nbr);
+    /* Arm 2: the answer is `mine`, so `meet < mine` is false wherever this is
+       read and the side comes out as no side at all -- which is the same answer
+       the fringe cases already give, so nothing downstream needs a new shape. */
+    if (rock && this.rockSides >= 2) return mine;
+    const hide = capped ? 0
+               : rock && this.rockSides >= 1 ? stepM
+               : stepM + CFG.wallFadeM;
     const meet = Math.max(0, Math.min(mine, this.drawnM(nbr) - hide));
     /* Whole blocks only -- see `Render.voxelBlocks`. `mine` is a whole number of
        metres (a square's height, or `cut_stump_m`), and the cut is never allowed
@@ -1591,21 +1683,56 @@ const Render = {
      * The cut is only allowed while that block PAINTS SOLID, and that is not
      * known until draw() -- fade it, because you are inspecting something behind
      * it, and the whole face has to come back or the fade would open a hole. So
-     * both shapes are worked out here and draw() picks between them. */
-  clipFaces(w, it, k, at, stepM) {
+     *      both shapes are worked out here and draw() picks between them.
+
+     AND A SQUARE CAN BE STANDING IN FRONT OF THIS FACE WITHOUT BEING IN THE
+     PICTURE AT ALL. That is the whole reason this takes `s`: since the wall skin
+     (`Render.wallSkin`) the buried rock is dropped before it is ever added to the
+     list, so `at` -- which is built FROM the list -- answers "nothing here" for
+     a square that is unquestionably there. A face that believed it painted its
+     whole stored side, and a block's stored side runs from its top all the way
+     down to the floor of the world: eight metres of wall hanging over the black
+     where the square that used to cover it was, and over whatever lay behind it.
+     The world is asked instead, and asked what the picture is really about: is
+     the square in front of this face ROCK, and is it in front of us at all.
+
+     IT IS ASKED OF THE WORLD AND NOT OF THE SKIN, and that is deliberate: the
+     list is missing squares for more than one reason (the skin dropped them, the
+     screen cut them, their whole piece is off it) and a side that stood against
+     rock is rock facing rock whichever of those it was. Asking the skin's own
+     question -- rock AND buried -- would have left the fringe cases painting the
+     whole side again, which is the flap this rule exists to stop, standing at the
+     edge of the frame. */
+  clipFaces(s, w, it, k, at, stepM) {
     const cell = it.cell, x = cell.x, y = cell.y;
     for (let f = 0; f < 2; f++) {
       const other = f === 0 ? it.cornerL : it.cornerR;
       /* Which of the four edges the face stands on, named by the corner it runs
          from: one of the two corners it hangs between is the near corner. */
       const e = other === (it.near + 1) % 4 ? it.near : other;
-      const nbr = w.at(x + EDGE_STEP[e][0], y + EDGE_STEP[e][1]);
+      const nx = x + EDGE_STEP[e][0], ny = y + EDGE_STEP[e][1];
+      const nbr = w.at(nx, ny);
       if (!nbr) continue;      /* nothing there: no piece, so no block in front */
       const nk = at.get(nbr);
-      /* Not on screen, or painted before this face: either way there is nothing
-         standing in front of it to hide it. */
-      if (nk === undefined || nk <= k) continue;
-      if (nbr.slope !== SLOPE_FLAT || nbr.h <= 0) continue;
+      const rock = this.rockAt(nbr);
+      let front = false;       /* rock in front of this face, in the picture or not */
+      if (nk === undefined) {
+        /* Rock in front that the picture has not got: buried and dropped by the
+           skin, or off the screen, or in a piece that is. It is still rock, so
+           this side is rock facing rock like any other -- see `Render.rockSides`. */
+        if (!rock) continue;
+        /* A square the list holds is in front of us because it PAINTS after us.
+           A square the list does not hold has to answer the same question the
+           only way it can, by its own depth -- and if it is further from the
+           camera than we are it is behind us, not in front, and can neither hide
+           this face nor lie over it. */
+        if (!(this.depth(s, nx + 0.5, ny + 0.5) > it.depth)) continue;
+        front = true;
+      } else {
+        if (nk <= k) continue; /* painted before this face: it hides nothing */
+        if (nbr.slope !== SLOPE_FLAT || nbr.h <= 0) continue;
+        front = rock;
+      }
       /* Where the two blocks meet, and never longer than our own wall: a cut
          that ended up above it would paint outside the block. OUR OWN WALL is
          `wallM` and not `cell.h`, because a block that only keeps a foot of
@@ -1614,12 +1741,21 @@ const Render = {
          out as a sliver of no height at all. */
       const mine = it.wallM;
       const meet = this.cutMeet(nbr, mine, stepM);
+      /* WHICH SURFACE IS IN FRONT IS WRITTEN DOWN SEPARATELY FROM WHICH BLOCK
+         IS. `nbrL`/`nbrR` are a position in the picture's list, and there is no
+         position for a square that was dropped before it was added -- so the
+         dropped case leaves them at -1, exactly as if the piece ended there, and
+         says `rockL`/`rockR` instead. `wallsPainted()` is what reads the two,
+         and draw()'s `lost` guard goes on reading only the numbers, because it
+         is about a block that was looked for and is missing. */
       if (f === 0) {
-        it.nbrL = nk;
+        it.nbrL = front && nk === undefined ? -1 : nk;
+        it.rockL = front;
         it.cutML = mine - meet;
         it.cutL = meet < mine ? this.cutWall(it.left, it.top[it.near], it.top[other], meet) : null;
       } else {
-        it.nbrR = nk;
+        it.nbrR = front && nk === undefined ? -1 : nk;
+        it.rockR = front;
         it.cutMR = mine - meet;
         it.cutR = meet < mine ? this.cutWall(it.right, it.top[it.near], it.top[other], meet) : null;
       }
@@ -1887,8 +2023,24 @@ const Render = {
      away. `sideShown()` is the silhouette, and it is worked out from the world
      instead. */
   wallsPainted(it, alphaOf) {
-    const hideL = this.clipWalls && it.nbrL >= 0 && alphaOf[it.nbrL] === 1;
-    const hideR = this.clipWalls && it.nbrR >= 0 && alphaOf[it.nbrR] === 1;
+    /* A face with a square in the picture in front of it is hidden when that
+       square paints solid. A face with a DROPPED square in front of it has no
+       such test to take -- there is nothing to paint solid -- and the wall skin
+       has already said the square is there: what `Render.rockSides` says about
+       such a face is settled in `cutMeet()`, which is where `cutL`/`cutR` come
+       from. At arm 0 those two disagree on purpose and this reads `it.left`, the
+       whole stored side, which is exactly the v0.47.0 picture.
+
+       AND THE ONE FACE THAT COMES BACK WHOLE at arm 2 is the one whose rock in
+       front is not painted AT ALL (`alphaOf` 0, the cutaway's own doing): the
+       rule gives way there, because a side cut short against a square that is
+       not on the screen leaves a hole, and that is the hole v0.34.0 closed. The
+       cutaway only does that at `cut_solid` 0, which is not the shipped look. */
+    const rockL = it.rockL === true, rockR = it.rockR === true;
+    const hideL = this.clipWalls &&
+      (it.nbrL >= 0 ? alphaOf[it.nbrL] === 1 : rockL && this.rockSides > 0);
+    const hideR = this.clipWalls &&
+      (it.nbrR >= 0 ? alphaOf[it.nbrR] === 1 : rockR && this.rockSides > 0);
     return { l: hideL ? it.cutL : it.left, r: hideR ? it.cutR : it.right,
              ml: hideL ? it.cutML : it.wallM, mr: hideR ? it.cutMR : it.wallM,
              /* And the strip of rock this block shows along its far edges, where
@@ -2153,6 +2305,20 @@ const Render = {
     let walls = 0, wallPx = 0, buried = 0, kept = 0, lost = 0, faded = 0;
     let backs = 0, backPx = 0;
     let banded = 0;
+    /* SIDES WITH ROCK IN FRONT OF THEM -- what `Render.rockSides` is about.
+       Counted here, in the one place the painted quads exist, and not in
+       `wallsPainted()`, which the pointer's own answer calls too: a count that
+       moves when somebody merely POINTS at the picture is not a count of what
+       reached it. `stoneSides` is how many side faces had rock in front of them,
+       in the picture or not; `stoneShown` is how many of those were painted
+       anyway; `stoneM` is how far those painted ones drop, in metres, and
+       `stonePx` the area they cover. At arm 0 `stoneShown` is most of
+       `stoneSides` and `stoneM` is a whole stored side each (8 m); at arm 1 the
+       same faces drop one depth step (about half a metre); at arm 2 nothing is
+       painted at all and `stoneShown` is 0. Those four numbers are what a test
+       asserts, because "the side facing rock is not shown" is a claim about ALL
+       of them and a sample of one proves nothing (lesson 15). */
+    let stoneSides = 0, stoneShown = 0, stoneM = 0, stonePx = 0;
     /* How many top faces were painted, how many of those were the rock of a wall
        rather than a surface somebody laid, and how many were left out because
        `wallBody` is switched off. A test reads all three: with the look the game
@@ -2347,6 +2513,8 @@ const Render = {
            side under a fade is what stops the fade opening a hole. */
         const faced = this.wallsPainted(it, alphaOf);
         const qL = faced.l, qR = faced.r, mL = faced.ml, mR = faced.mr;
+        if (it.rockL) { stoneSides++; if (qL) { stoneShown++; stoneM += mL; stonePx += this.area(qL); } }
+        if (it.rockR) { stoneSides++; if (qR) { stoneShown++; stoneM += mR; stonePx += this.area(qR); } }
         /* Both sides of a block, in the block's own material. */
         const sided = this.mappedWalls && mat && CFG.texStrength > 0;
         /* The same two shadings with no colour of their own, for a surface that
@@ -2567,6 +2735,13 @@ const Render = {
          is a cull that never fired, and `skinKept` 0 with `skinDropped` > 0 is a
          frame with no walls standing in it at all. See Render.wallSkin. */
       skinDropped: this.skinDropped, skinKept: this.skinKept,
+      /* Sides with ROCK IN FRONT OF THEM -- in the picture or not: how many,
+         how many were painted anyway, how far those drop and how much picture
+         they cover. The whole of `Render.rockSides` is in the difference between
+         the first two, and it is the same count in every arm because it is a
+         question about the world. See the counters' comment in draw(). */
+      stoneSides: stoneSides, stoneShown: stoneShown,
+      stoneM: stoneM, stonePx: stonePx,
       lights: s.lit ? lightSourcesIn(s).length : 0,
       focus: focusIdx, zoom: s.cam.zoom,
       bufW: this.w, bufH: this.h

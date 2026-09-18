@@ -8,6 +8,163 @@ them on an old build.
 
 ---
 
+## v0.48.0 — a wall shows only the side with open ground in front of it
+
+Their words: **"only show the side(s) of a wall block that face the walkable
+area."** Asked what the rock side should do instead -- there are two readings of
+"only show", and they look nothing like each other -- they picked the **strict**
+one: *"Only sides facing open ground, always — turn the view onto a wall's rock
+side and the wall vanishes, letting you see straight through into the room behind
+it."* So the rule is not "cut the rock side short", it is **the rock side is not
+painted at all**, and the picture is see-through from that angle on purpose.
+
+### What the previous release left hanging
+
+v0.47.0 stops painting a square of rock that has rock on all four sides of it.
+That removal was done **before** a square becomes a polygon, so the cut in
+`clipFaces()` -- which cuts a face down to the top of the neighbour in front of it
+-- went looking for a neighbour that was no longer in the batch. The branch for a
+neighbour that is not there used to be "nothing is in front, so keep the whole
+face", and the whole face is a quad from the block's own cap **all the way down to
+height 0**: eight metres, 256 pixels. So behind every wall one tile thick stood a
+**flap** of its own face hanging down over the black where the rock in front used
+to be, and the cut could no longer take it away. The missing-neighbour branch now
+asks the **world** whether the square in front is rock (`rockAt`) rather than
+trusting what happens to be in the picture, so the flap is cut against a neighbour
+the picture has thrown away -- and the two features stop depending on each other.
+
+`Render.rockSides` picks the rule (`__test.rockSides(n)`, a code flag, not a
+sheet dial -- it is not a feel decision, it is what a wall is):
+
+- **2, the way the game ships.** A side whose neighbour in front is rock is not
+  painted. One tile of wall, everything behind it black, and you can see through
+  it -- floor, gear and crawlers included.
+- **1, the look not taken.** The same side cut down to the strip standing above
+  the rock in front of it. It keeps the wall opaque from every angle and is one
+  number away if the see-through turns out to be too much.
+- **0, v0.47.0.** Buried rock counted as nothing in front of a face, so the whole
+  stored side was painted -- the arm this is proved against inside ONE build.
+
+### A second flap, at the FRONT of the list, and a test is what found it
+
+The clip ran down the list of shapes **one short of the end**, on the reasoning
+that nothing can be painted after the last shape and so the last shape needs no
+cutting. That is true of the picture and false of the question, because a side asks
+two different things: *does the thing in front of me get painted after me?* (the
+list) and, when the neighbour is not in the list at all, *is there rock in front of
+me in the world?* The last shape was never asked, so it kept the defaults that mean
+"nothing in front of me", and `wallsPainted()` handed back the whole stored side --
+the same eight-metre flap, once a frame. The skin is what made it bite: taking the
+buried blocks out of the list **promotes a one-tile block to the front of it**, so
+the shape with nothing in front of it was exactly the one-tile wall. Seed 3, no
+turn: the frontmost wall's flap laid **1,580 pixels of wall over open floor**, and
+the floor went 110,747 -> 109,167.
+
+What caught it was not an eye but v0.47.0's own skin battery, whose subject is the
+floor the walls are standing on. A flap hanging over the black is invisible against
+black; this one hung over floor. The list is now walked to the end -- the extra
+question can only ever answer "nothing in front of me" -- and the battery, pinned to
+its own look, prints its recorded numbers to the pixel either way, which is the check
+that the repair did not repaint the look it was not about. The v0.48.0 census moved
+by exactly that block: the shipped arm's wall faces 4,489 -> 4,396, and its counts
+of sides standing against rock 9,498 -> 9,591 (the frontmost one's sides were always
+painted whole in the old-look arm too; they had simply never been asked about).
+
+### What it was measured at, A/B inside one build
+
+**64 cases** -- seeds 1, 2, 7 and 777, each at both camera angles, all four
+quarter turns and both zooms, every world given its 2,000 frames before it was
+looked at (lesson 24) -- at the suite's own window. The battery prints the count
+of **distinct frames** it reached, because 64 cases that all photograph one
+picture is the symptom lesson 27 was written from: it reaches **64**. Both arms
+run in one build, no rebuild between them (lessons 5, 21).
+
+| | whole side painted (v0.47.0) | only the open side (v0.48.0) |
+|---|---|---|
+| sides standing against rock | 9,591 | 9,591 |
+| of them painted | **8,288** (22,909 m, 23,458,816 px) | **0** |
+| wall faces painted | 12,684 | **4,396** (65.3% fewer) |
+| pixels of the picture that moved | -- | 7,623,499 |
+| ...of them newly black | 0 | **3,636,011** |
+| ...of them newly showing floor | -- | **2,117,117** |
+| pixels of black in the picture | 2,991,701 | **6,627,712** (2.22×) |
+| pixels of floor in the picture | 9,513,787 | **11,630,904** |
+| answers asked, over 64 views | 196,608 | 196,608 |
+| answers that named something else | -- | **49,112, every one of them rock** |
+| ...of those, answers that became nothing at all | -- | **29,844** |
+| answers naming rock / naming people | 83,124 / 3,452 | **34,012 / 3,476** |
+
+The last three rows are the pick and the halo following the picture for free,
+and they are asserted rather than admired: **every answer that changed was rock,
+and nothing else changed at all** -- no crawler, no camp site, no floor named
+something else. 24 of the points a wall used to cover were crawler points, which
+is why the people count goes *up*.
+
+**The new arm paints a strict subset of the old one's shapes, and that is what the
+test asserts rather than argues** (lesson 21): not one pixel that was paint becomes
+black (`darkToPaint === 0`), not one pixel that was floor becomes anything else
+(`groundToOther === 0`), newly black is at least as much as before
+(`onDark >= offDark`), the floor can only grow (`on.ground >= off.ground`), and the
+wall faces can only fall (`on.walls <= off.walls`). **And that 63.2% of the newly
+opened ground is black** is the honest statement of the look: opening the wall
+without any black behind it would have been a different picture, and a worse one.
+
+### And one thing the picker cannot be trusted to say here
+
+The pick answer for a point the wall used to cover is now **floor, a crawler, or
+nothing** -- where "nothing" means you are looking out at the black with no ground
+back there at all. The 24 people points above are the check on the part that
+matters: an answer that used to be a wall and is now a crawler is the see-through
+working, and a test asserts it happens and that it is small.
+
+### Five tests had to be pinned for the length of their own run, and why
+
+The first full run after the change went red in exactly four places, and none of
+them was a bug. **All four measure the side of a wall that stands against rock**
+-- a foot landing partway up a block, the strip a block shows along its far edge,
+a snapped foot moving a line of pixels, and the black a cut may not open -- and
+since v0.48.0 that side is not painted at all, so their subject had stopped
+existing and each was quietly asking its question of nothing (lesson 19). Two of
+them had already been pinned once, in v0.47.0, for the same kind of reason.
+
+So each of the four now states the picture its own numbers were taken on
+(`t.rockSides(0)`, and for the two v0.46.0 censuses `t.wallSkin(false)` as well),
+puts every flag back afterwards, and **asserts that it went back** so no test
+after it inherits a look nobody asked for. The two v0.46.0 censuses were pinned
+back to the skin-off picture as well because with the skin on the same 40 views
+paint 5,160 faces where their recorded figure is 10,975 -- a run that prints a
+different number from the one written next to it is two numbers, not a
+measurement. Pinned, they print **10,975 faces, 1,545 part-metre, 1,347 pixels
+moved**, which is what the record already said. The shipped look is owned by the
+new census, which is the one that says what the black may and may not be.
+
+**The fifth is v0.47.0's own skin battery, and its reason runs the other way.**
+That battery takes the buried blocks out of the picture and counts what it saved,
+and at the shipped look it now saves **no picture at all**: once the sides rule has
+taken a face out, taking the block out on top of it takes out nothing that was being
+painted. Measured over its 16 cases: **0 pixels differ, 16 of 16 cases**, while the
+same switch still leaves **4,429 squares a frame** (70,863 over the battery) out of
+the build. So the skin has stopped being a look and become a pure saving, and the
+battery is pinned to the look its recorded numbers were taken on (`rockSides(0)`)
+with the shipped look proved **beside** it, case by case: the switch must move pixels
+at the pinned look (278,000-odd over the battery -- without that half the zero would
+be a ruler that cannot fail, lesson 19) and must move **none** at the shipped look
+while still dropping work. The claim is not "the skin is invisible"; it is "at this
+look the sides rule has already done the skin's job", and if either half stops being
+true the test says so.
+
+### What a person will see
+
+Walls read as a shell, and standing outside one you look straight through it into
+the room: the floor, the camp and the crawlers inside are all visible, and where
+there is no ground behind the wall there is the black. **A lot more of the picture
+is black than before -- about twice as much -- and the floor behind a wall is now
+part of the picture rather than something the wall was hiding.** Pointing at
+anything still names what is really there. If the see-through turns out to be too
+much, the same wall cut down to the strip above its neighbour is one number away.
+
+---
+
 ## The roadmap carries the side chat's answers, and the four things it had missed (no game change)
 
 `ROADMAP.md` is the parking lot: everything agreed but not built lives in it, and
@@ -51,11 +208,12 @@ into the decided section and the four new questions onto the end of the list, so
 reference elsewhere in the file still points at what it always pointed at. Nothing was
 deleted, and the four lines this replaced were the four that were wrong.
 
-**The game did not change when this was done, which is why no new version sits above
-this note.** Nothing in `src/` or `tests/` was touched, no number in the sheet moved,
-and nothing needed re-running. What changed is that the roadmap now holds the answers
-the side chat had been keeping in a file of its own — and the reason each of the four
-had been missed, which is the part that would otherwise have been lost.
+**The game did not change when this was done, which is why it carries no version of
+its own.** Nothing in `src/` or `tests/` was touched, no number in the sheet
+moved, and nothing needed re-running. What changed is that the roadmap now holds
+the answers the side chat had been keeping in a file of its own — and the reason
+each of the four had been missed, which is the part that would otherwise have
+been lost.
 
 ---
 

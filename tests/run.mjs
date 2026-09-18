@@ -1217,6 +1217,22 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
        rock that touches open space is painted (v0.47.0)`. */
     const wasSkin = t.wallSkin();
     t.wallSkin(false);
+    /* AND THE ROCK-SIDE RULE IS PINNED BACK TOO (v0.48.0), one version on and
+       for the same reason. Since v0.48.0 a side with rock in front of it is not
+       painted at all, and a bare-backdrop census on THAT look is counting the
+       x-ray itself: the black behind a wall, which the person asked for, arrives
+       in patches far too big to be called seams (up to 75 pixels across here,
+       where the bound below is 48). The subject of this test is the cut -- a face
+       cut against the neighbour in front of it -- and at the shipped rule there
+       is no such face left to cut. So the look these numbers were taken on is
+       stated rather than assumed: `rockSides(0)` is v0.47.0's rule, the whole
+       stored side painted, which is the picture every bound below comes from
+       (lesson 21 -- never say "this only adds", state the arm the change is
+       side. `rockSides(0)` is v0.47.0's rule, the whole stored side painted, which
+       is the picture every number above was taken on. The shipped rule has its own
+       census, `only the sides of a wall facing open ground are shown (v0.48.0)`. */
+    const wasSides = t.rockSides();
+    t.rockSides(0);
     const wasZoom = t.buffer().zoom;
     /* The BUFFER, never the page: pickAt() answers in buffer pixels, so a census
        read off the scaled page would ask about the wrong squares at zoom 3. And
@@ -1406,12 +1422,18 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
     t.zoom(wasZoom);
     t.clipWalls(true);
     t.wallSkin(wasSkin);
-    return { cases: out, wasSkin: wasSkin, backSkin: t.wallSkin() };
+    t.rockSides(wasSides);
+    return { cases: out, wasSkin: wasSkin, backSkin: t.wallSkin(),
+             wasSides: wasSides, backSides: t.rockSides() };
   }, cases);
   assert(r.backSkin === r.wasSkin,
     `the rock skin came back as ${r.backSkin} where it started at ${r.wasSkin}`
     + ' -- this test pins it off, and every test after it wants the look that'
     + ' shipped');
+  assert(r.backSides === r.wasSides && r.wasSides === 2,
+    `the rock-side rule came back as ${r.backSides} where it started at`
+    + ` ${r.wasSides} -- this test pins it to the old look, and every test after`
+    + ' it wants the rule that ships (2)');
   for (const q of r.cases) {
     const at = `seed ${q.c.seed}${q.c.quarter ? ' turned ' + q.c.quarter : ''}`
       + `${q.c.zoom ? ' at zoom ' + q.c.zoom : ''}`;
@@ -1642,6 +1664,17 @@ await test('the rock along a wall\'s far edges is painted only where the cut ope
        taken with the full-rock picture; they are taken that way again. */
     const wasSkin = t.wallSkin();
     t.wallSkin(false);
+    /* AND THE ROCK-SIDE RULE IS PINNED BACK TOO (v0.48.0) -- again for the same
+       reason, and here it is the strips' whole subject. A far-edge strip is only
+       ever painted where a face is cut SHORT against the rock in front of it, and
+       since v0.48.0 a face with rock in front of it is not painted at all, so the
+       strips this test is about have nowhere to go and the two arms stop
+       differing in a way the census can see (refusing them moved which pixels are
+       see-through in 126,965 places, which is the x-ray, not a strip).
+       `rockSides(0)` is v0.47.0's rule -- the whole stored side painted -- which
+       is the picture every number above was taken on. */
+    const wasSides = t.rockSides();
+    t.rockSides(0);
     const wasCut = t.cfg.cutSolid;
     const wasBB = t.backBands();
     const wasBBS = t.backBandsSolid();
@@ -1898,6 +1931,7 @@ await test('the rock along a wall\'s far edges is painted only where the cut ope
     t.backBands(wasBB);
     t.backBandsSolid(wasBBS);
     t.wallSkin(wasSkin);
+    t.rockSides(wasSides);
     t.zoom(wasZoom);
     t.tilt(false);
     t.unpoint();
@@ -1906,7 +1940,8 @@ await test('the rock along a wall\'s far edges is painted only where the cut ope
     return { out: out, tot: tot, pics: pics.size, wasCut: wasCut, wasBB: wasBB,
              wasBBS: wasBBS, backCut: t.cfg.cutSolid, backBB: t.backBands(),
              backBBS: t.backBandsSolid(), wasSkin: wasSkin,
-             backSkin: t.wallSkin() };
+             backSkin: t.wallSkin(), wasSides: wasSides,
+             backSides: t.rockSides() };
   }, cases);
   const tot = r.tot;
   /* The dials went back where they were found: this test paints the world
@@ -1916,6 +1951,10 @@ await test('the rock along a wall\'s far edges is painted only where the cut ope
       && r.backSkin === r.wasSkin,
     `the dials came back as ${r.backCut}/${r.backBB}/${r.backBBS}/${r.backSkin}`
     + ` where they started at ${r.wasCut}/${r.wasBB}/${r.wasBBS}/${r.wasSkin}`);
+  assert(r.backSides === r.wasSides && r.wasSides === 2,
+    `the rock-side rule came back as ${r.backSides} where it started at`
+    + ` ${r.wasSides} -- this test pins it to the old look, and every test after`
+    + ' it wants the rule that ships (2)');
   assert(tot.cases === 24 && r.pics > 20,
     `${tot.cases} views were looked at and they reached ${r.pics} different`
     + ' pictures, so the seeds, angles, turns and drags are doing something');
@@ -2070,6 +2109,28 @@ await test('every wall the picture paints stands a whole number of metres (v0.46
     const t = window.__test, out = [], worlds = new Set();
     t.pause(); t.unpoint();
     const wasFlag = t.voxelBlocks();
+    /* THE ROCK-SIDE RULE IS PINNED BACK TO v0.47.0 (v0.48.0). This census counts
+       faces that REACH THE CANVAS, and the faces it was written for -- a foot
+       landing partway up a block at the raised angle, where one depth step of the
+       view is 1.6875 m -- are exactly the faces that stand against rock, which
+       since v0.48.0 are not painted at all: with the shipped rule the control arm
+       paints 0 part-metre faces out of 1,806, so the arm that is supposed to be
+       not-whole is empty and the identity is asked of nothing (lesson 19).
+       `rockSides(0)` is v0.47.0's rule, the whole stored side painted, which is
+       the picture every number above was taken on, and the two metre-block arms
+       are one flag apart on top of it (lesson 21). The shipped rule has its own
+       census, `only the sides of a wall facing open ground are shown (v0.48.0)`. */
+    const wasSides = t.rockSides();
+    t.rockSides(0);
+    /* AND THE ROCK SKIN IS PINNED OFF AS WELL (v0.47.0), because the numbers
+       quoted above were taken before there was one. With the skin on, half the
+       rock never reaches the batch at all, so the census counts 5,160 faces where
+       the record says 10,975 -- and a run that prints a different number from the
+       one written next to it is two numbers, not a measurement. The claim is
+       about a foot landing partway up a block, and a block buried in the hill
+       behind the picture is exactly where such a foot is found. */
+    const wasSkin = t.wallSkin();
+    t.wallSkin(false);
     for (const c of CASES) {
       t.seed(c.seed);
       t.advance(2000);
@@ -2104,8 +2165,11 @@ await test('every wall the picture paints stands a whole number of metres (v0.46
                  onPaintPx: on.paintPx, onWallPx: onC.wallPx });
     }
     t.voxelBlocks(wasFlag);
+    t.rockSides(wasSides);
+    t.wallSkin(wasSkin);
     return { out: out, worlds: worlds.size, wasFlag: wasFlag,
-             backFlag: t.voxelBlocks() };
+             backFlag: t.voxelBlocks(), wasSides: wasSides,
+             backSides: t.rockSides(), wasSkin: wasSkin, backSkin: t.wallSkin() };
   }, VOXEL_CASES);
   const tot = { offOdd: 0, onOdd: 0, offFaces: 0, onFaces: 0, raisedOdd: 0,
                 raisedFaces: 0, lowOdd: 0, lowFaces: 0, offBuried: 0, onBuried: 0,
@@ -2175,6 +2239,14 @@ await test('every wall the picture paints stands a whole number of metres (v0.46
   assert(r.wasFlag === true && r.backFlag === true,
     `the metre blocks came back as ${r.backFlag} where they started at`
     + ` ${r.wasFlag} -- the look that ships is the whole-metre one`);
+  assert(r.backSides === r.wasSides && r.wasSides === 2,
+    `the rock-side rule came back as ${r.backSides} where it started at`
+    + ` ${r.wasSides} -- this test pins it to the old look, and every test after`
+    + ' it wants the rule that ships (2)');
+  assert(r.backSkin === r.wasSkin && r.wasSkin === true,
+    `the rock skin came back as ${r.backSkin} where it started at ${r.wasSkin}`
+    + ' -- this test pins it off, and every test after it wants the look that'
+    + ' ships');
   assert(r.out.length === 40 && r.worlds >= 30,
     `${r.out.length} views were looked at and they reached ${r.worlds} different`
     + ' pictures of their own, so the seeds, angles and turns are doing something');
@@ -2243,6 +2315,26 @@ await test('snapping a foot to a whole metre only ever paints more wall (v0.46.0
     const t = window.__test, out = [];
     t.pause(); t.unpoint();
     const wasFlag = t.voxelBlocks();
+    /* THE ROCK-SIDE RULE IS PINNED BACK TO v0.47.0 (v0.48.0), and this is the
+       test that needs it most plainly. What it watches for is MOVEMENT: a foot
+       snapped from 1.6875 m up to a whole metre moves a line of pixels along
+       every face that stands against rock. Since v0.48.0 those faces are not
+       painted at all, so the two arms came out identical in all 40 views and the
+       9,185,280-pixel identity below was asked of a change that never happened
+       (lesson 27 -- an "unchanged" claim over a change that does not occur is a
+       sentence about nothing). `rockSides(0)` is v0.47.0's rule, the whole stored
+       side painted, which is the picture every number above was taken on, with
+       the two metre-block arms one flag apart on top of it (lesson 21). */
+    const wasSides = t.rockSides();
+    t.rockSides(0);
+    /* AND THE ROCK SKIN OFF WITH IT (v0.47.0), for the same reason as the whole-
+       metre census above: the numbers quoted here were taken before there was
+       one, and with the skin on half the rock never reaches the batch, so the
+       same 40 views paint 5,160 faces and 13.1 M pixels where the record says
+       10,975 and 26.3 M. The claim -- a snapped foot only ever paints MORE wall --
+       is asked of the faces the feet are on. */
+    const wasSkin = t.wallSkin();
+    t.wallSkin(false);
     for (const c of CASES) {
       t.seed(c.seed);
       t.advance(2000);
@@ -2269,7 +2361,11 @@ await test('snapping a foot to a whole metre only ever paints more wall (v0.46.0
                  differ: d.differ, pixels: d.pixels, worst: d.worst, deep: d.deep });
     }
     t.voxelBlocks(wasFlag);
-    return { out: out, wasFlag: wasFlag, backFlag: t.voxelBlocks() };
+    t.rockSides(wasSides);
+    t.wallSkin(wasSkin);
+    return { out: out, wasFlag: wasFlag, backFlag: t.voxelBlocks(),
+             wasSides: wasSides, backSides: t.rockSides(),
+             wasSkin: wasSkin, backSkin: t.wallSkin() };
   }, VOXEL_CASES);
   const tot = { walls: 0, px: 0, faded: 0, moved: 0, deep: 0, worst: 0,
                 identical: 0, movedViews: 0, oddPx: 0, odd: 0, pixels: 0,
@@ -2311,6 +2407,14 @@ await test('snapping a foot to a whole metre only ever paints more wall (v0.46.0
   assert(r.wasFlag === true && r.backFlag === true,
     `the metre blocks came back as ${r.backFlag} where they started at`
     + ` ${r.wasFlag}`);
+  assert(r.backSides === r.wasSides && r.wasSides === 2,
+    `the rock-side rule came back as ${r.backSides} where it started at`
+    + ` ${r.wasSides} -- this test pins it to the old look, and every test after`
+    + ' it wants the rule that ships (2)');
+  assert(r.backSkin === r.wasSkin && r.wasSkin === true,
+    `the rock skin came back as ${r.backSkin} where it started at ${r.wasSkin}`
+    + ' -- this test pins it off, and every test after it wants the look that'
+    + ' ships');
   assert(r.out.length === 40, `${r.out.length} views were looked at`);
   assert(tot.movedViews >= 4 && tot.moved > 0,
     `the picture did not move at all in ${r.out.length - tot.movedViews} of the`
@@ -2499,6 +2603,19 @@ await test('the top metre of a wall still fades away (v0.46.0)', async () => {
  *  4. AND WHAT IS NOT IN THE PICTURE CANNOT BE POINTED AT (rule 8): the centre
  *     of every culled square, and a grid over the whole frame, answered by
  *     `pickAt` itself, never once name a square the cull took.
+ *
+ * TWO LOOKS ARE IN HERE, and the difference between them is v0.48.0's rule. The
+ * battery numbers above were taken with the back of the rock painted and merely
+ * CUT -- `rockSides` 0, which is v0.47.0's own look -- so the battery PINS that
+ * look and puts the game back afterwards. The sides rule the game now ships
+ * takes every face of a buried square out at source, and then this cull has
+ * nothing left to take: the same toggle, at the shipped `rockSides` 2, leaves
+ * 70,863 squares unbuilt over the battery (4,429 a frame) and paints NOT ONE
+ * PIXEL differently in any of the 16 frames -- while the same comparison at the
+ * look above moves millions. Both are asserted, the first as the count that
+ * makes the second a measurement rather than a cull that never ran (lesson 19),
+ * and the second because it is what the skin is for now: not a look of its own,
+ * but not building the back of a hill nobody can see.
  */
 const SKIN_CASES = [];
 for (const seed of [1, 2, 3, 7]) {
@@ -2540,7 +2657,15 @@ await test('only the rock that touches open space is painted (v0.47.0)', async (
     };
     const out = [];
     t.pause(); t.unpoint();
-    const wasSkin = t.wallSkin();
+    const wasSkin = t.wallSkin(), wasSides = t.rockSides();
+    /* THE LOOK THESE NUMBERS WERE TAKEN ON (lesson 21). v0.47.0 recorded this
+       battery with the back of the rock painted and merely CUT, and it is pinned
+       there: the sides rule the game now ships takes every face of a buried
+       square out at source, so at that look this cull has nothing left to take.
+       What the skin does at the shipped look is measured in the same loop, and
+       the answer is that it moves NO pixel at all -- it stops building a few
+       thousand squares a frame and paints the identical picture. */
+    t.rockSides(0);
     for (const c of CASES) {
       t.seed(c.seed);
       t.advance(2000);
@@ -2561,6 +2686,7 @@ await test('only the rock that touches open space is painted (v0.47.0)', async (
       t.wallSkin(false);
       t.redraw();
       const offC = t.consumed();
+      const offRaw = Render.bctx.getImageData(0, 0, Render.w, Render.h).data;
       const off = squares(), offWho = standing();
       let offBuried = 0;
       for (const it of Render.batch) {
@@ -2571,6 +2697,7 @@ await test('only the rock that touches open space is painted (v0.47.0)', async (
       t.wallSkin(true);
       t.redraw();
       const onC = t.consumed();
+      const onRaw = Render.bctx.getImageData(0, 0, Render.w, Render.h).data;
       const on = squares(), onWho = standing();
       let onBuried = 0;
       for (const it of Render.batch) {
@@ -2578,6 +2705,33 @@ await test('only the rock that touches open space is painted (v0.47.0)', async (
       }
       const onMap = t.fillMap();
       t.redraw();
+      /* 5. AND THE SAME TOGGLE AT THE LOOK THE GAME SHIPS MOVES NOTHING. Pinned
+         back to `rockSides` 2, the skin leaves a few thousand squares a frame
+         unbuilt and must paint the very same picture, because every face of a
+         buried square already had rock in front of it and the sides rule had
+         taken those faces out at source. The count on the left of the pair is
+         what makes the zero on the right a measurement rather than a dead
+         instrument (lesson 19): the same comparison, at the look of the battery
+         above, moves 278,000-odd pixels. */
+      let skinDiff = 0;
+      for (let i = 0; i < offRaw.length; i += 4) {
+        if (offRaw[i] !== onRaw[i] || offRaw[i + 1] !== onRaw[i + 1]
+            || offRaw[i + 2] !== onRaw[i + 2]) skinDiff++;
+      }
+      t.rockSides(2);
+      t.wallSkin(false);
+      t.redraw();
+      const shipOff = Render.bctx.getImageData(0, 0, Render.w, Render.h).data;
+      t.wallSkin(true);
+      t.redraw();
+      const shipC = t.consumed();
+      const shipOn = Render.bctx.getImageData(0, 0, Render.w, Render.h).data;
+      let shipDiff = 0;
+      for (let i = 0; i < shipOff.length; i += 4) {
+        if (shipOff[i] !== shipOn[i] || shipOff[i + 1] !== shipOn[i + 1]
+            || shipOff[i + 2] !== shipOn[i + 2]) shipDiff++;
+      }
+      t.rockSides(0);
       /* What the cull took, whether anything came the other way, and whether a
          square that STAYED was built any differently. */
       const gone = new Set();
@@ -2627,12 +2781,15 @@ await test('only the rock that touches open space is painted (v0.47.0)', async (
         offOther: offMap.other, onOther: onMap.other,
         offFlat: offMap.flat, onFlat: onMap.flat,
         offMingled: offMap.mingled, onMingled: onMap.mingled,
-        canvas: offMap.canvas
+        canvas: offMap.canvas,
+        skinDiff: skinDiff, shipDiff: shipDiff, shipDropped: shipC.skinDropped
       });
     }
     t.wallSkin(wasSkin);
+    t.rockSides(wasSides);
     t.unpoint();
-    return { out: out, wasSkin: wasSkin, back: t.wallSkin(), cases: CASES.length };
+    return { out: out, wasSkin: wasSkin, back: t.wallSkin(),
+             wasSides: wasSides, backSides: t.rockSides(), cases: CASES.length };
   }, SKIN_CASES);
   const tot = { rockOn: 0, buriedOn: 0, offBuried: 0, onBuried: 0, dropped: 0, kept: 0,
                 offDropped: 0, gone: 0, added: 0, moved: 0, removedBuried: 0,
@@ -2640,9 +2797,13 @@ await test('only the rock that touches open space is painted (v0.47.0)', async (
                 offDrawn: 0, onDrawn: 0, offGround: 0, onGround: 0, offBack: 0,
                 onBack: 0, offWallMap: 0, onWallMap: 0, offOther: 0, onOther: 0,
                 offMingled: 0, onMingled: 0, offActors: 0, onActors: 0,
-                offSites: 0, onSites: 0, canvas: 0, withGone: 0, movedViews: 0 };
+                offSites: 0, onSites: 0, canvas: 0, withGone: 0, movedViews: 0,
+                skinDiff: 0, shipDiff: 0, shipDropped: 0 };
   assert(r.wasSkin === true && r.back === true,
     `the skin came back as ${r.back} where the game ships it at ${r.wasSkin}`);
+  assert(r.backSides === r.wasSides,
+    `the sides rule came back as ${r.backSides} where the battery found it at`
+    + ` ${r.wasSides}, so a test that pins a look left the game on it`);
   assert(r.out.length === r.cases && r.out.length === 16,
     `${r.out.length} cases were run of ${r.cases} asked for`);
   for (const q of r.out) {
@@ -2715,6 +2876,14 @@ await test('only the rock that touches open space is painted (v0.47.0)', async (
     assert(q.asks > 1000 && q.onGone === 0,
       `${at}: ${q.onGone} of ${q.asks} answers named a square the cull had taken out`
       + ' of the picture');
+    /* 5. AND AT THE LOOK THE GAME SHIPS THE SAME TOGGLE MOVES NOT ONE PIXEL --
+       while still leaving squares out of the build, which is what makes the zero
+       about the picture and not about a cull that never ran. */
+    assert(q.skinDiff > 0 && q.shipDiff === 0 && q.shipDropped > 0,
+      `${at}: the skin moved ${q.skinDiff} pixels at the look of this battery and`
+      + ` ${q.shipDiff} at the look the game ships, having left ${q.shipDropped}`
+      + ' squares a frame unbuilt at both, where the shipped look already had those'
+      + ' faces culled by the sides rule and must paint the same picture');
     tot.rockOn += q.rockOn; tot.buriedOn += q.buriedOn; tot.offBuried += q.offBuried;
     tot.onBuried += q.onBuried; tot.dropped += q.dropped; tot.kept += q.kept;
     tot.offDropped += q.offDropped;
@@ -2732,6 +2901,8 @@ await test('only the rock that touches open space is painted (v0.47.0)', async (
     tot.offActors += q.offActors; tot.onActors += q.onActors;
     tot.offSites += q.offSites; tot.onSites += q.onSites;
     tot.canvas += q.canvas;
+    tot.skinDiff += q.skinDiff; tot.shipDiff += q.shipDiff;
+    tot.shipDropped += q.shipDropped;
     if (q.gone > 0) tot.withGone++;
     if (q.offWallPx !== q.onWallPx) tot.movedViews++;
   }
@@ -2754,6 +2925,15 @@ await test('only the rock that touches open space is painted (v0.47.0)', async (
     + ' battery, so "the black only ever grows" is not being asked of anything');
   assert(tot.onBack > 0,
     'not one pixel of black opened up anywhere in the battery');
+  /* AND THE SAME TOGGLE AT THE LOOK THE GAME SHIPS IS INVISIBLE, over the whole
+     battery: 70,863 squares left unbuilt over the 16 frames (4,429 a frame), and
+     not one pixel different in any of them -- while the same comparison at the
+     look above moves millions. That is what the skin is for now: not a look of
+     its own, but not building the back of a hill nobody can see. */
+  assert(tot.skinDiff > 0 && tot.shipDiff === 0 && tot.shipDropped > 0,
+    `over ${r.out.length} cases the skin moved ${tot.skinDiff} pixels at the look`
+    + ` of this battery but ${tot.shipDiff} at the look the game ships, having left`
+    + ` ${tot.shipDropped} squares a frame unbuilt`);
   /* MOST OF WHAT WAS CULLED WAS ALREADY COVERED, to the pixel, by rock that
      stays -- which is what makes this a change to the SHAPE of the hill rather
      than a window into it. So the paint that leaves is under a tenth of the
@@ -2786,7 +2966,518 @@ await test('only the rock that touches open space is painted (v0.47.0)', async (
     + ` wall ${tot.offWallMap} -> ${tot.onWallMap}, black ${tot.offBack} ->`
     + ` ${tot.onBack} (${(100 * black / took).toFixed(1)}% of what was taken),`
     + ` ground ${tot.offGround} -> ${tot.onGround} to the pixel,`
-    + ` ${tot.asks} answers asked over the culled squares and none of them naming one`);
+    + ` ${tot.asks} answers asked over the culled squares and none of them naming`
+    + ` one; and the same toggle at the shipped look moves ${tot.shipDiff} pixels`
+    + ` where this look moves ${tot.skinDiff}, having left ${tot.shipDropped}`
+    + ' squares a frame unbuilt');
+});
+
+/* ONLY THE SIDES OF A WALL THAT FACE OPEN GROUND ARE SHOWN (v0.48.0)
+ *
+ * A block paints the two of its four sides that face the camera. Where one of
+ * those sides stands against ROCK it was painted anyway, cut down to whatever
+ * the rock in front reached -- and v0.47.0 took that rock out of the picture, so
+ * there was nothing left to cut the side down to and it was handed back whole:
+ * eight metres of wall hanging over the black, and over whatever lay behind it.
+ * That is the artifact this is about, and the rule that removes it is the one
+ * the game ships: **a side with rock in front of it is not drawn at all, so a
+ * wall seen from its rock side is see-through.**
+ *
+ * WHAT IT COSTS is rock that was genuinely visible. Where the block in front is
+ * LOWER than we are, the strip of our side standing above it was rock anybody
+ * could see; it goes with the rest, and you look over that block and out into
+ * black. The setting that keeps those strips is `rockSides` 1 and the setting
+ * that draws them the v0.47.0 way -- whole -- is 0, and both are one number
+ * away, because a look is a setting and not a row of the sheet.
+ *
+ * WHAT IT BUYS is that the picture stops pretending to be solid where nothing
+ * is, which is what was asked for in as many words.
+ *
+ * THREE THINGS ARE PROVED HERE, and none of them is argued:
+ *
+ *  1. THE COUNT IS A QUESTION ABOUT THE WORLD, and a second walk agrees with it.
+ *     How many side faces had rock in front of them -- in the picture or not --
+ *     is re-derived here from `Render.batch` and `world.at()`, with `clipFaces()`'s
+ *     own edge arithmetic, and it must equal the counter the drawing kept, in
+ *     BOTH arms. Without that, "nothing was shown" would pass just as well on a
+ *     frame that never had a rock-facing side in it at all.
+ *  2. THE SHIPPED ARM SHOWS NONE OF THEM, and the arm one number away shows
+ *     thousands -- side by side in ONE build (lesson 21), so the zero is a
+ *     measurement and not an empty world.
+ *  3. NOTHING ELSE MOVED. The rock skin culls exactly as much either way; every
+ *     rock-facing face that was shown becomes wall paint that is not there; the
+ *     black only ever grows and the floor only ever gains, because a wall taken
+ *     out of the picture reveals whatever it was covering -- floor, a further
+ *     wall's own fading edge, or black -- and hides nothing; the crawlers and the
+ *     camp sites are the same list; and over hundreds of thousands of answers
+ *     from `pickAt`, NOT ONE point the old picture answered as ground, as a
+ *     crawler or as a camp site answers differently. That last one is a theorem
+ *     rather than luck, and worth saying why: `pickAt` answers the LAST shape
+ *     containing the point, so taking shape `j` out of the list can only change
+ *     the answer at a point where `j` was the answer -- and the only shapes this
+ *     takes out are the side faces of rock-facing sides, so the only points that
+ *     can change are points that answered ROCK.
+ *
+ * Printed by its own battery over 64 cases (4 seeds x 2 angles x 4 quarters x 2
+ * zooms, and every one of them a frame of its own): 9,591 side faces stood
+ * against rock and 8,288 of them were shown in the old picture -- 22,909 metres
+ * of wall, 23,458,816 pixels of it -- and 0 were shown in the new one, 0 metres,
+ * 0 pixels. Wall paint 12,684 -> 4,396 faces, the dark 2,991,701 -> 6,627,712
+ * pixels and the floor 9,513,787 -> 11,630,904, so 2,117,117 pixels of floor came
+ * back into view behind the walls that went. Of 196,608 answers from `pickAt`,
+ * 49,112 changed and every one of them was rock in the old picture, 29,844 of
+ * those now answering nothing at all -- and 3,452 answers named a crawler or a
+ * camp site before where 3,476 do now, because 24 of the points a wall was
+ * covering were people.
+ *
+ * THOSE FIGURES ARE THE ONES AFTER THE FLAP WAS FIXED, and 93 of the 9,591 are
+ * the fix. v0.48.0's own clip loop stopped one short of the end of the list, on
+ * the argument that nothing can be painted after the last thing -- true of the
+ * picture, and false of this question, which also asks whether rock stands in
+ * front of a face in the WORLD. So the frontmost block of each frame kept
+ * `nbrL/nbrR` at -1 and was handed its sides WHOLE: two faces a frame hanging
+ * over open floor, which is precisely the artifact this release exists to
+ * remove. The counters read 9,498 / 8,195 with the flap there. Nothing else
+ * about the battery moved by more than a rounding of the same faces -- and the
+ * v0.47.0 skin battery above comes out identical to the pixel either way, which
+ * is the check that the fix did not quietly repaint the look it was not about.
+ */
+const STONE_CASES = [];
+for (const seed of [1, 2, 7, 777]) {
+  for (const up of [false, true]) {
+    for (const turn of [0, 1, 2, 3]) {
+      for (const zoom of [1, 2]) {
+        STONE_CASES.push({ seed: seed, up: up, turn: turn, zoom: zoom });
+      }
+    }
+  }
+}
+
+await test('only the sides of a wall facing open ground are shown (v0.48.0)', async () => {
+  const r = await page.evaluate((CASES) => {
+    const t = window.__test;
+    const isRock = (c) => !!c && c.h > 0 && TILE(c.tile).footing === 'block';
+    const CODE = { nothing: 0, ground: 1, rock: 2, crawler: 3, camp: 4 };
+
+    /* WHICH SIDES HAVE ROCK IN FRONT OF THEM, worked out here from the world
+       rather than read off the flag the drawing set -- a test that reads the flag
+       is asking the code whether it agrees with itself. This is `clipFaces()`
+       exactly: the two faces a block shows, the edge each one stands on (named
+       by the corner it runs from, whichever of the two is not the near one), the
+       square one step off that edge, and whether that square is rock and paints
+       after us. */
+    const sidesFacingRock = (s, it, k, at) => {
+      const cell = it.cell;
+      let n = 0;
+      for (let f = 0; f < 2; f++) {
+        const other = f === 0 ? it.cornerL : it.cornerR;
+        const e = other === (it.near + 1) % 4 ? it.near : other;
+        const nx = cell.x + EDGE_STEP[e][0], ny = cell.y + EDGE_STEP[e][1];
+        const nbr = s.world.at(nx, ny);
+        if (!isRock(nbr)) continue;
+        const nk = at.get(nbr);
+        if (nk === undefined) {
+          /* A square the picture has not got, and there is more than one reason
+             for that: the skin dropped it, the screen cut it, its whole piece is
+             off it. It answers "am I in front" the only way it can, by its own
+             depth -- which is what the build asks it too. */
+          if (!(Render.depth(s, nx + 0.5, ny + 0.5) > it.depth)) continue;
+        } else {
+          if (nk <= k) continue;                     /* painted before this face */
+          if (nbr.slope !== SLOPE_FLAT || nbr.h <= 0) continue;
+        }
+        n++;
+      }
+      return n;
+    };
+    /* The whole frame's worth of them, under the same guards the build uses to
+       decide which squares have their faces worked out at all. EVERY square in
+       the list is asked about, the last one included: v0.48.0 found the build's
+       own clip loop stopping one short of the end, on the argument that nothing
+       can be painted after the last thing -- true of the PICTURE, and false of
+       this question, because a side also asks whether rock stands in front of it
+       in the WORLD, and the answer to that does not care where the rock sits in
+       the list. Left unassigned, the frontmost block's sides were handed back
+       whole, which is a flap of wall over open floor. Measured before the fix:
+       the drawing counted 276 where this walk found 275. */
+    const countSides = (s) => {
+      const b = Render.batch, at = new Map();
+      for (let k = 0; k < b.length; k++) if (b[k].kind === 'cell') at.set(b[k].cell, k);
+      let n = 0;
+      for (let k = 0; k < b.length; k++) {
+        const it = b[k];
+        if (it.kind !== 'cell' || !it.solid) continue;
+        if (it.cell.slope !== SLOPE_FLAT) continue;
+        n += sidesFacingRock(s, it, k, at);
+      }
+      return n;
+    };
+    /* WHAT THE POINTER ANSWERS, at the same points in both arms, in the four
+       classes a person would use -- the three runs of numbers `pickAt` hands
+       back, with the cells split into the ground you can stand on and the rock
+       you cannot. */
+    const walk = (s, pts) => {
+      const world = s.world, nc = world.cells.length, na = s.actors.length;
+      const tally = { nothing: 0, ground: 0, rock: 0, crawler: 0, camp: 0 };
+      const codes = new Uint8Array(pts.length >> 1);
+      for (let p = 0, q = 0; p < pts.length; p += 2, q++) {
+        const hit = Render.pickAt(s, pts[p], pts[p + 1]);
+        let k = 'nothing';
+        if (hit >= 0) {
+          if (hit < nc) k = isRock(world.cells[hit]) ? 'rock' : 'ground';
+          else if (hit < nc + na) k = 'crawler';
+          else k = 'camp';
+        }
+        tally[k]++;
+        codes[q] = CODE[k];
+      }
+      return { tally: tally, codes: codes };
+    };
+
+    const out = [];
+    const pics = new Set();
+    t.pause(); t.unpoint();
+    const was = t.rockSides();
+    for (const c of CASES) {
+      t.seed(c.seed);
+      t.advance(2000);
+      t.tilt(!!c.up);
+      t.rotate(c.turn);
+      t.settle();
+      t.zoom(c.zoom);
+      t.unpoint();
+      const s = Game.state;
+      /* The same points asked in both arms, and both arms are the same buffer --
+         the setting does not touch the camera. A grid every 11 pixels lands on
+         wall sides (which are tens of pixels across) rather than sampling them
+         by luck. */
+      const pts = [];
+      for (let py = 3; py < Render.h - 3; py += 11) {
+        for (let px = 3; px < Render.w - 3; px += 11) pts.push(px, py);
+      }
+      const row = { seed: c.seed, up: !!c.up, turn: c.turn, zoom: c.zoom, asks: 0, sides: 0 };
+      const shot = [];
+      for (const arm of [0, 2]) {
+        t.rockSides(arm);
+        t.redraw();
+        const con = t.consumed();
+        const sides = countSides(s);
+        row.sides = sides;
+        const asked = walk(s, pts);
+        let actors = 0, sites = 0;
+        for (const it of Render.batch) {
+          if (it.kind === 'actor') actors++;
+          else if (it.kind === 'site') sites++;
+        }
+        /* THE PICTURE ITSELF, kept before `fillMap()` repaints its colours over
+           it -- this is what a person is looking at, and comparing the two arms'
+           copies of it needs no agreement about what any colour means. */
+        const raw = new Uint8Array(Render.bctx.getImageData(0, 0, Render.w, Render.h).data);
+        const map = t.fillMap();
+        /* AND THE SAME FRAME IN `fillMap()`'s OWN COLOURS, one ink per kind of
+           paint, so a pixel says WHAT PAINTED IT. In that copy a colour can only
+           be one of six by construction, so two arms can be compared pixel by
+           pixel with no room for a shade of rock to be mistaken for the dark. */
+        const kinds = new Uint8Array(Render.bctx.getImageData(0, 0, Render.w, Render.h).data);
+        shot.push({ raw: raw, kinds: kinds, con: con, map: map, asked: asked,
+                    sides: sides, actors: actors, sites: sites });
+      }
+      const offS = shot[0], onS = shot[1];
+      /* WHAT THE CAMERA WAS ACTUALLY POINTED AT. Sixty-four cases must reach
+         sixty-four different frames: a battery that re-measures one frozen
+         picture is the failure lesson 27 writes down, and it reports as a result
+         rather than as a mistake. So the old arm's own pixels are hashed and the
+         distinct answers counted -- the seeds, tilts, turns and zooms must all be
+         doing something. */
+      let dig = 2166136261;
+      for (let i = 0; i < offS.raw.length; i += 8) {
+        dig = Math.imul(dig ^ offS.raw[i], 16777619) >>> 0;
+      }
+      pics.add(dig + ':' + Render.w + 'x' + Render.h);
+      /* WHERE THE TWO PICTURES DIFFER. `moved` is how much of what a person sees
+         the rule touched. Then, kind by kind: a pixel that was dark must still be
+         dark, and a pixel that was floor must still be floor, because the shipped
+         picture paints a SUBSET of the old one's shapes at the same places in the
+         same order -- so it can only ever uncover, never cover. Counted here
+         instead of argued. */
+      const INK = new Map();
+      const pack = (r, g, b) => (r << 16) | (g << 8) | b;
+      const given = (hex) => pack(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16),
+                                  parseInt(hex.slice(5, 7), 16));
+      for (const [name, hex] of [['plain', '#fe00fe'], ['ground', '#00fe00'],
+                                 ['wall', '#0000fe'], ['other', '#fefe00'],
+                                 ['band', '#00fefe'], ['dark', BACKDROP]]) {
+        INK.set(given(hex), name);
+      }
+      let moved = 0, darkToPaint = 0, paintToDark = 0, darkStays = 0;
+      let groundToOther = 0, otherToGround = 0, offDark = 0, onDark = 0;
+      const offInk = { plain: 0, ground: 0, wall: 0, other: 0, band: 0, dark: 0, mix: 0 };
+      const onInk = { plain: 0, ground: 0, wall: 0, other: 0, band: 0, dark: 0, mix: 0 };
+      for (let i = 0; i < offS.raw.length; i += 4) {
+        if (offS.raw[i] !== onS.raw[i] || offS.raw[i + 1] !== onS.raw[i + 1]
+            || offS.raw[i + 2] !== onS.raw[i + 2]) moved++;
+        const c0 = INK.get(pack(offS.kinds[i], offS.kinds[i + 1], offS.kinds[i + 2]));
+        const c1 = INK.get(pack(onS.kinds[i], onS.kinds[i + 1], onS.kinds[i + 2]));
+        offInk[c0 === undefined ? 'mix' : c0]++;
+        onInk[c1 === undefined ? 'mix' : c1]++;
+        if (c0 === 'dark') offDark++;
+        if (c1 === 'dark') onDark++;
+        if (c0 === 'dark' && c1 === 'dark') { darkStays++; continue; }
+        if (c0 === 'dark') darkToPaint++;
+        else if (c1 === 'dark') paintToDark++;
+        if (c0 === 'ground' && c1 !== 'ground') groundToOther++;
+        else if (c0 !== 'ground' && c1 === 'ground') otherToGround++;
+      }
+      for (const arm of [0, 2]) {
+        const q = arm === 0 ? offS : onS, con = q.con;
+        row[arm === 0 ? 'off' : 'on'] = {
+          sides: q.sides, stoneSides: con.stoneSides,
+          shown: con.stoneShown, metres: con.stoneM, px: con.stonePx,
+          walls: con.walls, wallPx: con.wallPx, drawn: con.count,
+          dropped: con.skinDropped, skinKept: con.skinKept,
+          backKept: con.kept, lost: con.lost, stumps: con.stumps,
+          ground: q.map.ground, back: q.map.backdrop, flat: q.map.flat,
+          plain: q.map.plain, wall: q.map.wall, other: q.map.other,
+          band: q.map.band, mingled: q.map.mingled, canvas: q.map.canvas,
+          actors: q.actors, sites: q.sites, tally: q.asked.tally, codes: q.asked.codes
+        };
+      }
+      row.offInk = offInk; row.onInk = onInk;
+      row.moved = moved; row.darkToPaint = darkToPaint;
+      row.paintToDark = paintToDark; row.darkStays = darkStays;
+      row.groundToOther = groundToOther; row.otherToGround = otherToGround;
+      row.offDark = offDark; row.onDark = onDark;
+      t.redraw();
+      const off = row.off, on = row.on;
+      /* 3. WHAT THE POINTER ANSWERS, POINT BY POINT. A point may change class,
+         and it may only ever change FROM rock -- the theorem in the prose above,
+         measured instead of asserted. */
+      let changed = 0, wasRock = 0, toNothing = 0;
+      for (let q = 0; q < off.codes.length; q++) {
+        if (off.codes[q] === on.codes[q]) continue;
+        changed++;
+        if (off.codes[q] === CODE.rock) {
+          wasRock++;
+          if (on.codes[q] === CODE.nothing) toNothing++;
+        }
+      }
+      row.asks = off.tally.nothing + off.tally.ground + off.tally.rock
+               + off.tally.crawler + off.tally.camp;
+      row.changed = changed; row.wasRock = wasRock; row.toNothing = toNothing;
+      row.offGround = off.tally.ground; row.onGround = on.tally.ground;
+      row.offRock = off.tally.rock; row.onRock = on.tally.rock;
+      row.offPeople = off.tally.crawler + off.tally.camp;
+      row.onPeople = on.tally.crawler + on.tally.camp;
+      out.push(row);
+    }
+    t.rockSides(was);
+    t.unpoint();
+    return { out: out, was: was, back: t.rockSides(),
+             cases: CASES.length, pics: pics.size };
+  }, STONE_CASES);
+  const tot = { sides: 0, offShown: 0, offM: 0, offPx: 0, onShown: 0, onM: 0, onPx: 0,
+                offWalls: 0, onWalls: 0, offWallPx: 0, onWallPx: 0,
+                offDrawn: 0, onDrawn: 0, offGround: 0, onGround: 0,
+                offBack: 0, onBack: 0, offDark: 0, onDark: 0,
+                offActors: 0, onActors: 0, offSites: 0, onSites: 0,
+                asks: 0, changed: 0, wasRock: 0, toNothing: 0,
+                offRock: 0, onRock: 0, offPeople: 0, onPeople: 0,
+                moved: 0, darkToPaint: 0, paintToDark: 0, darkStays: 0,
+                groundToOther: 0, otherToGround: 0,
+                withShown: 0, withMoved: 0 };
+  assert(r.was === 2 && r.back === 2,
+    `the setting came back as ${r.back} where the game ships it at ${r.was}`);
+  assert(r.out.length === r.cases && r.out.length === 64,
+    `${r.out.length} cases were run of ${r.cases} asked for`);
+  assert(r.pics === r.cases,
+    `the ${r.cases} cases reached ${r.pics} different frames, so the seeds, tilts,` +
+    ' turns and zooms are not all doing anything and the range was not run');
+  for (const q of r.out) {
+    const at = `seed ${q.seed}${q.up ? ' raised' : ''} quarter ${q.turn} zoom ${q.zoom}`;
+    /* 0. THE RULER ITSELF. The walk below sorts every pixel by its COLOUR in the
+       `fillMap()` pass; the census sorts the same frame by which DOOR each fill
+       came out of. Seven ways for them to disagree, and if any did, every number
+       after this one is about a picture neither of them painted. */
+    const inks = [['plain', 'plain'], ['ground', 'ground'], ['wall', 'wall'],
+                  ['other', 'other'], ['band', 'band'], ['dark', 'back'],
+                  ['mix', 'mingled']];
+    const offInk = q.offInk, onInk = q.onInk;
+    const wrong = inks.filter(([m, th]) =>
+      offInk[m] !== q.off[th] || onInk[m] !== q.on[th]);
+    assert(wrong.length === 0,
+      `${at}: a walk of the frame by colour and the census by the door each fill`
+      + ` came out of disagree about ${wrong.length} of the seven kinds of paint`
+      + ` (${wrong.map((w) => w[0]).join(', ')}), so these two are not measuring`
+      + ' the same frame');
+    /* 1. THE COUNT IS A QUESTION ABOUT THE WORLD, and the drawing's own counter
+       is the number a second walk gives -- in both arms, because it is a fact
+       about the world and the setting may not touch it. */
+    assert(q.sides > 0 && q.off.sides === q.sides && q.on.sides === q.sides,
+      `${at}: ${q.off.sides} side faces stood against rock in the old picture and`
+      + ` ${q.on.sides} in the new one, where a second walk over the batch finds`
+      + ` ${q.sides} -- either the arms disagree about the world or there is`
+      + ' nothing here for the rule to be about');
+    assert(q.off.stoneSides === q.off.sides && q.on.stoneSides === q.on.sides,
+      `${at}: the drawing counted ${q.off.stoneSides} -> ${q.on.stoneSides} rock-facing`
+      + ` faces where a walk of the world finds ${q.off.sides} -> ${q.on.sides}, so`
+      + ' the counter is counting something other than the sides of the walls');
+    /* 2. THE RULE. The arm one number away shows thousands of them, over the
+       whole battery; the shipped arm shows not one, of any height or any width. */
+    assert(q.off.shown > 0 && q.off.metres > 0 && q.off.px > 0,
+      `${at}: the old picture showed ${q.off.shown} of those ${q.sides} faces`
+      + ` (${q.off.metres} m, ${q.off.px} px), so this case cannot tell the rule`
+      + ' from a frame with no rock-facing wall in it');
+    assert(q.on.shown === 0 && q.on.metres === 0 && q.on.px === 0,
+      `${at}: the shipped picture shows ${q.on.shown} faces standing against rock,`
+      + ` ${q.on.metres} m of them and ${q.on.px} px, where the whole rule is that`
+      + ' a side with rock behind it is not drawn at all');
+    /* 3. AND NOTHING ELSE MOVED. The skin is the dial beside this one and culls
+       exactly as much either way; the wall can only lose paint; the black can
+       only grow; the floor keeps every pixel; the people are the same list. */
+    assert(q.on.dropped === q.off.dropped && q.on.skinKept === q.off.skinKept,
+      `${at}: the rock skin went ${q.off.dropped} -> ${q.on.dropped} squares culled`
+      + ` and ${q.off.skinKept} -> ${q.on.skinKept} kept, where this setting is not`
+      + ' the skin and may not touch it');
+    assert(q.on.walls <= q.off.walls && q.on.wallPx <= q.off.wallPx
+        && q.on.drawn <= q.off.drawn,
+      `${at}: the picture painted ${q.off.walls} -> ${q.on.walls} wall faces,`
+      + ` ${q.off.wallPx} -> ${q.on.wallPx} pixels of wall and ${q.off.drawn} ->`
+      + ` ${q.on.drawn} things, where taking sides away can only take paint`);
+    assert(q.on.back >= q.off.back,
+      `${at}: the black went ${q.off.back} -> ${q.on.back} pixels, so what was`
+      + ' removed was not wall standing over the backdrop');
+    /* WHERE THE TWO PICTURES DIFFER, and the two facts that make the difference
+       safe. The shipped picture paints a subset of the old one's shapes at the
+       same places in the same order, so a pixel can only ever go from paint to
+       dark, never the other way, and floor can only be uncovered, never covered. */
+    assert(q.offDark === q.off.back && q.onDark === q.on.back,
+      `${at}: the census found ${q.off.back} -> ${q.on.back} unpainted pixels and a`
+      + ` walk of the same frame ${q.offDark} -> ${q.onDark}, so the two are`
+      + ' measuring different things');
+    assert(q.darkToPaint === 0,
+      `${at}: ${q.darkToPaint} pixels that nothing painted in the old picture were`
+      + ' painted in the new one, where the new picture draws a subset of the same'
+      + ' shapes in the same order and so can only ever put dark IN');
+    assert(q.onDark >= q.offDark,
+      `${at}: the dark went ${q.offDark} -> ${q.onDark} pixels, so what was taken`
+      + ' out of the picture was not wall standing over the dark');
+    assert(q.groundToOther === 0,
+      `${at}: ${q.groundToOther} pixels that were floor stopped being floor, where`
+      + ' taking wall away can only ever uncover floor');
+    assert(q.moved > 0,
+      `${at}: the two pictures are identical, so this case is not evidence about`
+      + ' the rule at all');
+    assert(q.on.ground >= q.off.ground,
+      `${at}: the floor went ${q.off.ground} -> ${q.on.ground} pixels, so removing`
+      + ' wall hid floor that was visible, which nothing can do');
+    assert(q.on.actors === q.off.actors && q.on.sites === q.off.sites,
+      `${at}: the picture holds ${q.off.actors} -> ${q.on.actors} crawlers and`
+      + ` ${q.off.sites} -> ${q.on.sites} camp sites`);
+    assert(q.on.lost === 0 && q.on.backKept === q.off.backKept,
+      `${at}: ${q.on.lost} faces were left cut away with nothing painted in front`
+      + ` and ${q.off.backKept} -> ${q.on.backKept} faces were handed back whole,`
+      + ' where this setting adds no holes and takes none away');
+    /* 4. AND NO ANSWER CHANGED EXCEPT ONE THAT WAS ROCK. Counted, per case, over
+       the whole frame: every point that answers differently is a point the old
+       picture answered as ROCK, and most of those now answer nothing at all. */
+    assert(q.asks > 1000 && q.changed === q.wasRock,
+      `${at}: ${q.changed} of ${q.asks} points answer differently and ${q.wasRock}`
+      + ' of those were rock in the old picture, where taking a shape out of the'
+      + ' list may only change an answer that shape was giving');
+    assert(q.offGround > 0 && q.onGround > 0 && q.offPeople > 0 && q.onPeople > 0,
+      `${at}: ${q.offGround} -> ${q.onGround} points answered ground and`
+      + ` ${q.offPeople} -> ${q.onPeople} answered a crawler or a camp site, so`
+      + ' "none of those changed" is being asked of something that exists');
+    tot.sides += q.sides; tot.offShown += q.off.shown; tot.offM += q.off.metres;
+    tot.offPx += q.off.px; tot.onShown += q.on.shown; tot.onM += q.on.metres;
+    tot.onPx += q.on.px;
+    tot.offWalls += q.off.walls; tot.onWalls += q.on.walls;
+    tot.offWallPx += q.off.wallPx; tot.onWallPx += q.on.wallPx;
+    tot.offDrawn += q.off.drawn; tot.onDrawn += q.on.drawn;
+    tot.offGround += q.off.ground; tot.onGround += q.on.ground;
+    tot.offBack += q.off.back; tot.onBack += q.on.back;
+    tot.offDark += q.offDark; tot.onDark += q.onDark;
+    tot.moved += q.moved; tot.darkToPaint += q.darkToPaint;
+    tot.paintToDark += q.paintToDark; tot.darkStays += q.darkStays;
+    tot.groundToOther += q.groundToOther; tot.otherToGround += q.otherToGround;
+    tot.offActors += q.off.actors; tot.onActors += q.on.actors;
+    tot.offSites += q.off.sites; tot.onSites += q.on.sites;
+    tot.asks += q.asks; tot.changed += q.changed; tot.wasRock += q.wasRock;
+    tot.toNothing += q.toNothing;
+    tot.offRock += q.offRock; tot.onRock += q.onRock;
+    tot.offPeople += q.offPeople; tot.onPeople += q.onPeople;
+    if (q.off.shown > 0) tot.withShown++;
+    if (q.moved > 0) tot.withMoved++;
+  }
+  /* AND THE WHOLE THING IS NOT A COUNTER THAT NEVER FIRED. */
+  assert(tot.offShown > 0 && tot.offM > 0 && tot.withShown === r.out.length,
+    `${tot.offShown} faces of ${tot.sides} were shown over ${r.out.length} cases`
+    + ` and ${tot.withShown} of them showed any, so the rule was not asked of the`
+    + ' whole range');
+  assert(tot.onShown === 0 && tot.onM === 0 && tot.onPx === 0,
+    `the shipped picture shows ${tot.onShown} faces, ${tot.onM} m and ${tot.onPx} px`
+    + ' of wall standing against rock over the whole battery');
+  assert(tot.withMoved === r.out.length && tot.moved > 0,
+    `only ${tot.withMoved} of the ${r.out.length} cases painted any differently,`
+    + ` and ${tot.moved} pixels differ over the whole battery, so the range was`
+    + ' not run');
+  /* The dark may only ever GROW, and it may only grow by what the removed walls
+     were standing over: not one pixel that nothing painted may come out painted,
+     and every pixel newly dark is by definition one that moved. The floor can be
+     uncovered; it can never be covered. */
+  assert(tot.darkToPaint === 0,
+    `${tot.darkToPaint} pixels that nothing painted were painted over by the new`
+    + ' picture, where it paints a subset of the same shapes in the same order and'
+    + ' so cannot cover anything the old one left showing');
+  assert(tot.onDark - tot.offDark === tot.paintToDark - tot.darkToPaint,
+    `the dark grew by ${tot.onDark - tot.offDark} pixels where ${tot.paintToDark}`
+    + ` moved pixels came out dark and ${tot.darkToPaint} went the other way`);
+  assert(tot.onDark > tot.offDark,
+    `the dark went ${tot.offDark} -> ${tot.onDark} pixels over the whole battery,`
+    + ' so the pictures differ somewhere other than the dark and this is not the'
+    + ' change it claims to be');
+  assert(tot.groundToOther === 0,
+    `${tot.groundToOther} pixels that were floor stopped being floor over the`
+    + ' whole battery, where taking wall out of the picture can only uncover'
+    + ' floor, never cover it');
+  assert(tot.otherToGround > 0 && tot.onGround > tot.offGround,
+    `the floor went ${tot.offGround} -> ${tot.onGround} pixels and only`
+    + ` ${tot.otherToGround} of them were uncovered behind a wall that went, where`
+    + ' the point of the rule is that the room behind the wall is now in view');
+  assert(tot.offActors > 0 && tot.offActors === tot.onActors
+      && tot.offSites === tot.onSites && tot.onSites > 0,
+    `${tot.offActors} -> ${tot.onActors} crawlers and ${tot.offSites} ->`
+    + ` ${tot.onSites} camp sites were on the picture over the whole battery, so`
+    + ' either there was nobody to lose or this lost them');
+  assert(tot.changed === tot.wasRock && tot.wasRock > 0,
+    `${tot.changed} answers changed over the battery and ${tot.wasRock} of them`
+    + ' were rock in the old picture -- a change anywhere else would mean this'
+    + ' took something that was not a wall standing against rock');
+  assert(tot.toNothing > 0 && tot.toNothing <= tot.wasRock,
+    `${tot.toNothing} of the ${tot.wasRock} rock answers that changed came out`
+    + ' as nothing at all');
+  /* WHAT IT COSTS AND WHAT IT BUYS, in pixels: the wall loses paint, the dark and
+     the floor both gain, and the people are where they were. These are the
+     numbers a session that wants the strips back (the setting at 1) has to move. */
+  const floorGain = tot.onGround - tot.offGround;
+  const darkGain = tot.onDark - tot.offDark;
+  const darkShare = (100 * darkGain / Math.max(1, darkGain + floorGain)).toFixed(1);
+  assert(tot.moved > 0 && darkGain > 0 && floorGain > 0,
+    `${tot.moved} pixels differ, ${darkGain} of them newly dark and ${floorGain}`
+    + ' the floor, so the change did not reach the picture');
+  console.log(`  ... ${r.out.length} cases of only the sides facing open ground`
+    + ` (${r.pics} frames of their own): ${tot.sides} side faces stood against rock,`
+    + ` ${tot.offShown} of them shown in the old picture (${tot.offM} m,`
+    + ` ${tot.offPx} px) and ${tot.onShown} in the new one; wall faces`
+    + ` ${tot.offWalls} -> ${tot.onWalls}, ${tot.moved} pixels of the frame`
+    + ` changed, of which ${darkGain} came out dark and ${floorGain} came out`
+    + ` floor uncovered behind the walls that went (${darkShare}% of that newly`
+    + ` opened ground is the dark itself); the dark shows ${tot.offDark} ->`
+    + ` ${tot.onDark} pixels, the floor ${tot.offGround} -> ${tot.onGround}, and`
+    + ` ${tot.asks} answers were asked, ${tot.changed} changed, every one of them`
+    + ` rock (${tot.toNothing} now nothing), ${tot.offRock} -> ${tot.onRock}`
+    + ` naming rock and ${tot.offPeople} -> ${tot.onPeople} naming a crawler or a`
+    + ' camp site');
 });
 
 /* The wall behind a block you can see past is brought back whole. When a block

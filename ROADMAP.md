@@ -150,8 +150,68 @@ noted against each line:
   it reads as a black gap where it used to read as a lump. Keeping such lumps is
   one line and **has not been asked for**.
 
-- **The picture draws the whole world it holds, whether or not anyone has been
-  there.** Asked for "voxels, and do not display ones that are unrevealed", the
+- ~~**A wall shows only the side with open ground in front of it.**~~ **Done —
+  v0.48.0.** Asked for in as many words — *"only show the side(s) of a wall block
+  that face the walkable area"* — and settled by effect first. The choice they took
+  is the **strict** one: *"Only sides facing open ground, always — turn the view
+  onto a wall's rock side and the wall vanishes, letting you see straight through
+  into the room behind it."* So a side whose neighbour in front of it is rock is
+  **not painted at all**, and the picture is see-through from that angle on purpose:
+  the floor, the camp and the crawlers behind a wall are visible, and where no
+  ground stands behind it there is the black. `Render.rockSides` is the rule (a
+  code flag, not a sheet dial — it says what a wall IS, not how much to show):
+  **2 ships**, **1 is the look not taken** (the same side cut down to the strip
+  standing above the rock in front of it, opaque from every angle, **one number
+  away if the see-through is too much**), and **0 is v0.47.0** (the whole stored
+  side painted), which is the arm the change is proved against inside ONE build.
+  It also fixed **two** flaps that v0.47.0 had left hanging, and they were the same
+  eight-metre quad (a block's cap down to height 0, 8 m, 256 px) painted were the
+  black should have been:
+  1. `clipFaces()` built its neighbour map out of the batch, so a wall's neighbour —
+     now culled before it becomes a polygon — read as "nothing in front", and the
+     whole stored side was painted. The missing-neighbour branch now asks the world
+     (`rockAt`), so the cut cannot depend on who is in the picture.
+  2. The clip walk ran one short of the end of the list (`k < b.length - 1`), on the
+     true-but-insufficient reasoning that nothing is painted after the last shape so
+     it needs no cutting. The last shape was therefore never asked, kept the defaults
+     that mean "nothing in front of me", and `wallsPainted()` handed back its whole
+     stored side — and the skin is what made it bite, because culling the buried
+     blocks **promotes a one-tile wall to the front of the list**. Seed 3, no turn:
+     **1,580 px of wall laid over open floor**, floor 110,747 -> 109,167. It was found
+     by a TEST — v0.47.0's own skin battery, whose subject is the floor — not by an
+     eye, because a flap hanging over black is invisible against black and this one
+     hung over floor. The walk now runs to the end; the extra question can only ever
+     answer "nothing in front of me".
+  Measured A/B inside one build, 64 cases (4 seeds x 2 angles x 4 turns x 2 zooms,
+  each world settled, 64 distinct frames printed as the probe's own self-check):
+  sides standing against rock 9,591, painted **8,288 -> 0** (22,909 m, 23,458,816
+  px), wall faces **12,684 -> 4,396** (65.3% fewer), pixels moved 7,623,499 — of them
+  **3,636,011 newly black and 2,117,117 newly floor** — black **2,991,701 ->
+  6,627,712** (2.22x), floor **9,513,787 -> 11,630,904**, and of 196,608 picked
+  answers **49,112 changed, every one of them rock** (29,844 became nothing; 24
+  points that a wall used to cover turned out to be crawlers, which is why the people
+  count rises 3,452 -> 3,476; rock 83,124 -> 34,012). **63.2% of the newly opened
+  ground is the black itself**, which is the honest statement of the look: opening the
+  wall with no black behind it would have been a different and worse picture.
+  **The pick and the ring follow the picture for free and needed no work** — `pickAt()`
+  (`faced.bl`/`faced.br`), `drawPick()` and the halo all ask `wallsPainted()`, and
+  `sideShown()` asks the same `cutMeet()` the clip asks, so all three read
+  `rockSides`. This is written down because a note here once said the opposite and sent
+  a session looking for a gap that is not there. **One real seam, written down because
+  it is invisible until it is not:** the pick names a block through its back strips
+  (`faced.br`/`faced.bl`) while `shapeOf()` builds the ring from the cap and the two
+  sides only — so a block that showed *nothing but* a back strip would be pickable and
+  ringless. At `cut_solid` 1 `backBand()` returns null for every block, so nothing
+  ships in that state; if the fade is ever switched on, that pairing is the first
+  thing to check. **Five older tests pin the look for their own run** — all five
+  measure a face standing against rock, two take `wallSkin(false)` as well as
+  `rockSides(0)` because their recorded counts were taken on the skin-off picture,
+  and the fifth is the skin battery itself, whose counts stop moving at the shipped
+  look (once the sides rule has taken the face out, removing the block on top of it
+  saves **0 pixels**, though it still leaves 4,429 squares a frame unbuilt — so the
+  skin has become a saving rather than a look). See `CHANGELOG.md` v0.48.0.
+
+- **The picture draws the whole world it holds, whether or not anyone has been there.** Asked for "voxels, and do not display ones that are unrevealed", the
   buried half turned out to be **mostly built already** — a block inside solid rock
   is not painted and cannot be pointed at, since v0.34.0's cut — and **v0.47.0
   finished that half off** for the 1,151 squares the cut was still painting (see

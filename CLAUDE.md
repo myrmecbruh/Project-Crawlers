@@ -1517,8 +1517,11 @@ count **bare backdrop as a FAULT**. That was a fault's right name while the ship
 look painted every block; it is the shipped look now. Both tests are about OTHER
 knobs -- the wall clip and the far-edge bands -- and both sets of numbers were
 taken on the fully-rocked picture, so they run against the rock as it was, and each
-restores the flag and asserts that it came back. `__test.wallSkin(on)` is the door,
-and the suite's own test for the skin is
+restores the flag and asserts that it came back. **v0.48.0 adds `t.rockSides(0)`
+on top of that** for the same reason, because they also count the side of a wall
+standing against rock, which is a side the shipped look no longer paints -- see "A
+wall shows only the side with open ground in front of it" below.
+`__test.wallSkin(on)` is the door, and the suite's own test for the skin is
 `only the rock that touches open space is painted (v0.47.0)`.
 
 **The new test carries its own negative control inside one build** -- the same 16
@@ -1529,6 +1532,123 @@ the buried squares in the batch (1,151 of them reaching the canvas) and it is th
 same frame every number above is quoted against. And, lesson 27, the battery prints
 how much work it did -- the answers it asked, the buried squares it found -- because
 an instrument that cannot tell you it did nothing tells you nothing, loudly.
+
+### A wall shows only the side with open ground in front of it -- v0.48.0
+
+Their instruction: *"only show the side(s) of a wall block that face the walkable
+area."* Settled by EFFECT before anything was built, and the choice they took is
+the **strict** one: *"Only sides facing open ground, always — turn the view onto a
+wall's rock side and the wall vanishes, letting you see straight through into the
+room behind it."* So a **side face whose neighbour in front of it is rock is not
+painted at all**, and the picture is deliberately see-through from that angle: the
+floor, the camp and the crawlers behind the wall are visible, and where there is no
+ground back there, the black.
+
+**`Render.rockSides` is the rule, not a sheet dial** (it says what a wall IS, not
+how much of one to show), and `__test.rockSides(n)` is the door:
+
+- **2 -- ships.** Rock in front means the side is not painted.
+- **1 -- the look not taken.** The side cut down to the strip standing above the
+  rock in front of it: opaque from every angle.
+- **0 -- v0.47.0.** Buried rock counted as nothing in front of a face, so the whole
+  stored side got painted. This is the arm the change is proved against inside ONE
+  build (lessons 5, 21).
+
+`rockAt(c)` is the shared question -- `c.h > 0 && TILE(c.tile).footing === 'block'`
+-- used by both `rockMap()` and the cut, so what the sides rule believes is rock and
+what the clip believes is rock cannot drift apart. `buriedRock()` went **back** to
+its single-purpose piece-required form; the skin and the sides rule do not share
+their neighbour walk.
+
+**The flap, and why it was there.** v0.47.0 takes buried rock out of the batch
+*before* a square becomes a polygon, and `clipFaces()` used to build its `at` Map
+from the batch -- so the block in front of a one-tile wall was simply not there, the
+missing-neighbour branch said "nothing is in front, keep the whole face", and the
+whole stored face is the quad from the block's cap **down to height 0**: 8 m, 256
+px. Every wall therefore hung a flap of itself over the black its neighbour had
+left. The branch now asks the **world** whether the square in front is rock
+(`rockAt`) instead of trusting the batch, so the cut works against a neighbour the
+picture has thrown away, and the two features stop depending on each other. That
+`wallsPainted()` is shared by `draw()`, `pickAt()` and the halo means the pointer
+and the outline inherit the change for free; the **back bands do NOT depend on
+`rockSides`**, which is what keeps `pickAt`'s theorem true.
+
+**A second flap, at the FRONT of the list, and a test found this one.** The clip
+loop ran `for (k = 0; k < b.length - 1; k++)` -- one short of the end -- on the
+argument that nothing can be painted after the last thing in the list. That is true
+of the PICTURE and false of the question, because a side asks two different things:
+*does the thing in front of me get painted after me?* (the batch, through `at.get`)
+and, when the neighbour is not in the batch at all, *is there rock in front of me in
+the WORLD?* (`Render.depth`). The frontmost item was skipped, so it kept
+`nbrL/nbrR = -1` and `rockL/rockR = false`, and `wallsPainted()` fell through to the
+whole stored face: the same 8 m quad, once a frame. The skin is what made it bite --
+culling the buried blocks promotes a one-tile block to the FRONT of the list
+(measured: item 275 of 318 became 211 of 212). What caught it was the v0.47.0 skin
+battery's floor assertion, seed 3 quarter 0: **110,747 -> 109,167 pixels of floor**.
+A flap hanging over the black is invisible against black; this one hung over floor.
+The loop now covers every item, and the extra call can only ever answer "nothing in
+front of me". The v0.47.0 battery, pinned to its own look, prints its recorded
+numbers to the pixel either way -- the check that the fix did not repaint the look
+it was not about -- and the v0.48.0 census moved by exactly the flap: the shipped
+arm's wall faces 4,489 -> 4,396.
+
+Measured A/B inside ONE build, **64 cases** (seeds 1, 2, 7, 777 x both angles x
+four quarter turns x both zooms), each world settled with 2,000 frames before it was
+looked at (lesson 24), each case's own frame hashed so the battery can print that it
+reached **64 distinct frames** (lesson 27): sides standing against rock **9,591**,
+painted **8,288** before (22,909 m, 23,458,816 px) and **0** now; wall faces
+**12,684 -> 4,396** (65.3% fewer); pixels that moved **7,623,499**, of them
+**3,636,011 newly black** and **2,117,117 newly floor**; black in the picture
+**2,991,701 -> 6,627,712** (2.22x); floor **9,513,787 -> 11,630,904**; picked answers
+asked 196,608, **49,112 changed and every one of them was rock** (29,844 became
+nothing at all), rock answers 83,124 -> 34,012, people answers 3,452 -> 3,476 -- 24
+points a wall had been covering turned out to be crawlers. The flap fix moved the
+old-look arm's **counters** and not its picture: the frontmost item's sides were
+always painted whole there, they were simply never asked about, which is why sides
+standing against rock go 9,498 -> 9,591 and sides shown 8,195 -> 8,288 while the
+v0.47.0 battery, pinned to that same look, prints its record to the pixel.
+
+**The new arm paints a strict subset of the old one's shapes, and the test asserts
+that rather than arguing it** (lesson 21): `darkToPaint === 0`,
+`groundToOther === 0`, `onDark >= offDark`, `on.ground >= off.ground`,
+`on.walls <= off.walls`. `stoneSides` counts `it.rockL/rockR` on **every** solid flat
+cell in the batch -- raised floor squares included -- so it is never asserted equal
+to a rock-squares-only walk (`stoneShown` is the walk; `stoneSides` must match
+between arms and `arm0.stoneShown > 0 && arm0.stoneM > 0`). The new census is
+`only the sides of a wall facing open ground are shown (v0.48.0)`.
+
+**Five older tests pin the look for the length of their own run, and each asserts
+it came back.** Four of them measure a face standing against rock -- the foot a
+block shows partway up, the strip along its far edge, the line a snapped foot
+moves, the black a cut may not open -- which v0.48.0 stops painting, so each now
+states the picture its numbers were taken on instead of assuming it (lessons 19, 21,
+24): `cutting the buried walls opens no hole and moves a hairline only` and the
+v0.45.0 strips test take `rockSides(0)` **on top of** the `wallSkin(false)` they
+already took in v0.47.0; the two v0.46.0 censuses take `rockSides(0)` **and**
+`wallSkin(false)`, because with the skin on the same 40 views paint 5,160 faces
+where their recorded figure is 10,975, 715 part-metre faces where it is 1,545, and
+1,337 moved pixels where it is 1,347 -- a run that prints a different number from
+the one written beside it is two numbers, not a measurement. Pinned, they print
+their record exactly.
+
+The **fifth** is v0.47.0's own skin battery, and its reason runs the other way: once
+the sides rule takes a face out, taking the buried block out of the batch on top of
+it takes out nothing that was being painted. Measured over its 16 cases at the
+shipped look: **0 pixels differ, 16 of 16**, while the same toggle still leaves
+**4,429 squares a frame** (70,863 over the battery) unbuilt -- so at this look the
+skin is a pure saving and no longer a look. It is therefore pinned to the look its
+numbers were recorded on (`rockSides(0)`) and the shipped look is proved **beside**
+it, case by case: `skinDiff > 0` at the pinned look (278,000-odd pixels over the
+battery, the negative control of lesson 19 -- without it the zero would be a dead
+instrument rather than a measurement) and `shipDiff === 0` with `shipDropped > 0` at
+`rockSides(2)`. The claim is not "the skin is invisible"; it is "at the shipped look
+the sides rule has already done the skin's job", and if either arm stops being true
+the test says so.
+
+**What a person sees:** a wall is a shell. Standing outside one you look through it
+into the room; a lot more of the picture is black than before -- about twice as much
+-- and the floor behind a wall is part of the picture rather than something the wall
+was hiding. If the see-through is too much, arm 1 is one number away.
 
 ---
 ## The machinery, and why each piece exists

@@ -272,6 +272,26 @@ window.__test = {
     return Render.wallSkin;
   },
 
+  /* SHOW A SIDE OF A WALL ONLY WHERE WALKABLE GROUND IS IN FRONT OF IT. `2`, the
+     way the game ships (v0.48.0), is the rule entire: a side whose square in
+     front is buried rock is not painted at all, so a wall seen from its rock side
+     is see-through into whatever is behind it. `1` cuts that side down to the
+     strip standing above the rock in front instead of deleting it. `0` is
+     v0.47.0, where buried rock counted as nothing in front of a face and the
+     whole stored side -- eight metres -- was painted: the arm this is proved
+     against inside ONE build (lesson 21), and the arm the suite's counters are
+     compared with. Called with nothing it only reports which way it is set.
+     Which faces are painted is decided while the shapes are built, so changing it
+     has to ask for them to be built again. */
+  rockSides(n) {
+    if (n !== undefined) {
+      Render.rockSides = n | 0;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.rockSides;
+  },
+
   /* The strips of rock a block shows along its far edges, where the block behind
      it is too low to cover it. ON (`backBands: true`), and they are painted only
      where rock is drawn SHORT -- which is only while `cut_solid` is 0, so at the
