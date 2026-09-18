@@ -254,6 +254,24 @@ window.__test = {
     return Render.wallBody;
   },
 
+  /* Leave out of the picture the rock that has rock on every side of it -- the
+     way the game ships (v0.47.0): only the rock that touches open space is
+     drawn, and everything buried behind it is black. Every wall is one tile
+     thick. Turning this OFF is the picture as it was before, with the whole
+     body of the hill drawn -- the arm the new look is proved against inside ONE
+     build (lesson 21), and the arm the suite's drop-count is checked against.
+     Called with nothing it only reports which way it is set. Which squares are
+     in the batch is decided while the shapes are built, so changing it has to
+     ask for them to be built again. */
+  wallSkin(on) {
+    if (on !== undefined) {
+      Render.wallSkin = !!on;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.wallSkin;
+  },
+
   /* The strips of rock a block shows along its far edges, where the block behind
      it is too low to cover it. ON (`backBands: true`), and they are painted only
      where rock is drawn SHORT -- which is only while `cut_solid` is 0, so at the

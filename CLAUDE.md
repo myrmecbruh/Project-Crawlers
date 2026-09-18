@@ -1454,6 +1454,82 @@ their tops) and `--stump=0` (the foot of rock gone: a clean hole again).
 writes the numbers out; `files/hole-diff.mjs` compares two builds and says *which*
 pixels changed (see above).
 
+### One tile of wall, and black behind it -- v0.47.0
+
+Their instruction, in their words: *"walls should only be one tile thick - simply
+show black nothingness behind them"*. Settled by EFFECT before anything was built
+(the choice they took): **only the rock that touches open space is drawn,
+everything behind it is black even where ground stands higher, and every wall is
+exactly one tile.**
+
+**The rule is a property of the WORLD, not of the camera.** A square of rock with
+rock on all four sides of it is left out of the picture **whole** -- in every
+quarter, at every height, whether or not anything happens to be standing in front
+of it. `Render.wallSkin` (a code flag, default on) is the switch; `rockMap(piece)`
+answers "is there rock at this square" for every square of a piece once per build,
+and `buriedRock(w, piece, rock, x, y)` asks the four neighbours off the square's
+own edges with the **same `EDGE_STEP` stepping the clip uses**, so what the skin
+believes is buried and what the clip believes is covered cannot disagree.
+Neighbours inside the piece come from the map; a neighbour along the rim comes from
+`w.at()`, and **a neighbour that is not there counts as OPEN**, so a wall at the
+edge of a piece is drawn exactly as it will be drawn when the player walks up to it
+and the piece next door is made. Nothing about the answer depends on which pieces
+the match happens to hold.
+
+**The skip is the FIRST thing the per-square loop does** (`skinDropped++` then
+`continue`), before the off-screen box test and before `b.push` -- so a square the
+skin took out is never a polygon, never a pick box, and never an occluder. It
+cannot leave a hole in the clip's own bookkeeping either: `clipFaces()` rebuilds
+its `at` Map out of the batch, so `kept === 0 && lost === 0` still holds with the
+skin on (it does). The counters are new names, `skinDropped` / `skinKept`, because
+`consumed.buried` was already the clip's own "side faces hidden by the block in
+front"; `it.cutaway` comes from `cell.cutaway` and not from the batch, so a square
+that survives keeps an identical descriptor.
+
+**This is the correction to v0.46.0's "buried blocks already don't exist".** That
+was true of the CUT, which is view-dependent -- it hides a square only where
+something stands in front of it along the line of sight -- and not of the world.
+Of the **70,863** squares of rock boxed in on all four sides in the 16 views the
+suite looks at, **1,151 were still being painted**: a square standing taller than
+the rock in front of it pokes a sliver of itself up above the ridge, and a hill
+looked at along its length rather than into it keeps its whole interior.
+
+Measured A/B inside ONE build, 16 cases (4 seeds x 2 angles x 2 turns) at 624x368,
+229,632 px a case: wall faces **4,493 -> 2,200** (51.0% fewer), pixels of wall
+**1,534,395 -> 1,404,572** (8.5% -- most culled rock was already covered to the
+pixel by nearer rock), black **0 -> 124,768** (96.1% of what was taken out, the
+rest being pixels that changed from one sort of rock to another), **ground
+1,872,551 -> 1,872,551, identical to the pixel**, nothing added and nothing kept
+but built differently, the crawler and camp-site lists unchanged, and **0 of 31,247**
+picked answers named a square the skin had taken out. The ground coming out
+identical is lesson 21 said in pixels: nothing a crawler can stand on moves.
+`files/probe-skin.mjs` (the first look), `files/probe-skin-census.mjs` (how much of
+the picture is painted BY buried rock -- it walks a grid of screen pixels and asks
+`pickAt` which square painted each one), `files/probe-skin-bounds.mjs`,
+`files/probe-skin-where.mjs` (which pixels changed, and what they changed from),
+`files/probe-skin-cases.mjs` (the 16-case battery the suite test now runs) and
+`files/probe-skin-table.txt` are the instruments; `files/skin-*.png` the pictures.
+
+**Two tests pin the flag OFF for their own run**, and the reason is worth keeping:
+`cutting the buried walls opens no hole and moves a hairline only` and `the rock
+along a wall's far edges is painted only where the cut opens a gap (v0.45.0)` both
+count **bare backdrop as a FAULT**. That was a fault's right name while the shipped
+look painted every block; it is the shipped look now. Both tests are about OTHER
+knobs -- the wall clip and the far-edge bands -- and both sets of numbers were
+taken on the fully-rocked picture, so they run against the rock as it was, and each
+restores the flag and asserts that it came back. `__test.wallSkin(on)` is the door,
+and the suite's own test for the skin is
+`only the rock that touches open space is painted (v0.47.0)`.
+
+**The new test carries its own negative control inside one build** -- the same 16
+views painted twice, with the skin off and on -- because a picture of a culled
+world cannot tell a cull from a renderer that has stopped drawing walls. The arm
+with the skin off is what gives the cull something to be measured against: it holds
+the buried squares in the batch (1,151 of them reaching the canvas) and it is the
+same frame every number above is quoted against. And, lesson 27, the battery prints
+how much work it did -- the answers it asked, the buried squares it found -- because
+an instrument that cannot tell you it did nothing tells you nothing, loudly.
+
 ---
 ## The machinery, and why each piece exists
 

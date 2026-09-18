@@ -33,6 +33,12 @@ const Render = {
   pick: null, pctx: null,
   batch: [],
   consumed: null,
+  /* What the rock skin did to the last batch it built: how many squares of rock
+     were left out of the picture because rock stood on every side of them, and
+     how many were kept because open air did. Kept on the renderer rather than
+     counted in draw(), because they are properties of the list `build()` made, and
+     the list outlives the frame it was made in. See Render.wallSkin. */
+  skinDropped: 0, skinKept: 0,
   recordItems: false,
   /* Paint only the part of a side wall that stands above the block standing in
      front of it. Flipped off only by the test that paints one frame both ways
@@ -77,6 +83,47 @@ const Render = {
      True paints the flat top; `wallCaps` true paints the old lit lid. Both are
      controls, and both are proved against the shipped look inside one build. */
   wallBody: false,
+  /* ONLY THE ROCK THAT FACES OPEN AIR IS PAINTED, AND EVERYTHING BEHIND IT IS
+     NOTHING AT ALL -- not shaded rock, not a hidden face, just the backdrop the
+     whole picture is laid on.
+
+     The labyrinth is cut out of solid rock, so most of the rock the picture used
+     to walk past has rock on every one of its four sides: the inside of a wall
+     two, four, ten squares thick. Every one of those squares was drawn -- its own
+     two near faces, cut down to where the block in front reached -- and none of it
+     could ever be seen except the few pixels that escaped over the top of a lower
+     neighbour. A wall margin was a staircase of stone going back into the dark
+     because all of it was painted, and the ask was one tile of wall with black
+     behind it.
+
+     So a square of rock whose four neighbours are all rock is left out of the
+     batch. It is not drawn, not clipped against and not picked, because all three
+     read the same list, and what shows behind the one tile of wall that remains is
+     the backdrop.
+
+     IT IS THE SAME ROCK, DRAWN LESS OFTEN. No face moves, no height changes, no
+     tile is retinted, and no rule about where ground is or how a crawler walks
+     has anything to do with it. What leaves is the rock that had rock on every
+     side of it, which is the rock nothing has ever been able to see.
+
+     THE ONE PICTURE CONSEQUENCE WORTH KNOWING: a terrace standing behind a nearer
+     wall is BLACK above it rather than grey, however high it stands -- rock that is
+     only reachable by looking THROUGH other rock is not drawn. That is the ask,
+     and it is why the test is the four squares AROUND a square rather than
+     anything about the camera: a square at the rim of a piece, with no piece next
+     door, is beside nothing and is therefore rock you can walk round and see.
+
+     THE CUTAWAY STILL WORKS, which is worth saying because it looks as though it
+     should not. The column of rock the cut opens is opened at the room's own wall,
+     and that wall is the first square of the column with open air beside it, so it
+     is still painted -- and rock between the camera and a room is exactly what
+     `cut_solid` is about. What is no longer behind that wall is the stack of
+     buried rock the cut's own padding had been keeping.
+
+     False is the A/B control: the picture as it was, every square of rock drawn.
+     See `skinDropped` / `skinKept` in `consumed` -- a cull whose control dropped
+     nothing would pass on a picture that never had buried rock in it at all. */
+  wallSkin: true,
   /* WHERE THE FAR HALF OF A LID TOO SMALL TO BE SEEN IS STILL WANTED: the two
      faces of a block's BACK, cut down to where the square behind it reaches --
      and painted only where the rock in the way is drawn SHORT.
@@ -1189,6 +1236,61 @@ const Render = {
     return !(maxX < 0 || minX > this.w || maxY < 0 || minY > this.h);
   },
 
+  /* WHICH SQUARES OF A PIECE ARE ROCK STANDING ON THE GROUND, one byte each, in
+     the same order the piece's own squares are stored -- so `rock[li]` is the
+     square `cells[li]`, and a neighbour is one step along the array.
+
+     Asked once for the whole piece before any of it is walked, because the skin
+     asks it of four neighbours for every rock square of the frame and asking the
+     WORLD each of those four times would be four lookups through the map of
+     pieces for a question whose answer is already in the array in hand. The
+     scratch array is kept on the renderer and refilled per piece: it is thrown
+     away the moment a piece is done with it.
+
+     A RAMP IS NOT ROCK HERE, however high it climbs. Its footing is a slope a
+     crawler walks up, so a ramp beside a square makes that square rock you can
+     see, which is the whole meaning of the test. */
+  rockMap(piece) {
+    const cells = piece.cells;
+    let m = this._rockScratch;
+    if (!m || m.length !== cells.length) m = this._rockScratch = new Uint8Array(cells.length);
+    for (let k = 0; k < cells.length; k++) {
+      const c = cells[k];
+      m[k] = c.h > 0 && TILE(c.tile).footing === 'block' ? 1 : 0;
+    }
+    return m;
+  },
+
+  /* IS THERE ROCK ON ALL FOUR SIDES OF THIS SQUARE -- the one question the skin
+     asks, worked out by stepping off the square's own edges with `EDGE_STEP`, the
+     same way `clipFaces()` steps off them to find the block in front, so the look
+     and the cut cannot disagree about which square is beside which.
+
+     A SQUARE WITH NOTHING BESIDE IT COUNTS AS OPEN. The rim of a piece has no
+     piece next door until the player walks there, and rock with bare nothing at
+     its side is rock you can walk round and look at -- which is the rock that has
+     to be drawn. It also means the answer does not depend on which pieces happen
+     to be held this frame, so the same wall is drawn the same way while the
+     player walks toward it.
+
+     A NEIGHBOUR IS READ OUT OF THE PIECE'S OWN MAP where it is inside the piece
+     (the overwhelmingly common case, and four array reads), and out of the world
+     only along the rim. */
+  buriedRock(w, piece, rock, x, y) {
+    const n = piece.n, ox = piece.ox, oy = piece.oy;
+    for (let e = 0; e < 4; e++) {
+      const nx = x + EDGE_STEP[e][0], ny = y + EDGE_STEP[e][1];
+      const lx = nx - ox, ly = ny - oy;
+      if (lx >= 0 && ly >= 0 && lx < n && ly < n) {
+        if (!rock[ly * n + lx]) return false;
+      } else {
+        const nbr = w.at(nx, ny);
+        if (!nbr || nbr.h <= 0 || TILE(nbr.tile).footing !== 'block') return false;
+      }
+    }
+    return true;
+  },
+
   /* Painter's order is back to front, which is ascending depth along whatever
      direction the camera is looking. With the view able to swing, that is no
      longer the order the cells are stored in, so everything visible goes into
@@ -1205,6 +1307,7 @@ const Render = {
     this.ensure();
     if (s.lightDirty) computeLight(s);
     b.length = 0;
+    this.skinDropped = 0; this.skinKept = 0;
 
     /* What is standing on which square, keyed by the square itself rather than
        by a number worked out from where it is -- which is also what keeps two
@@ -1232,10 +1335,26 @@ const Render = {
       if (!this.pieceOnScreen(s, piece)) continue;
       const first = piece.firstCell;
       const cells = piece.cells;
+      /* Where the rock is in this piece, worked out once for the whole piece --
+         see rockMap(). Null where the skin is off, so the arm the cull is proved
+         against does not pay for a map it never reads. */
+      const rock = this.wallSkin ? this.rockMap(piece) : null;
       for (let li = 0; li < cells.length; li++) {
         const cell = cells[li];
         const i = first + li;
         const x = cell.x, y = cell.y;
+
+        /* ONE TILE OF WALL AND BLACK BEHIND IT: a square of rock with rock on
+           every side of it is buried, and buried rock is not in the picture at
+           all. See Render.wallSkin for the whole of it.
+
+           A crawler and a camp site cannot be on this square: both stand where
+           they can walk, and a block is not a square anybody walks on, so
+           leaving it out cannot take anything else off the picture with it. */
+        if (rock && rock[li]) {
+          if (this.buriedRock(w, piece, rock, x, y)) { this.skinDropped++; continue; }
+          this.skinKept++;
+        }
 
         const top = new Array(4);
         const box = [Infinity, Infinity, -Infinity, -Infinity];
@@ -2441,6 +2560,13 @@ const Render = {
          means every square metre picked the same one, which is a material with
          one picture or a picker that is doing nothing. */
       picks: picks.size,
+      /* What the rock skin did to the list this frame was drawn from: how many
+         squares of rock were left out of the batch because rock stood on every
+         side of them, and how many were kept because open air did. BOTH are
+         read, because either alone passes on the wrong picture: `skinDropped` 0
+         is a cull that never fired, and `skinKept` 0 with `skinDropped` > 0 is a
+         frame with no walls standing in it at all. See Render.wallSkin. */
+      skinDropped: this.skinDropped, skinKept: this.skinKept,
       lights: s.lit ? lightSourcesIn(s).length : 0,
       focus: focusIdx, zoom: s.cam.zoom,
       bufW: this.w, bufH: this.h

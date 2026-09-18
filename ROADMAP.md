@@ -119,11 +119,44 @@ noted against each line:
   the suite test that holds it is `the rock along a wall's far edges is painted only
   where the cut opens a gap (v0.45.0)`, 24 views and four arms inside one build.
 
+- ~~**One tile of wall, and black behind it.**~~ **Done — v0.47.0.** Asked for in
+  as many words — *"walls should only be one tile thick. simply show black
+  nothingness behind them"* — and settled by effect first: **only the rock that
+  touches open space is drawn, everything behind it is black even where ground
+  stands higher, and every wall is exactly one tile**. `Render.wallSkin` (a code
+  flag) drops a square of rock with rock on all four sides of it **whole**,
+  whichever way the camera is turned and however tall the rock beside it stands;
+  the neighbour question is asked off the square's own edges with the same
+  `EDGE_STEP` the cut uses, and **a neighbour past the rim of the piece counts as
+  open**, so the same wall is drawn the same way while the player walks toward it.
+  This closes the correction of v0.46.0's own claim: the cut hides a square only
+  where a block stands **in front** of it along the line of sight, and of the
+  **70,863** squares boxed in on all four sides in the 16 views the suite looks at,
+  **1,151 were still painted** — a hill's interior is invisible to the cut when the
+  camera looks along the hill rather than into it. Measured A/B inside one build
+  (16 cases, 624x368): wall faces 4,493 -> **2,200** (51.0% fewer), pixels of wall
+  1,534,395 -> **1,404,572** (8.5%), black 0 -> **124,768** (96.1% of what went),
+  floor **1,872,551 both ways, identical to the pixel**, nothing added and nothing
+  kept built differently, crawlers and camp sites the same list, and **0 of 31,247**
+  answers naming a square the cull took out. The floor coming out identical is
+  lesson 21's promise said in pixels: nothing a crawler can stand on moves. Two
+  suite tests pin the flag off for their own run — `cutting the buried walls opens
+  no hole and moves a hairline only` and `the rock along a wall's far edges is
+  painted only where the cut opens a gap (v0.45.0)` — because both measure bare
+  backdrop as a FAULT and this release makes it a feature; their subject is another
+  knob and their numbers were taken on the fully-rocked picture. `files/probe-skin*.mjs`
+  and `CHANGELOG.md` v0.47.0 carry the reasoning. **Open question:** a lump of rock
+  standing up out of the middle of a hill with rock on every side is gone too, so
+  it reads as a black gap where it used to read as a lump. Keeping such lumps is
+  one line and **has not been asked for**.
+
 - **The picture draws the whole world it holds, whether or not anyone has been
   there.** Asked for "voxels, and do not display ones that are unrevealed", the
-  buried half turned out to be **already built** — a block inside solid rock is
-  not painted and cannot be pointed at, since v0.34.0's cut — and **the unexplored
-  half is not built at all**. There is no memory of what has been seen anywhere in
+  buried half turned out to be **mostly built already** — a block inside solid rock
+  is not painted and cannot be pointed at, since v0.34.0's cut — and **v0.47.0
+  finished that half off** for the 1,151 squares the cut was still painting (see
+  the bullet above; the v0.46.0 note that followed from it is corrected in
+  `CHANGELOG.md` v0.47.0). **The unexplored half is not built at all**. There is no memory of what has been seen anywhere in
   `src/js`: nothing remembers a square, so there is no remembered copy to draw and
   nothing to hide. `light` is worked out per square and floods only through what
   does not block sight, which is the closest thing that exists, but it is rebuilt

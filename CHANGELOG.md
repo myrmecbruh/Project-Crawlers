@@ -8,6 +8,102 @@ them on an old build.
 
 ---
 
+## v0.47.0 — one tile of wall, and black behind it
+
+Their words: **"walls should only be one tile thick - simply show black nothingness
+behind them."** Offered the reading by its effect -- should the rock behind a wall
+be black *even where ground stands higher* -- they picked **"only the rock that
+touches open space is drawn; everything behind it is black, even ground that
+stands higher. Every wall is exactly one tile, always."** So that is what this
+release does, and it is a rule about the **world**, not about the camera: a square
+of rock with rock on all four sides of it is left out of the picture **whole**,
+whatever quarter the view is on and whatever height the rock beside it stands at.
+Nothing else is looked at, and no wall is ever drawn two squares deep.
+
+### v0.46.0 said buried blocks already didn't exist. That was true of the cut, not of the world
+
+The cut of v0.34.0 hides what is behind the rock *in front of it along the line of
+sight*. A hill's interior is invisible to the cut when the camera looks along the
+hill rather than into it: a square whose four neighbours are all rock, standing
+taller than the rock in front of it, pokes a sliver of itself above the ridge and
+is painted. Counted over the 16 views the new test looks at: **70,863** squares of
+rock have rock on all four sides of them, and **1,151** of those were still in the
+picture. So the earlier answer was 98.4% right and 1,151 squares wrong, and this
+release is about the 1,151 -- plus the promise that they can never come back.
+
+- `Render.rockMap(piece)` marks the rock of a piece -- a square with height, on a
+  tile whose `footing` is `block`. A ramp counts as rock for this purpose.
+- `Render.buriedRock(w, piece, rock, x, y)` steps off the square's own four edges
+  and asks the same question the cut asks, in the same way (`EDGE_STEP`), so the
+  look and the cut cannot disagree about where an edge is. A neighbour inside the
+  piece is read out of `rockMap`; along the rim it is read out of the world, and
+  **a neighbour that is not there counts as OPEN** -- so a square on the edge of a
+  piece is always drawn, and the same wall is drawn the same way while the player
+  walks toward it, whichever pieces happen to be held.
+- `Render.wallSkin` is the flag (a code flag, not a sheet dial: it is not a feel
+  decision, it is what a wall is). A dropped square is skipped **before** it
+  becomes a polygon: it is never painted, never a pick box and never an occluder,
+  so nothing downstream ever learns it was there.
+
+### What it was measured at, A/B inside one build
+
+Both arms run inside ONE build (lessons 5, 21), no rebuild between them, at the
+suite's own window: **16 cases** -- seeds 1, 2, 3 and 7, each at both camera
+angles and two quarter turns, every case given its 2,000 frames before it was
+looked at (lesson 24) -- 624x368, so **229,632 pixels a case, 3,674,112 pixels
+looked at twice**.
+
+| | full rock (v0.46.0) | one tile of wall (v0.47.0) |
+|---|---|---|
+| squares of rock the frames looked at | 96,434 | 96,434 |
+| of them with rock on all four sides | 70,863 | 70,863 |
+| of them still in the picture | 1,151 | **0** |
+| squares added, or kept but built differently | -- | **0 added, 0 moved** |
+| wall faces painted | 4,493 | **2,200** (51.0% fewer) |
+| pixels of wall painted | 1,534,395 | **1,404,572** (129,823 went, 8.5%) |
+| pixels of black behind the walls | 0 | **124,768** -- 96.1% of what went |
+| pixels of floor | 1,872,551 | **1,872,551, identical to the pixel** |
+| crawlers, camp sites on the picture | -- | **the same list, both ways** |
+| answers asked over squares that were taken out | 31,247 | **0 named one** |
+
+The instrument that planned the change (`files/probe-skin-cases.txt`) ran the same
+battery on its own smaller canvas and found the same shape: 44.7% fewer faces,
+3.69% of the wall taken, 95.4% of it black. **The numbers move with the canvas;
+the shape does not** -- which is why the test now quotes the figures its own run
+prints rather than the instrument's.
+
+The floor coming out **identical to the pixel** is lesson 21's promise said in
+pixels instead of in squares: no square a crawler could stand on moves, and the
+camp, the crawlers and the ground underfoot are exactly as they were. No frame
+time is quoted here: the timings were taken while the suite was running on the
+same machine, and a number measured through somebody else's load is not a number.
+
+### Two tests had to be pinned, and the reason is worth keeping
+
+`cutting the buried walls opens no hole and moves a hairline only` and `the rock
+along a wall's far edges is painted only where the cut opens a gap (v0.45.0)` both
+went red on the first full run, and neither was a bug. Both of them define a HOLE
+as bare backdrop enclosed by rock, and both of them measure bare backdrop as a
+fault. **This release makes bare backdrop a feature.** So each of them now pins
+the rock skin off for the length of its own run and puts it back (with an assertion
+that it went back): their subject is another knob -- the cut, and the far-edge
+strips -- and their recorded numbers were taken on the fully-rocked picture. The
+new test owns the shipped look, and it is the one that says what the black may and
+may not be: **never more than the wall paint that went away, and never in a place
+the floor used to be.**
+
+### What a person will see
+
+The hill is an outer skin of rock now. You see one square of it from wherever you
+stand and the inside of it is black -- including where a lump of rock stood up out
+of the middle of a hill and was touching rock on every side, which now reads as a
+black gap where it used to read as a lump. Everything you can walk on, everyone
+standing on it and every piece of the camp is untouched to the pixel. The picture
+also has half the wall faces to paint. If the lumps are wanted back, that is one
+line, and it should be asked for rather than assumed.
+
+---
+
 ## v0.46.0 — every metre of rock is a block, and a wall's foot lands on a course
 
 Their words: **"make each meter of material a voxel (like minecraft blocks) and

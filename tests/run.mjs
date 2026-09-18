@@ -1206,6 +1206,17 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
     const t = window.__test, out = [];
     t.pause();
     t.unpoint();
+    /* THE ROCK SKIN IS PINNED OFF FOR THIS TEST (v0.47.0), and this is one of
+       only two tests that needs it. Its subject is the CUT, and every number
+       below was taken on the picture as it stood before the skin existed -- a
+       picture in which a pixel of bare backdrop could only ever be a hole. The
+       shipped look opens black on purpose ("one tile of wall, black behind it"),
+       so "no enclosed bare backdrop" has stopped being a claim about this look
+       at all and is now a claim about the cut, which is what is measured here.
+       The skin's own black is measured against what it took away, by `only the
+       rock that touches open space is painted (v0.47.0)`. */
+    const wasSkin = t.wallSkin();
+    t.wallSkin(false);
     const wasZoom = t.buffer().zoom;
     /* The BUFFER, never the page: pickAt() answers in buffer pixels, so a census
        read off the scaled page would ask about the wrong squares at zoom 3. And
@@ -1394,8 +1405,13 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
     }
     t.zoom(wasZoom);
     t.clipWalls(true);
-    return { cases: out };
+    t.wallSkin(wasSkin);
+    return { cases: out, wasSkin: wasSkin, backSkin: t.wallSkin() };
   }, cases);
+  assert(r.backSkin === r.wasSkin,
+    `the rock skin came back as ${r.backSkin} where it started at ${r.wasSkin}`
+    + ' -- this test pins it off, and every test after it wants the look that'
+    + ' shipped');
   for (const q of r.cases) {
     const at = `seed ${q.c.seed}${q.c.quarter ? ' turned ' + q.c.quarter : ''}`
       + `${q.c.zoom ? ' at zoom ' + q.c.zoom : ''}`;
@@ -1616,6 +1632,16 @@ await test('the rock along a wall\'s far edges is painted only where the cut ope
     const t = window.__test;
     t.pause();
     t.unpoint();
+    /* THE ROCK SKIN IS PINNED OFF FOR THIS TEST (v0.47.0) -- the second and last
+       test that needs it, for the same reason as the hole census above: what
+       this test asks is whether refusing the far-edge strips moves a pixel of
+       bare backdrop, and on the shipped look a bare pixel is not evidence of
+       anything. The skin opens black where the rock behind a wall was, which is
+       the whole point of it, so "refusing the strips opens no window" has become
+       a claim about the strips rather than about the look. Its numbers were
+       taken with the full-rock picture; they are taken that way again. */
+    const wasSkin = t.wallSkin();
+    t.wallSkin(false);
     const wasCut = t.cfg.cutSolid;
     const wasBB = t.backBands();
     const wasBBS = t.backBandsSolid();
@@ -1871,6 +1897,7 @@ await test('the rock along a wall\'s far edges is painted only where the cut ope
     t.cfg.cutSolid = wasCut;
     t.backBands(wasBB);
     t.backBandsSolid(wasBBS);
+    t.wallSkin(wasSkin);
     t.zoom(wasZoom);
     t.tilt(false);
     t.unpoint();
@@ -1878,15 +1905,17 @@ await test('the rock along a wall\'s far edges is painted only where the cut ope
     t.redraw();
     return { out: out, tot: tot, pics: pics.size, wasCut: wasCut, wasBB: wasBB,
              wasBBS: wasBBS, backCut: t.cfg.cutSolid, backBB: t.backBands(),
-             backBBS: t.backBandsSolid() };
+             backBBS: t.backBandsSolid(), wasSkin: wasSkin,
+             backSkin: t.wallSkin() };
   }, cases);
   const tot = r.tot;
-  /* The three dials went back where they were found: this test paints the world
+  /* The dials went back where they were found: this test paints the world
      four different ways, and leaving it in one of them would hand every test
      after it a look nobody asked for. */
-  assert(r.backCut === r.wasCut && r.backBB === r.wasBB && r.backBBS === r.wasBBS,
-    `the dials came back as ${r.backCut}/${r.backBB}/${r.backBBS} where they`
-    + ` started at ${r.wasCut}/${r.wasBB}/${r.wasBBS}`);
+  assert(r.backCut === r.wasCut && r.backBB === r.wasBB && r.backBBS === r.wasBBS
+      && r.backSkin === r.wasSkin,
+    `the dials came back as ${r.backCut}/${r.backBB}/${r.backBBS}/${r.backSkin}`
+    + ` where they started at ${r.wasCut}/${r.wasBB}/${r.wasBBS}/${r.wasSkin}`);
   assert(tot.cases === 24 && r.pics > 20,
     `${tot.cases} views were looked at and they reached ${r.pics} different`
     + ' pictures, so the seeds, angles, turns and drags are doing something');
@@ -2412,6 +2441,352 @@ await test('the top metre of a wall still fades away (v0.46.0)', async () => {
     + ` faded faces ${tot.offFaded} -> ${tot.onFaded}, all of them carrying the`
     + ` wall's material (${tot.offBanded} / ${tot.onBanded}),`
     + ` ${tot.offFaces} -> ${tot.onFaces} faces painted`);
+});
+
+/* ---- one tile of wall, and black behind it (v0.47.0) ---------------------- *
+ * Asked for in as many words -- "walls should only be one tile thick, simply
+ * show black nothingness behind them" -- and settled by EFFECT before it was
+ * built: only the rock that touches open space is drawn, everything behind it
+ * is black even where ground stands higher, and every wall is exactly one tile.
+ *
+ * The rule is a property of the WORLD and not of the camera. A square of rock
+ * with rock on all four sides of it is left out of the picture, whole, whatever
+ * quarter the view is on and whatever height the rock beside it stands at.
+ * Nothing else is looked at. A neighbour past the rim of the piece is read out
+ * of the world, and a neighbour that is not there counts as OPEN -- so a square
+ * on the edge of a piece is always drawn, and the same wall is drawn the same
+ * way while the player walks toward it.
+ *
+ * A CULL has to be proved a superset rather than argued to be one (lesson 23),
+ * and a count of nothing proves nothing without the same count made to be
+ * something (lesson 19), so both arms run inside ONE build (lesson 21), four
+ * seeds x both angles x two quarter turns:
+ *
+ *  1. THE RULE IS WHAT CULLED IT, worked out again here from the world rather
+ *     than asked of the code that does the culling. Every rock square of every
+ *     piece the frame looked at, sorted into buried and not by this test's own
+ *     four-neighbour check, has to come out as exactly the two counters -- and
+ *     NOT ONE square that was built is buried, with the arm that has the skin
+ *     switched off holding thousands of them.
+ *  2. NOTHING ELSE MOVED. Square for square: what the culled arm built is a
+ *     subset of what the old arm built; every square that left is buried rock;
+ *     not one square that stayed changed its tile, height or cut; and the
+ *     crawlers and the camp sites are the same list on both sides.
+ *  3. THE ONLY THING IT CAN DO IS TAKE ROCK AWAY, and it reaches the picture:
+ *     fewer wall faces and fewer pixels of wall, never more; NOT ONE PIXEL of
+ *     floor changes, which is lesson 21's promise -- no square a crawler could
+ *     stand on moves -- said in pixels instead of in squares; and what goes is
+ *     a few percent of the wall's paint, of which almost all turns to black,
+ *     because most of what was culled was already covered, to the pixel, by
+ *     rock that stays.
+ *
+ *     Measured by this test on its own battery -- 16 cases, buffer 624x368
+ *     (229,632 pixels a frame): 70,863 squares of rock with rock on all four
+ *     sides culled out of the 96,434 the frames looked at, 1,151 of them in the
+ *     old picture and 0 in the new; wall faces 4,493 -> 2,200, 51.0% fewer; the
+ *     wall's own pixels 1,534,395 -> 1,404,572, so 129,823 of them went -- 8.5%
+ *     of the old wall and 3.5% of the battery; the black grew by 124,768, which
+ *     is 96.1% of what was taken and never more than it. The floor is
+ *     IDENTICAL to the pixel (1,872,551 both ways), and 31,247 answers were
+ *     asked over the culled squares without one of them naming one. The
+ *     instrument that planned the change (`files/probe-skin-cases.txt`) ran the
+ *     same battery at 434x318 and found the same shape with the numbers its own
+ *     canvas gives -- 44.7% fewer faces, 3.69% of the wall taken, 95.4% of it
+ *     black. The numbers move with the canvas; the shape does not.
+ *
+ *     Which is the shape of the change: the rock you were never seeing stops
+ *     being painted, and the rock you were seeing is exactly as it was.
+ *  4. AND WHAT IS NOT IN THE PICTURE CANNOT BE POINTED AT (rule 8): the centre
+ *     of every culled square, and a grid over the whole frame, answered by
+ *     `pickAt` itself, never once name a square the cull took.
+ */
+const SKIN_CASES = [];
+for (const seed of [1, 2, 3, 7]) {
+  for (const up of [false, true]) {
+    for (const turn of [0, 1]) SKIN_CASES.push({ seed: seed, up: up, turn: turn });
+  }
+}
+
+await test('only the rock that touches open space is painted (v0.47.0)', async () => {
+  const r = await page.evaluate((CASES) => {
+    const t = window.__test;
+    const isRock = (c) => !!c && c.h > 0 && TILE(c.tile).footing === 'block';
+    /* The rule, worked out here from the world. A square with no piece beside it
+       yet counts as OPEN, which is what `world.at()` says with an undefined. */
+    const buried = (world, cell) => {
+      const STEPS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+      for (let e = 0; e < 4; e++) {
+        if (!isRock(world.at(cell.x + STEPS[e][0], cell.y + STEPS[e][1]))) return false;
+      }
+      return true;
+    };
+    /* What the picture built: the square's own number, and what was built there. */
+    const squares = () => {
+      const m = new Map();
+      for (const it of Render.batch) {
+        if (it.kind === 'cell') {
+          m.set(it.i, it.cell.tile + ':' + it.cell.h + ':' + (it.cutaway ? 1 : 0));
+        }
+      }
+      return m;
+    };
+    const standing = () => {
+      let actors = 0, sites = 0;
+      for (const it of Render.batch) {
+        if (it.kind === 'actor') actors++;
+        else if (it.kind === 'site') sites++;
+      }
+      return { actors: actors, sites: sites };
+    };
+    const out = [];
+    t.pause(); t.unpoint();
+    const wasSkin = t.wallSkin();
+    for (const c of CASES) {
+      t.seed(c.seed);
+      t.advance(2000);
+      t.tilt(!!c.up);
+      t.rotate(c.turn ? 1 : 0);
+      t.settle();
+      t.unpoint();
+      const s = Game.state, world = s.world;
+      let rockOn = 0, buriedOn = 0;
+      for (const piece of world.live) {
+        if (!Render.pieceOnScreen(s, piece)) continue;
+        for (const cell of piece.cells) {
+          if (!isRock(cell)) continue;
+          rockOn++;
+          if (buried(world, cell)) buriedOn++;
+        }
+      }
+      t.wallSkin(false);
+      t.redraw();
+      const offC = t.consumed();
+      const off = squares(), offWho = standing();
+      let offBuried = 0;
+      for (const it of Render.batch) {
+        if (it.kind === 'cell' && buried(world, it.cell)) offBuried++;
+      }
+      const offMap = t.fillMap();
+      t.redraw();
+      t.wallSkin(true);
+      t.redraw();
+      const onC = t.consumed();
+      const on = squares(), onWho = standing();
+      let onBuried = 0;
+      for (const it of Render.batch) {
+        if (it.kind === 'cell' && buried(world, it.cell)) onBuried++;
+      }
+      const onMap = t.fillMap();
+      t.redraw();
+      /* What the cull took, whether anything came the other way, and whether a
+         square that STAYED was built any differently. */
+      const gone = new Set();
+      let added = 0, moved = 0, removedBuried = 0;
+      for (const i of off.keys()) if (!on.has(i)) gone.add(i);
+      for (const [i, was] of off) {
+        if (!on.has(i)) {
+          if (buried(world, world.cells[i])) removedBuried++;
+        } else if (on.get(i) !== was) moved++;
+      }
+      for (const i of on.keys()) if (!off.has(i)) added++;
+      /* 4. Nothing left out can be pointed at. A dropped square is not in the
+         batch at all, so this is `pickAt` answering about pixels where rock used
+         to be -- at the centre of every culled square, and over the whole frame. */
+      let asks = 0, onGone = 0;
+      for (const i of gone) {
+        const cell = world.cells[i];
+        const p = Render.project(s, cell.x + 0.5, cell.y + 0.5, cell.h);
+        const hit = Render.pickAt(s, p.x, p.y);
+        asks++;
+        if (gone.has(hit)) onGone++;
+      }
+      for (let y = 3; y < Render.h - 3; y += 11) {
+        for (let x = 3; x < Render.w - 3; x += 11) {
+          const hit = Render.pickAt(s, x, y);
+          asks++;
+          if (gone.has(hit)) onGone++;
+        }
+      }
+      out.push({
+        seed: c.seed, up: !!c.up, turn: c.turn,
+        rockOn: rockOn, buriedOn: buriedOn,
+        offDropped: offC.skinDropped, dropped: onC.skinDropped, kept: onC.skinKept,
+        offBuried: offBuried, onBuried: onBuried,
+        offCells: off.size, onCells: on.size,
+        gone: gone.size, added: added, moved: moved, removedBuried: removedBuried,
+        asks: asks, onGone: onGone,
+        offActors: offWho.actors, onActors: onWho.actors,
+        offSites: offWho.sites, onSites: onWho.sites,
+        offWalls: offC.walls, onWalls: onC.walls,
+        offWallPx: offC.wallPx, onWallPx: onC.wallPx,
+        offCut: offC.cut, onCut: onC.cut,
+        offDrawn: offC.count, onDrawn: onC.count,
+        offGround: offMap.ground, onGround: onMap.ground,
+        offBack: offMap.backdrop, onBack: onMap.backdrop,
+        offWallMap: offMap.wall, onWallMap: onMap.wall,
+        offOther: offMap.other, onOther: onMap.other,
+        offFlat: offMap.flat, onFlat: onMap.flat,
+        offMingled: offMap.mingled, onMingled: onMap.mingled,
+        canvas: offMap.canvas
+      });
+    }
+    t.wallSkin(wasSkin);
+    t.unpoint();
+    return { out: out, wasSkin: wasSkin, back: t.wallSkin(), cases: CASES.length };
+  }, SKIN_CASES);
+  const tot = { rockOn: 0, buriedOn: 0, offBuried: 0, onBuried: 0, dropped: 0, kept: 0,
+                offDropped: 0, gone: 0, added: 0, moved: 0, removedBuried: 0,
+                asks: 0, onGone: 0, offWalls: 0, onWalls: 0, offWallPx: 0, onWallPx: 0,
+                offDrawn: 0, onDrawn: 0, offGround: 0, onGround: 0, offBack: 0,
+                onBack: 0, offWallMap: 0, onWallMap: 0, offOther: 0, onOther: 0,
+                offMingled: 0, onMingled: 0, offActors: 0, onActors: 0,
+                offSites: 0, onSites: 0, canvas: 0, withGone: 0, movedViews: 0 };
+  assert(r.wasSkin === true && r.back === true,
+    `the skin came back as ${r.back} where the game ships it at ${r.wasSkin}`);
+  assert(r.out.length === r.cases && r.out.length === 16,
+    `${r.out.length} cases were run of ${r.cases} asked for`);
+  for (const q of r.out) {
+    const at = `seed ${q.seed}${q.up ? ' raised' : ''}${q.turn ? ' turned' : ''}`;
+    /* 1. THE RULE IS WHAT CULLED IT, and not one square that was built is buried.
+       The arm with the skin off holds them in their thousands -- without that,
+       nothing here can tell a cull from a build that never had any rock in it. */
+    assert(q.buriedOn > 0 && q.rockOn > q.buriedOn,
+      `${at}: the frame looked at ${q.rockOn} squares of rock of which ${q.buriedOn}`
+      + ' have rock on all four sides, so there is nothing here to cull either way');
+    assert(q.dropped === q.buriedOn && q.kept === q.rockOn - q.buriedOn,
+      `${at}: the world holds ${q.rockOn} squares of rock in the pieces the frame`
+      + ` looked at and ${q.buriedOn} of them are buried, where the frame counted`
+      + ` ${q.dropped} dropped and ${q.kept} kept`);
+    assert(q.offDropped === 0,
+      `${at}: ${q.offDropped} squares were counted as dropped with the skin switched`
+      + ' off, so the counters are counting something other than the skin');
+    assert(q.offBuried > 0 && q.onBuried === 0,
+      `${at}: ${q.offBuried} buried squares were in the picture with the skin off and`
+      + ` ${q.onBuried} with it on`);
+    /* 2. A SUBSET, and only ever a subset: nothing added, nothing that stayed
+       built differently, and every square that left was buried rock. */
+    assert(q.added === 0 && q.moved === 0,
+      `${at}: the skin ADDED ${q.added} squares and built ${q.moved} of the squares`
+      + ' it kept differently, where it is only allowed to leave rock out');
+    assert(q.gone === q.removedBuried,
+      `${at}: ${q.gone} squares left the picture and ${q.removedBuried} of them were`
+      + ' buried rock');
+    assert(q.offActors === q.onActors && q.offSites === q.onSites,
+      `${at}: the picture holds ${q.offActors} -> ${q.onActors} crawlers and`
+      + ` ${q.offSites} -> ${q.onSites} camp sites`);
+    /* 3. THE ONLY THING IT CAN DO IS TAKE ROCK AWAY -- and it reached the
+       picture rather than a counter. */
+    assert(q.onWalls <= q.offWalls && q.onWallPx <= q.offWallPx
+        && q.onDrawn <= q.offDrawn && q.onCut <= q.offCut,
+      `${at}: the picture painted ${q.offWalls} -> ${q.onWalls} wall faces,`
+      + ` ${q.offWallPx} -> ${q.onWallPx} pixels of wall and ${q.offDrawn} ->`
+      + ` ${q.onDrawn} things, and left ${q.offCut} -> ${q.onCut} squares out whole`);
+    assert(q.onWalls > 0 && q.onCells > 0,
+      `${at}: the culled picture has ${q.onWalls} wall faces and ${q.onCells} squares`
+      + ' in it -- a cull that leaves nothing has taken the world away, not the hill');
+    /* NOT ONE PIXEL OF FLOOR MOVES. That is lesson 21's promise -- no square a
+       crawler could stand on ever changes -- stated in pixels rather than in
+       squares, and it is what would show if the cull were taking rock a hall
+       runs through instead of rock behind rock. The fills that came through no
+       door are a census of their own and are equally untouched, which is also
+       what lets "the black is never more than the wall paint that went" be read
+       as arithmetic: wall in, black out, nothing else in between. */
+    assert(q.onGround === q.offGround && q.onFlat === q.offFlat,
+      `${at}: the floor went ${q.offGround} -> ${q.onGround} pixels and the fills`
+      + ` that came through no door went ${q.offFlat} -> ${q.onFlat}, where the`
+      + ' cull is only allowed to take wall away');
+    assert(q.onBack >= q.offBack,
+      `${at}: the black behind the walls went ${q.offBack} -> ${q.onBack} pixels, so`
+      + ' the rock that was taken away was not what was behind it');
+    assert(q.onOther === 0 && q.offOther === 0,
+      `${at}: ${q.offOther} -> ${q.onOther} pixels were covered by a material from`
+      + ' somewhere that is neither the ground nor a wall');
+    /* The census names every fill by the door it came through, so a pixel it
+       cannot name is a blend or a pixel no fill ever touched: the antialiased
+       hairline, which is 5-8% of a picture either way. What matters here is
+       that the cull neither smears it nor fills it in -- and that number is why
+       this bound is a tolerance and not a zero: a census that counted only the
+       fills it owns would be a census of a picture nobody drew. */
+    assert(Math.abs(q.onMingled - q.offMingled) <= q.canvas * 0.01,
+      `${at}: ${q.offMingled} -> ${q.onMingled} pixels came out a colour the census`
+      + ` does not know, more than the ${Math.round(q.canvas * 0.01)} a hairline may`
+      + ' move, so the cull is smearing the picture rather than revealing it');
+    /* 4. And nothing the picture left out can be pointed at. */
+    assert(q.asks > 1000 && q.onGone === 0,
+      `${at}: ${q.onGone} of ${q.asks} answers named a square the cull had taken out`
+      + ' of the picture');
+    tot.rockOn += q.rockOn; tot.buriedOn += q.buriedOn; tot.offBuried += q.offBuried;
+    tot.onBuried += q.onBuried; tot.dropped += q.dropped; tot.kept += q.kept;
+    tot.offDropped += q.offDropped;
+    tot.gone += q.gone; tot.added += q.added; tot.moved += q.moved;
+    tot.removedBuried += q.removedBuried;
+    tot.asks += q.asks; tot.onGone += q.onGone;
+    tot.offWalls += q.offWalls; tot.onWalls += q.onWalls;
+    tot.offWallPx += q.offWallPx; tot.onWallPx += q.onWallPx;
+    tot.offDrawn += q.offDrawn; tot.onDrawn += q.onDrawn;
+    tot.offGround += q.offGround; tot.onGround += q.onGround;
+    tot.offBack += q.offBack; tot.onBack += q.onBack;
+    tot.offWallMap += q.offWallMap; tot.onWallMap += q.onWallMap;
+    tot.offOther += q.offOther; tot.onOther += q.onOther;
+    tot.offMingled += q.offMingled; tot.onMingled += q.onMingled;
+    tot.offActors += q.offActors; tot.onActors += q.onActors;
+    tot.offSites += q.offSites; tot.onSites += q.onSites;
+    tot.canvas += q.canvas;
+    if (q.gone > 0) tot.withGone++;
+    if (q.offWallPx !== q.onWallPx) tot.movedViews++;
+  }
+  /* AND THE WHOLE THING IS NOT A COUNTER THAT NEVER FIRED. */
+  assert(tot.dropped > 0 && tot.gone > 0 && tot.offBuried > 0,
+    `${tot.dropped} squares were culled over ${r.out.length} cases and ${tot.gone}`
+    + ` squares left the picture, with ${tot.offBuried} buried squares in it before`
+    + ' -- nothing here was culled at all');
+  assert(tot.withGone === r.out.length && tot.movedViews === r.out.length,
+    `only ${tot.withGone} of the ${r.out.length} cases had anything culled out of`
+    + ` them and ${tot.movedViews} of them had fewer pixels of wall painted, so the`
+    + ' range was not run');
+  assert(tot.offActors > 0 && tot.offActors === tot.onActors
+      && tot.offSites === tot.onSites,
+    `${tot.offActors} -> ${tot.onActors} crawlers and ${tot.offSites} ->`
+    + ` ${tot.onSites} camp sites were on the picture over the whole battery, so`
+    + ' either there was nobody to lose or the cull lost them');
+  assert(tot.offBack === 0,
+    `${tot.offBack} pixels of backdrop are in the old picture over the whole`
+    + ' battery, so "the black only ever grows" is not being asked of anything');
+  assert(tot.onBack > 0,
+    'not one pixel of black opened up anywhere in the battery');
+  /* MOST OF WHAT WAS CULLED WAS ALREADY COVERED, to the pixel, by rock that
+     stays -- which is what makes this a change to the SHAPE of the hill rather
+     than a window into it. So the paint that leaves is under a tenth of the
+     wall, and almost all of what leaves becomes black; and the floor does not
+     move at all, over the whole battery and not merely in one picture. */
+  const took = tot.offWallMap - tot.onWallMap, black = tot.onBack - tot.offBack;
+  assert(tot.onWalls <= tot.offWalls * 0.75 && tot.onWallPx <= tot.offWallPx * 0.75,
+    `the cull left ${tot.offWalls} -> ${tot.onWalls} wall faces and`
+    + ` ${tot.offWallPx} -> ${tot.onWallPx} pixels of wall over the battery,`
+    + ' which is not the hill losing the back quarter of itself');
+  assert(took > 0 && took < tot.offWallMap * 0.1,
+    `the cull took ${took} of the ${tot.offWallMap} pixels of wall in the old`
+    + ` picture (${(100 * took / tot.offWallMap).toFixed(1)}%), where most of what`
+    + ' it takes was already covered and the wall should not lose a tenth of'
+    + ' itself');
+  assert(black > took * 0.5 && black <= took,
+    `the black grew by ${black} pixels where ${took} pixels of wall were taken`
+    + ` away (${(100 * black / took).toFixed(1)}%), so what was culled was not rock`
+    + ' standing behind other rock -- nearly all of what goes should come out'
+    + ' black, and never more than went');
+  assert(tot.onGround === tot.offGround && tot.onFlat === tot.offFlat,
+    `over the whole battery the floor went ${tot.offGround} -> ${tot.onGround}`
+    + ` pixels and the fills from no door went ${tot.offFlat} -> ${tot.onFlat},`
+    + ' where taking the back of a hill away is allowed to take neither');
+  console.log(`  ... ${r.out.length} cases of one tile of wall: `
+    + `${tot.dropped} squares of rock with rock on all four sides culled out of`
+    + ` ${tot.rockOn}, ${tot.offBuried} of them in the old picture and`
+    + ` ${tot.onBuried} in the new; wall faces ${tot.offWalls} -> ${tot.onWalls}`
+    + ` (${(100 * (1 - tot.onWalls / tot.offWalls)).toFixed(1)}% fewer), pixels of`
+    + ` wall ${tot.offWallMap} -> ${tot.onWallMap}, black ${tot.offBack} ->`
+    + ` ${tot.onBack} (${(100 * black / took).toFixed(1)}% of what was taken),`
+    + ` ground ${tot.offGround} -> ${tot.onGround} to the pixel,`
+    + ` ${tot.asks} answers asked over the culled squares and none of them naming one`);
 });
 
 /* The wall behind a block you can see past is brought back whole. When a block
