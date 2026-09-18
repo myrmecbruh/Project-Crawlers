@@ -8,6 +8,57 @@ them on an old build.
 
 ---
 
+## The roadmap carries the side chat's answers, and the four things it had missed (no game change)
+
+`ROADMAP.md` is the parking lot: everything agreed but not built lives in it, and
+nothing in it is scheduled. **Two chats reach that file.** The one that owns the game
+builds; the side chat plans, and does not write code. On 16 September the side chat
+worked through the six needs, the job system, the skills, the fog and the economy, and
+wrote its conclusions out as a file to be copied in rather than applied — because two
+writers in one file means one of them loses their work.
+
+**The owning chat applied them itself.** Commit `7572055` (*"roadmap -- the needs job,
+the job system, and every answer from the side chat"*, 18 September 02:11) put the
+needs, the job system, the skills review, the discovery rulings and the carrying rules
+into the roadmap: **385 insertions, 33 deletions, `ROADMAP.md` only**. That stood as
+the whole of it until the side chat read its own draft back against the file and found
+**four things that had fallen between the two conversations:**
+
+- **A cross-reference that had gone stale.** One line said the fog question "is
+  question 6 below", and a later renumbering had moved it to item 3, so the pointer
+  sent a reader to the wrong question. A pointer that names only a number is a pointer
+  that rots; the line now says which question it means as well as where it sits.
+- **The unexplored-ground question was still presented as open**, though it was
+  answered on 16 September: ground the crawlers have walked and lit **stays drawn,
+  dimmed**, only what is lit right now is drawn bright, and **the player knows only
+  what the crawlers know**. It was missed because **the question came from the owning
+  chat's own interview and the answer came from the side chat** — the same thing asked
+  two different ways, with nothing joining the two up. The three shapes that were
+  offered are kept below it as the record.
+- **Six rulings decided after the draft was frozen** were missing from *Parked:
+  decided, waiting on the build*: the fog shape; **sight *is* the light**; carrying a
+  light costs one hand and nothing else; the game opens in the dark; reading a room
+  has to have a consequence; and a creature nobody has lit is heard, not seen, and
+  remembered where it was last known.
+- **Four open questions had never been mirrored into the roadmap at all** — where a
+  shop's stock comes from when `Market` carries no `storage` tag, whether a shopkeeper
+  is drawn, whether a shop must be lit to open (parked by decision, with the reason),
+  and whether captives exist anywhere beyond the Slave Market. They are questions
+  **14–17** now.
+
+**The numbered questions were deliberately not renumbered.** The six new bullets went
+into the decided section and the four new questions onto the end of the list, so every
+reference elsewhere in the file still points at what it always pointed at. Nothing was
+deleted, and the four lines this replaced were the four that were wrong.
+
+**The game did not change when this was done, which is why no new version sits above
+this note.** Nothing in `src/` or `tests/` was touched, no number in the sheet moved,
+and nothing needed re-running. What changed is that the roadmap now holds the answers
+the side chat had been keeping in a file of its own — and the reason each of the four
+had been missed, which is the part that would otherwise have been lost.
+
+---
+
 ## v0.47.0 — one tile of wall, and black behind it
 
 Their words: **"walls should only be one tile thick - simply show black nothingness

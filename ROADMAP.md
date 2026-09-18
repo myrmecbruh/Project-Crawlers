@@ -161,7 +161,8 @@ noted against each line:
   nothing to hide. `light` is worked out per square and floods only through what
   does not block sight, which is the closest thing that exists, but it is rebuilt
   from the sources each time and then thrown away — it is not knowledge. This is a
-  world-model job, not a renderer job, and it is question 6 below.
+  world-model job, not a renderer job, and it is the ground-nobody-has-explored
+  question below (question 3), which is now answered.
 
 ---
 
@@ -504,6 +505,103 @@ the answers were.
   sound became a Studying roll. The words that went were *"a script, a mark, or a room"*,
   and a room was Studying's only job in the game today.
 
+- **The fog remembers, and the player sees only what the crawlers know.** Answered in
+  the side chat, 16 September, and between them these two rulings settle the unexplored
+  half. **The shape:** ground the crawlers have seen **stays drawn, dimmed**, and only
+  what is lit *right now* is drawn brightly — Dwarf Fortress' answer, chosen over "the
+  world is simply not there" and over "the ground is there and unlit". **And the player
+  knows only what the crawlers know**, which is a ruling about the whole interface rather
+  than about rooms: today the entire labyrinth is drawn the moment the level loads, so the
+  only thing discovery gates is a room's name. Of the three sizes that could take, they
+  chose the **strictest** — the ground itself withheld, not only its labels.
+  What makes it cheap is that most of it is already written. `light.ambient` (**0.14**) is
+  *exactly* the brightness a remembered square wants, and its own note already describes it
+  that way — *"how much you can see where nothing is lighting the way"*
+  (`defaults.json:329-332`) — so the dim state is a surface drawn at zero light with the
+  dial already exposed; `light.steps` 6 gives six brightness levels to draw between dark and
+  fully lit; and the light flood already refuses to pass a blocking square
+  (`12-world.js:1088-1092`), which is the shape of a visibility routine, already running,
+  already used every frame. **What is genuinely new is only the memory** — a per-square "a
+  crawler has seen this" flag that outlives the light, plus the renderer drawing remembered
+  squares instead of skipping them. Two more pieces fall out for nothing: **rule 8 needs no
+  second rule**, because the pointer already answers from the shapes the painter actually
+  painted (`40-render.js:1935`, `:1976-2011`), so a square the fog keeps out cannot be named
+  by the pointer; and **there is no save system anywhere in `src/js`**, so a per-square flag
+  needs no file format and no migration. The one honest caveat is written up as question 11
+  below.
+- **Sight *is* the light.** Ruled strictly: **a crawler sees exactly where light reaches
+  them, and a crawler in the dark contributes nothing to the map.** The sheet already said
+  so — the campfire's own note calls it *"the only thing that lights a room"*
+  (`defaults.json:1952-1963`) — so this is a law the sheet was carrying all along, asked a
+  new question rather than a new law. Five consequences, and the last two change other
+  people's work: **the dark stops being free** (it is blindness, not a penalty); **carrying
+  the light becomes a job**, and it competes with the watch, because both need the same small
+  pool of tired people; **reading a room in the dark is impossible rather than harder**, which
+  is what the Lantern's `studying:2` is actually for; **the campfire's 9 squares are the whole
+  known world at the start**; and **a fire going out becomes a blindness event, not a comfort
+  event** — nothing in the game consumes fuel today, so under this ruling the missing fuel
+  rule stops being a nicety.
+  One line of the sheet now says something untrue, and it is the wording rather than the
+  number: `light.ambient` is described as *"how much you can see where nothing is lighting the
+  way"*, and under this ruling that is nobody. **The value stays 0.14** — it becomes *how
+  brightly remembered ground is drawn*, which is exactly the job the ruling above gave it.
+  A `note` change, not a number change, and the sort of edit this review exists to catch.
+- **Carrying a light costs one hand and nothing else — and the seed can rarely start you
+  blind.** Checked against the gear sheet rather than assumed: all three light sources —
+  **Candle** (3), **Lantern** (6), **Torch** (8) — are `offhand`, and the offhand list holds
+  *nothing else*, so a lamp never competes with the Spade, which is `mainhand`. **A tool and a
+  lamp are not in competition.** The two lights that help you read a room are the two that give
+  bonuses (Candle `studying:1`; Lantern `studying:2,foraging:1`), so the sheet already ties
+  light to reading. And the seed can rarely start a group blind: six crawlers at a 55% gear
+  chance (`actor.gear_chance`) against exactly three offhand items means roughly **one start in
+  120 has nobody carrying a light at all**.
+- **The game opens in the dark, and the first fire is the crawlers' own work.** The campfire is
+  already the first thing in `campPlan()` (`16-camp.js:18-60`) and the **only** camp structure
+  that lights anything — light **9**, against bedroll, store and windbreak at 0 — so the camp is
+  invisible until the fire exists, and **the fire's light is what reveals the camp that was
+  already planned**. The world appears in a nine-square circle, and it is the camp. The ruling
+  changes nothing about what happens; it changes only that the player can now *see* it happen,
+  so the first thing that happens becomes the first thing that matters. It is also the first
+  lesson: Building is a difficulty 15 roll that suffers without a tool, so a first fire built
+  badly teaches rule 1 before the player has learned anything else. Three small rules it forces,
+  all answered here: **you can work on what you are touching** — otherwise a crawler with no
+  lamp could not build the fire that would give them one, which is a deadlock in the opening
+  minute; **fog covers ground, not your own people**, because you are the coach and you know
+  where your crawlers are; and **the camp's unlit sites are not outlined either**, so nothing
+  is drawn in advance of the light.
+- **Reading a room has to have a consequence — that is how the "nothing finds anything" hole
+  closes.** Chosen over the three alternatives, all of them recorded: contents riding on a
+  different skill by room type (which would mean assigning all 42 function words to a skill);
+  a second named exception to rule 2, attribute-only, for noticing (which would put two
+  exceptions in a file that used to have none); and "nothing is ever secretly hidden" — which
+  was replaced, more strictly, by *the player knows only what the crawlers know*. Nothing needs
+  building *to find out*, because the roll, the title, the tags and the panel display **all work
+  today**; what was missing is that knowing changed nothing. So the tags get a consequence: an
+  `infested` room ought to make a crawler cautious, a `store`-tagged room ought to be worth
+  entering, a `collapsed` room ought to be slower to cross, and an unread room ought to feel
+  like a risk. That is a question about what the crawler *does with* the tags, not about whether
+  the tags reach the player — no new skill, no new exception, no new vocabulary. Two things are
+  left open by it: whether a failure has any *bite* (does an unread room hide anything
+  dangerous?), and what the dark now costs, which the ruling below answers.
+- **A creature nobody has lit up is heard, not seen — and once met, the map keeps where it was
+  last known to be.** Both halves together, because they are the present and past tense of one
+  thing: a sound mark is *something is out there now*, carries no picture, and you know roughly
+  where but not what; the remembered mark is *last seen here*, and it may be stale, which is the
+  most honest warning a dark labyrinth can give. **The mark has to read as old, not as a
+  tracker** — drawn the same way as a seen creature it would quietly undo the ruling above by
+  handing the player a live position for something no crawler can currently see. The honest
+  cost: **there is no audio, sound, noise or hearing anywhere in `src/js`**, so of everything the
+  fog forced, this is the one piece that is new machinery rather than a re-use of something
+  already written. **Noticing a noise is a Studying roll**, and **what the crawler is doing
+  changes what they can hear**, which turns the game's own flavour into a mechanic: *the crawler
+  reading a room is the one who can hear; the crawler hammering at a wall is the one who cannot.*
+  Job noise wants a column, and the job table is still a plan rather than code, so this is the
+  cheapest possible moment to add one. Three things it lays on other work: **all the noticing in
+  the game would sit on one skill**, so a group with nobody strong in Intellect and Willpower is
+  deaf as well as blind; `STUDY_TRIES` 3 needs a counterpart for hearing, or a crawler stands in
+  the dark rolling forever; and hearing must be **easier** than reading a room, which is
+  currently 13 — the number itself is question 10 below.
+
 ---
 
 ## Parked: questions waiting on them
@@ -551,12 +649,15 @@ waiting on the build**, just above.
      Theirs: *"I don't mind slopes leading up to walls. happens in caves and
      rubble all the time."* A session re-reported this as a defect more than once;
      it is not one.
-3. **Ground nobody has explored or lit is still drawn as if it were known.** Theirs,
+3. **Ground nobody has explored or lit is still drawn as if it were known. — ANSWERED:
+   the fog remembers, and the player sees only what the crawlers know.** The ruling is
+   in *Parked: decided, waiting on the build* above. The three shapes below are kept as
+   the record. Theirs,
    offered the two readings of "unrevealed": *"both — but buried blocks don't
    really need to exist, right?"* The buried half is already the case (a block
    inside solid rock has not been painted since v0.34.0); the explored half has
-   nothing behind it and is the genuinely unbuilt part of this request. It needs
-   answered before it can be built, because the three shapes it could take are
+   nothing behind it and is the genuinely unbuilt part of this request. It needed
+   answered before it could be built, because the three shapes it could take were
    three different games and they are not a matter of taste a session can settle:
    - **Absent** — the world simply is not there beyond what has been seen, so the
      picture ends and the crawlers walk into nothing. Cheapest and the most like a
@@ -623,6 +724,31 @@ waiting on the build**, just above.
     the floor under it is. Also worth a second look before it is written down:
     whether **Encumbrance** is the word, and whether it becomes a new *scale* or
     stays a quantity with no range of its own.
+
+14. **Where does a shop's stock come from, if `Market` carries no `storage` tag?**
+    Market's only tag is `worked`, while Counting House, Warehouse, Granary, Larder,
+    Armoury and Cistern all carry `storage`. So the sheet already separates *where a
+    thing is sold* from *where a thing is kept*, and a Market's tags say nothing about
+    what it has. Either stock belongs to the function word, or `storage` should be the
+    sign of it, or it is separate from both.
+15. **Is a shopkeeper drawn, or only the stock?** These are the two halves of a shop,
+    and **only the first needs rule 6 and a second body** — the salvage-dealer half is
+    exactly the `store_barrel` / `store_hoop` / `store_lid` parts the sheet already
+    draws.
+16. **Must a shop be lit to open? — parked by decision, not open.** *A shop is a
+    creature, and light is the mechanism*: the ruling above is that a creature nobody has
+    lit up is **heard, not seen**, so if a shopkeeper's fire is what makes a trader
+    dealable, then the economy and the fog are one system and the act of trading becomes
+    a beacon. **Deliberately parked** — nothing about a shop can be built until rule 6
+    exists, and settling the lighting rule now would mean deciding the details of an
+    unscheduled milestone, which the order they picked warns against. For whoever
+    answers it later: campfire **9**, torch **8**, lantern **6**, and the offhand slot
+    holds exactly one of the three.
+17. **Are there captives anywhere else?** The Slave Market ruling is about that room's
+    *stock*, not about captivity as a system. **Gaol, Oubliette, Menagerie and Kennels
+    carry the same `captivity` tag**, and if rule 6's creatures ever exist then a Gaol
+    with something in it is exactly what the rule was written for. So the answer is not
+    a general "no captives anywhere" — it is **"nothing is for sale"**.
 
 ---
 
