@@ -8,6 +8,62 @@ them on an old build.
 
 ---
 
+## v0.56.2 — the skills are renamed, and the keys underneath them are not
+
+Their words: **"replace instances of the old names except for old records in the
+changelog."**
+
+Seven of the fifteen skills carry a new name.
+
+- **Clambering** is now **Focusing** (Might + Agility)
+- **Wrangling** is now **Grappling** (Might + Presence)
+- **Fighting** is now **Brawling** (Might + Willpower)
+- **Ranging** is now **Maneuvering** (Agility + Endurance)
+- **Performing** is now **Entertaining** (Agility + Presence)
+- **Crafting** is now **Sneaking** (Agility + Intellect)
+- **Enduring** is now **Persisting** (Endurance + Willpower)
+
+The other eight -- Labouring, Building, Tinkering, Tending, Foraging, Bargaining,
+Leading, Studying -- are unchanged, and so is every pair.
+
+### The keys did not move, and that is the whole of the risk
+
+A skill's key is what other things point at: a gear row says `crafting:2`, a
+structure says which skill raised it, and a saved crawler keeps its pips under
+the key. Those are references, not sentences, so they are left exactly as they
+are. Only the name people read changed, and it changed in `src/defaults.json` and
+`docs/crawlers.xlsx` **together** -- the only two the build reconciles -- which is
+why the receipt still reads *"spreadsheet matches the code defaults exactly
+(nothing moved)"*. Applied to one side alone, a rename is fatal to the build, and
+that is the machinery doing its job rather than an inconvenience.
+
+### Three pieces of wording had to move with the names
+
+A rename makes old wording false, and a false note is worse than an old name:
+
+- **Crafting became Sneaking**, so its note ("Making and mending...") and its
+  tool requirement went with the old name -- nobody needs a wrench to hide.
+  `needs_tag` and `without` are empty for it now. The making and mending is not
+  lost: it is **Tinkering**'s, which already carried the tool and the shaking
+  hand.
+- **Ranging's** note said "moving quietly", which is Sneaking's work now, so
+  Maneuvering covers ground instead: travelling far, keeping pace, and getting
+  back over rough going.
+- **Tinkering's** note now says out loud what it took on.
+
+### What this leaves undone
+
+The roadmap records a four-item trap that rides with this rename, and it is
+**not** applied here, because it changes what movement and gear do: `MOVE_SKILL`
+still points at the `clambering` key; the Rope Coil and the Boots still bonus it;
+and the Tool Belt's `crafting:2` now reads as *Sneaking*, which is not what a
+belt of tools is for. That is a decision, not a typo.
+
+The entries below this one keep the old names. They are records of what things
+were called when they happened.
+
+---
+
 ## v0.51.0 — the light runs across a wall, so two blocks of a wall meet
 
 Their words: **"the light isn't smooth BETWEEN wall blocks though. I see the
