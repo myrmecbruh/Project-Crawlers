@@ -14,11 +14,11 @@ When something here gets built, it moves out of this file and into `CLAUDE.md`
 Taken from a real match on v0.14.0, not from memory, with what has changed since
 noted against each line:
 
-- **Four of the fifteen skills are used by anything.** Clambering (walking),
+- **Four of the fifteen skills are used by anything.** Focusing (walking),
   Labouring (clearing ground), Building (raising a camp), Studying (reading a
   room). The other **eleven are rows in the sheet that nothing ever calls**:
-  Wrangling, Fighting, Ranging, Performing, Crafting, Tinkering, Tending,
-  Foraging, Enduring, Bargaining, Leading.
+  Grappling, Brawling, Maneuvering, Entertaining, Sneaking, Tinkering, Tending,
+  Foraging, Persisting, Bargaining, Leading.
 - **There are no creatures at all.** Rule 6 is entirely unbuilt.
 - **The labyrinth used to be one fixed patch**, 56×56 metres, nine rooms, with a
   rock wall at the edge of the world. **As of v0.20.0 the world underneath goes
@@ -341,16 +341,16 @@ Creatures, generated from tags rather than hand-authored (rule 6). Brings danger
 makes carrying a light a real decision, gives Brawling and Grappling a job. But
 it is the combat fifth of the game, and rule 3 caps that at 20%.
 
-*Amended 16 Sept, after the skills review: this used to name **Fighting** and
-**Wrangling**, which are now **Brawling** and **Grappling**.*
+*Amended 16 Sept, after the skills review: the two skills this row now names are
+**Brawling** and **Grappling**.*
 
 ### 3. Hands and work — crafting, cooking, repair
 Gather materials, cook a meal, sew a coat, mend a broken spade. Puts Tinkering,
 Foraging and Labouring to work and makes gear something you maintain.
 
-*Amended 16 Sept, after the skills review: this used to name **Crafting**, which
-has been folded into **Tinkering**, so the row now names the three skills that
-actually do the work. Whether **Labouring** is the right third name for "gather
+*Amended 16 Sept, after the skills review: the making and mending work has been
+folded into **Tinkering**, so this row now names the three skills that actually do
+the work. Whether **Labouring** is the right third name for "gather
 materials" — or whether that should be **Building** — is worth a decision rather
 than an assumption.*
 
@@ -544,21 +544,25 @@ the answers were.
   it with a self-check labelled `(rule 2)` — the same shape as the four promoted items
   rule 2 warns about. The skills review left the grid intact anyway (all fifteen kept
   their pairs), so this is about the law's wording rather than about the game.
-- **The skills have been reviewed — eight renames, three changed lines, and a trap
-  that makes it more than a text edit.** Every key and every pair is preserved. New
-  names: Clambering → **Focusing**, Wrangling → **Grappling**, Fighting → **Brawling**,
-  Performing → **Entertaining**, Enduring → **Persisting**, and the key `ranging` on
-  Agility+Endurance → **Maneuvering**; **Ranging** and **Crafting** retire (Crafting
-  folds into **Tinkering**), and **Sneaking** takes the Agility+Intellect pair Crafting
-  vacated. The trap: the movement skill has moved from Might+Agility to Agility+Endurance,
+- **The skills are renamed — eight names, applied 19 Sept — and a trap that is
+  still outstanding.** Every key and every pair is preserved, because the keys are what
+  gear rows, structures and saved skills point at. New names: **Focusing** (MGT+AGI),
+  **Grappling** (MGT+PRE), **Brawling** (MGT+WIL), **Maneuvering** (AGI+END),
+  **Entertaining** (AGI+PRE), **Sneaking** (AGI+INT) and **Persisting** (END+WIL).
+  **Ranging** and **Crafting** retire: the making and mending work folds into
+  **Tinkering**, and the Agility+Intellect pair is **Sneaking** — which, being stealth,
+  drops the tool penalty it inherited; that penalty stays on Tinkering, where it
+  belongs. The sheet, `src/defaults.json` and the docs all read the new names now.
+  The trap: the movement skill has moved from Might+Agility to Agility+Endurance,
   but **the code does not know that yet** — `MOVE_SKILL` is `'clambering'`, so every
-  difficult step is rolled as the throwing skill. Four things have to move together:
+  difficult step is rolled as the throwing skill. Though the names are in, four things
+  have to move together before movement is right:
   `MOVE_SKILL` (`14-actors.js:249`) to `'ranging'`; the **Rope Coil** (`clambering:1` →
   `ranging:1`); the **Boots** (`clambering:2,ranging:2` — almost certainly `ranging:2`,
   as there is now only one movement skill); and the **Tool Belt**
   (`crafting:2,building:1` → recommended `tinkering:2`, since a work belt that helps you
   sneak is not what its note says). Those four are the complete set — every skill key was
-  searched across `src`, so the rest of the rename is text.
+  searched across `src`, so they are the whole of the code change.
 - **One line of the sheet was changed by a later ruling, and the loss is worth
   knowing.** **Studying**'s note now reads *"Lore, mapmaking, deciphering, listening for
   what is out there, and sitting with a problem until it gives."* — because noticing a
@@ -838,3 +842,67 @@ waiting on the build**, just above.
 - **The camera snaps when you pick a crawler.** Clicking one locks the view onto
   them instantly rather than easing across. It was left as a snap because they
   asked for a lock; if the jump annoys, it is a few lines to glide instead.
+- **A one-pixel dark hairline at every boundary between two ground squares.**
+  Found while measuring smooth light (v0.49.0) and older than it: the seam shows
+  in **both** arms of the A/B, with the light ramps switched off as much as on,
+  and it is why the ramp is judged analytically against the light the world keeps
+  on a square rather than from a row of pixels. It is a pre-existing artefact of
+  how neighbouring floor polygons are drawn, it is one pixel wide, and nothing
+  has been changed about it — moving it is a rendering job of its own, with
+  lesson 17's seam-extent bound written down before anyone starts. Nobody has
+  said whether they can see it. **Ask before working on it.**
+- **The light has height and casts shades, and every number in it is a first
+  guess.** v0.49.0 made the flame and the lamp hang where they really are, gave
+  the light a soft falloff, and put a shade behind everything solid — but the
+  eight dials (`light.lamp_height` 0.9, `fire_height` 0.35, `height_falloff` 1,
+  `smooth` 1, `shade_strength` 0.5, `shade_give` 0.3, `shade_reach` 2.2,
+  `shade_girth` 0.25, sheet rows 71-78) were chosen to make the mechanic visible,
+  not to be right. **Nothing has been judged in play yet**, and the standing order
+  says mechanics first — so they stay until somebody says a shade is too dark,
+  too long, or the lamp too high. The dials are the conversation.
+- **No low-end phone has been measured.** The shade pass and the light ramps cost
+  **+1.5 ms a drawn frame** (8.28 → 9.81 ms; the ramps 1.25 of it and the shades
+  0.28 on the lit picture) on the desktop this was built on, and the ask was
+  *"keep it cheap"* for phones and weak laptops. If it is not cheap enough there,
+  the sheet already holds the answer — `light.smooth` 0, `shade_strength` 0, a
+  coarser `light.steps` — and none of it is a rewrite.
+  Worth doing before the next thing that draws more, not after.
+- **The box says the light of the SQUARE, not of the height.** v0.50.0 put the
+  light level in the inspector, and it is `lightAt` — the game's own answer for
+  that square — for all three kinds of thing. So hovering the crown of a wall
+  tells you the light at its foot. That is deliberate for now (one number, one
+  meaning, and it is the number the light map is built from), but the picture
+  already knows better: `lightValueAt` answers the light at any height, which is
+  what paints a fire's wall brighter at the bottom. A second number — the light
+  where the pointer is ON the thing — is the obvious next offer, and **nobody has
+  asked for it.**
+- **A wall wearing a dropped-in picture can still show a faint seam where the
+  light lands hardest** (v0.51.0). The light now runs across a wall face, so two
+  blocks of a wall meet — a whole seam stepping by 32 levels went from four of
+  them to none over 16 measured moments — but the last of it is in the picture
+  path, and it cannot be reached without changing how a picture is shaded.
+  Mechanism: a picture is baked **over** the tint, `bake = αT + (1−α)·C(level)`,
+  so the across-correction's ratio leaves the picture's own term at
+  `αT·C(e)/C(level)` instead of `αT·C(e)` — error `αT(r − 1)` — and the two faces
+  of a seam have different `level`s because each is floored at its own `ref`.
+  Plain-coloured walls measure **0 seams either way**, which is the proof the
+  mechanism is the picture and not the geometry.
+  **The exact fix changes what every wall looks like**: bake each wall picture as
+  an unlit albedo (pattern keyed on white, so the pattern cache *shrinks*) and put
+  the whole light into a `multiply` gradient. Then a seam pixel is `T·C(e)` on
+  both sides and the middle of a face is `T·C(ref)`. It also touches `def.side`,
+  the fade/band path, and the tests that census patterned fills. **This is the
+  owner's decision, not a session's — ask, with the two effects stated plainly
+  ("walls wear their material at full strength and the light sits on top of it,
+  so the whole game gets a shade brighter and flatter unless the pictures are
+  re-made dark") and wait.**
+  A narrower candidate was rejected: sharing one `level` across a seam. Each face
+  can recover its neighbour's square light (`fsB = 2·e0 − fsA`) but neither can
+  see the other end of its own run, so it needs a run-wide walk — more machinery
+  for less of the answer.
+- **The across-face correction needs a `level` per face, and a run-wide one would
+  be fewer cache entries.** `level` is what keys the pattern cache, so raising it
+  adds a handful of 32×32 tiles (43 patterns measured at the camp before this
+  change). Walking a run of wall once and giving the whole run one `level` would
+  cut that, at the price of the walk. Not worth doing on the strength of tens of
+  tiles.

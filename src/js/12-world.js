@@ -1088,7 +1088,53 @@ function stepToward(world, from, field) {
  * so a fire lights its room and the hall leading out of it, and not the room on
  * the other side of the wall. Blocked squares still catch the light on their
  * near face; they just do not pass it on.
+ *
+ * And every source hangs at a HEIGHT: a fire at knee level, a carried lamp at
+ * the height of a hand. What a square gets is worked out from the true distance
+ * to the flame (lightFall), and the picture can ask the same source again,
+ * higher up a wall (lightValueAt), so the light has somewhere to be other than
+ * the floor it was measured on.
  */
+/* A step of the flood is one square across, and the shortest a square-wide step
+   could ever be is the diagonal of that square -- so every square of walking the
+   light does is worth at least this much of a metre. Not a knob: it is what a
+   step IS, like TICK_MS. */
+const STEP_METRES = 1 / Math.SQRT2;
+
+/* How much of a source's light arrives at a point, where the source is a thing
+   standing in the air at a real height.
+ *
+ * TWO DISTANCES, AND THE LIGHT PAYS THE LONGER.
+ *
+ * The first is the straight line to the point -- across the floor and up to the
+ * lamp, together (`height_falloff` says how much the climb counts). A point at
+ * the foot of a wall and a point three metres up that wall are not the same
+ * distance from a fire on the floor, which is why a fire lights the bottom of a
+ * room and leaves the top of it dark.
+ *
+ * The second is the way the light actually had to WALK, because light does not
+ * go through rock: round the corner of a hall it has come further than the
+ * straight line says. So where the walk is longer, the walk is what is paid --
+ * and a pool of light dims coming out of a passage instead of restarting in the
+ * next room.
+ *
+ * In the open the line is longer and the pool comes out round; the two are equal
+ * along the straight axes, so there is no seam between them. */
+function lightFall(src, px, py, pz, walked) {
+  const line = Math.hypot(src.x + 0.5 - px, src.y + 0.5 - py);
+  const dz = (pz - src.z) * CFG.heightFalloff;
+  const rho = Math.hypot(line, dz);
+  const detour = (walked || 0) * STEP_METRES;
+  const eff = detour > rho ? detour : rho;
+  return Math.max(0, 1 - Math.pow(eff / src.r, CFG.falloff));
+}
+
+/* Ground level under a square, for a light that hangs above it. */
+function sourceGround(state, x, y) {
+  const cell = state.world.at(x, y);
+  return cell ? surfaceHeight(cell) : 0;
+}
+
 function lightSourcesIn(state) {
   const out = [];
   for (let i = 0; i < state.actors.length; i++) {
@@ -1098,13 +1144,23 @@ function lightSourcesIn(state) {
       const item = a.worn[SLOT_IDS[k]];
       if (item && GEAR(item).light > best) best = GEAR(item).light;
     }
-    if (best > 0) out.push({ x: a.x, y: a.y, r: best });
+    if (best > 0) {
+      /* What a crawler carries is in their hand, at the height of a hand --
+         which is what makes a wall bright at the height they walk past it. */
+      out.push({ x: a.x, y: a.y, r: best, actor: a,
+                 z: sourceGround(state, a.x, a.y) + CFG.lampHeight });
+    }
   }
   if (state.camp) {
     for (let i = 0; i < state.camp.sites.length; i++) {
       const site = state.camp.sites[i];
       const def = STRUCT(site.structure);
-      if (site.built && def.light > 0) out.push({ x: site.x, y: site.y, r: def.light });
+      if (site.built && def.light > 0) {
+        /* A fire burns at knee height, not on the floor and not at the top of
+           the pile of logs it is built out of. */
+        out.push({ x: site.x, y: site.y, r: def.light, site: site,
+                   z: sourceGround(state, site.x, site.y) + CFG.fireHeight });
+      }
     }
   }
   return out;
@@ -1116,14 +1172,23 @@ function computeLight(state) {
      the whole world. Only ever touches squares that were lit, which keeps a
      recompute as cheap as the pool of light is small. */
   if (!state.lit) state.lit = [];
-  for (const c of state.lit) c.light = 0;
+  for (const c of state.lit) { c.light = 0; c.lightD = 0; c.lightSrc = -1; }
   state.lit.length = 0;
 
   const sources = lightSourcesIn(state);
+  /* The picture and the shadow pass read the sources back out of the match, and
+     they must read the same list this pass lit the world from -- a list rebuilt
+     somewhere else could put a flame an inch from where it was measured. */
+  state.sources = sources;
   const dist = new Map();
   for (let si = 0; si < sources.length; si++) {
     const src = sources[si];
-    const reach = Math.ceil(src.r);
+    /* The flood walks squares, and a square of walking is worth at least
+       1/sqrt(2) of a metre (STEP_METRES), so the farthest a square can carry
+       light is sqrt(2) times the radius. Walked further and every square beyond
+       is dark -- which is what keeps this a bounded walk rather than a sweep of
+       the world, and what stops the pool having a hard edge along the axes. */
+    const reach = Math.ceil(src.r * Math.SQRT2);
     dist.clear();
     const start = w.at(src.x, src.y);
     if (!start) continue;
@@ -1132,9 +1197,14 @@ function computeLight(state) {
     for (let head = 0; head < queue.length; head++) {
       const c = queue[head];
       const d = dist.get(c);
-      const fall = Math.max(0, 1 - Math.pow(d / src.r, CFG.falloff));
-      if (!(c.light > 0)) state.lit.push(c);
-      if (fall > (c.light || 0)) c.light = fall;
+      const fall = lightFall(src, c.x + 0.5, c.y + 0.5, surfaceHeight(c), d);
+      /* Which source is lighting this square is kept, because the picture has to
+         be able to ask that source again -- at a different height, for the top
+         of a wall. */
+      if (fall > (c.light || 0)) {
+        if (!(c.light > 0)) state.lit.push(c);
+        c.light = fall; c.lightD = d; c.lightSrc = si;
+      }
       if (d >= reach) continue;
       /* Rock catches the light but does not pass it on. */
       if (TILE(c.tile).tags.indexOf('blocks-sight') >= 0 && d > 0) continue;
@@ -1161,4 +1231,43 @@ function lightAt(state, cell) {
   if (!cell) return 0;
   const raw = cell.light || 0;
   return Math.round(raw * CFG.lightSteps) / CFG.lightSteps;
+}
+
+/* The same light, at a height you choose, WITHOUT the flat steps: how bright a
+   particular face of a thing is, rather than how bright the square is.
+ *
+ * A square has one level -- that is the game's own answer, and the panel and the
+ * tests read it -- but a wall is three metres of face standing in the light, and
+ * painting the whole of it at the level of its own floor is what made a fire
+ * read as a puddle of colour rather than as a light in a room. So the picture
+ * asks the source that lit the square again, at the height it is drawing.
+ *
+ * At the floor it gives back exactly what the square gives (bar the stepping),
+ * so nothing about the world's own light has moved; only what the picture does
+ * with it. */
+function lightValueAt(state, cell, z) {
+  if (!cell || !state.sources) return lightAt(state, cell);
+  const src = state.sources[cell.lightSrc];
+  if (!src) return lightAt(state, cell);
+  const hz = z === undefined ? surfaceHeight(cell) : z;
+  return lightFall(src, cell.x + 0.5, cell.y + 0.5, hz, cell.lightD);
+}
+
+/* The same, at a point that is not the middle of the square -- the picture
+   ramps a face from its foot to its top, and one floor square to its next, so it
+   has to be able to ask about a point INSIDE the square it is painting.
+ *
+ * THE SOURCE IS STILL THE ONE THAT LIT THE SQUARE, and the way the light walked
+ * to the square is still the square's. Half a metre to one side of a square's
+ * centre is not reached by a different source through a different doorway in any
+ * way the picture could act on, and a flood per corner of every face would be a
+ * flood per pixel.
+ *
+ * dx and dy are metres from that centre. */
+function lightPoint(state, cell, z, dx, dy) {
+  if (!cell || !state.sources) return lightAt(state, cell);
+  const src = state.sources[cell.lightSrc];
+  if (!src) return lightAt(state, cell);
+  return lightFall(src, cell.x + 0.5 + (dx || 0), cell.y + 0.5 + (dy || 0),
+                   z === undefined ? surfaceHeight(cell) : z, cell.lightD);
 }

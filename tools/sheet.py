@@ -63,7 +63,10 @@ PROSE = {"note", "unit"}
 
 
 def load_defaults(path):
-    raw = json.loads(pathlib.Path(path).read_text())
+    # Explicit UTF-8. Without it Windows decodes the file as the local code page,
+    # so a '·' or an '—' in the defaults comes back as mojibake and every build
+    # reports those rows as "moved" when the sheet already agrees with them.
+    raw = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
     return {s: raw[s] for s in SECTIONS}
 
 

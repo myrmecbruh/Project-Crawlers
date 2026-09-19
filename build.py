@@ -18,7 +18,6 @@ network. Run this after every change.
 """
 
 import base64
-import hashlib
 import json
 import pathlib
 import re
@@ -102,7 +101,7 @@ def fail(msg):
 
 
 def read_version():
-    text = VERSION_FILE.read_text()
+    text = VERSION_FILE.read_text(encoding="utf-8")
     found = VERSION_RE.findall(text)
     if len(found) != 1:
         fail("expected exactly one VERSION declaration in %s, found %d"
@@ -115,7 +114,7 @@ def collect_modules():
     if not mods:
         fail("no modules in src/js")
     for m in mods:
-        if not m.read_text().strip():
+        if not m.read_text(encoding="utf-8").strip():
             fail("%s is empty" % m.name)
     return mods
 
@@ -200,8 +199,11 @@ def main():
           % (version, "" if sheet_path == SHEET else "  [sheet: %s]" % sheet_path))
     game_data = load_data(sheet_path)
 
+    # Every text file is read and written as UTF-8 explicitly. Without it Windows
+    # uses the local code page, which quietly round-trips bytes that happen to be
+    # in it and mangles the ones that are not.
     code = "\n".join(
-        "/* ==== %s ==== */\n%s" % (m.name, m.read_text().rstrip())
+        "/* ==== %s ==== */\n%s" % (m.name, m.read_text(encoding="utf-8").rstrip())
         for m in mods
     )
 
@@ -213,7 +215,7 @@ def main():
     # The six attributes are shown in the order they are listed, and a figure is
     # authored from the ground up.
     code = code.replace("{{DATA}}", json.dumps(game_data, separators=(",", ":")))
-    style = (SRC / "style.css").read_text().strip()
+    style = (SRC / "style.css").read_text(encoding="utf-8").strip()
 
     # And the pictures somebody dropped in travel the same way, for the same
     # reason: one self-contained page.
@@ -223,7 +225,7 @@ def main():
              "the game")
     code = code.replace("{{TEXTURES}}", json.dumps(pictures, separators=(",", ":")))
 
-    shell = (SRC / "shell.html").read_text()
+    shell = (SRC / "shell.html").read_text(encoding="utf-8")
     for token in ("{{STYLE}}", "{{CODE}}"):
         if token not in shell:
             fail("shell.html is missing %s" % token)
@@ -245,7 +247,7 @@ def main():
 
     DIST.mkdir(exist_ok=True)
     scratch = DIST / "_check.js"
-    scratch.write_text(code)
+    scratch.write_text(code, encoding="utf-8")
     syntax = check_syntax(scratch)
     scratch.unlink()
 
@@ -255,22 +257,24 @@ def main():
     # A/B against a file, and check what built it. If a build of this version
     # already exists and the content has changed, the old file was a baseline
     # somebody may be comparing against -- say so loudly before clobbering it.
+    # Compare the TEXT, not encoded bytes: the file on disk has the platform's
+    # line endings, so a byte hash of it never matches what was just built and
+    # the warning fired on every build.
     if versioned.exists():
-        old = hashlib.sha256(versioned.read_bytes()).hexdigest()
-        new = hashlib.sha256(standalone.encode()).hexdigest()
-        if old != new:
+        old = versioned.read_text(encoding="utf-8")
+        if old != standalone:
             print("  !! dist/%s already existed and the content CHANGED."
                   % versioned.name)
             print("  !! If you were keeping it as a baseline, bump VERSION first.")
 
     versioned.parent.mkdir(parents=True, exist_ok=True)
-    versioned.write_text(standalone)
+    versioned.write_text(standalone, encoding="utf-8")
     if not out_override:
-        (DIST / "artifact.html").write_text(fragment)
+        (DIST / "artifact.html").write_text(fragment, encoding="utf-8")
 
     print("  --")
     for m in mods:
-        print("  %-18s %4d lines" % (m.name, len(m.read_text().splitlines())))
+        print("  %-18s %4d lines" % (m.name, len(m.read_text(encoding="utf-8").splitlines())))
     print("  %-18s %4d lines" % ("style.css", len(style.splitlines())))
     print("  script syntax      %s" % syntax)
     total = sum(len(v) for v in pictures.values())

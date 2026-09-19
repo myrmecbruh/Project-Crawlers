@@ -44,6 +44,17 @@ const Inspector = {
     return N('ui.doing_idle');
   },
 
+  /* How lit it is where a thing stands, as a per cent of full daylight. This is
+     the game's OWN answer for that square (`lightAt`), stepped the way the light
+     map is built, so the number in the box is the number the picture was drawn
+     from rather than a second opinion about it. One meaning everywhere the box
+     names it: the light AT that place, not the light something carries. */
+  lightText(s, x, y) {
+    const cell = s.world.at(x, y);
+    if (!cell) return null;
+    return Math.round(lightAt(s, cell) * 100) + '%';
+  },
+
   describe(s, idx) {
     if (idx < 0) return null;
     if (Render.isActorPick(s, idx)) {
@@ -51,6 +62,7 @@ const Inspector = {
       if (!a) return null;
       const d = describeActor(a);
       d.index = idx;
+      d.light = this.lightText(s, a.x, a.y);
       return d;
     }
     if (Render.isSitePick(s, idx)) {
@@ -65,6 +77,7 @@ const Inspector = {
              : !site.cleared ? N('ui.state_clearing')
              : site.progress > 0 ? N('ui.state_building') : N('ui.state_planned'),
         ground: TILE(s.world.at(site.x, site.y).tile).name,
+        light: this.lightText(s, site.x, site.y),
         efforts: site.efforts,
         tags: def.tags.map(function (t) { return TAG(t).name; })
               .concat(site.built ? [] : [TAG('unbuilt').name]),
@@ -97,16 +110,20 @@ const Inspector = {
       elevation: cell.h, elevationText: cell.h + ' m',
       footing: def.footing, footingText: this.footingText(def.footing),
       slope: cell.slope,
+      light: this.lightText(s, cell.x, cell.y),
       tags: tags,
       note: def.note
     };
   },
 
-  /* One line. Whatever the thing most obviously is. */
+  /* One line. Whatever the thing most obviously is -- and, at the end of it, how
+     dark it is where that thing stands. The light is the one fact every kind of
+     thing in the box can be asked, so it always reads in the same place. */
   summary(d) {
-    if (d.kind === 'crawler') return this.doingText(d.doing);
-    if (d.kind === 'site') return d.state;
-    return d.elevationText + ' · ' + d.footingText;
+    const lit = d.light ? ' · ' + N('ui.label_light') + ' ' + d.light : '';
+    if (d.kind === 'crawler') return this.doingText(d.doing) + lit;
+    if (d.kind === 'site') return d.state + lit;
+    return d.elevationText + ' · ' + d.footingText + lit;
   },
 
   /* ---- the hover tooltip ------------------------------------------------ */
@@ -178,6 +195,7 @@ const Inspector = {
   crawlerPanel(s, d) {
     const open = this.sections(s);
     let h = this.row(N('ui.label_doing'), this.doingText(d.doing));
+    if (d.light) h += this.row(N('ui.label_light'), d.light);
     h += this.row(N('ui.label_lastroll'), this.rollText(d.lastRoll));
 
     let attrs = '<div class="tt-attrs">';
@@ -246,6 +264,7 @@ const Inspector = {
              '<span class="bar"><span class="bar-fill" style="width:' + d.progress + '%"></span></span> '
              + d.progress + '%')
          + this.row(N('ui.label_ground'), d.ground)
+         + (d.light ? this.row(N('ui.label_light'), d.light) : '')
          + this.tagsRow(d.tags);
     } else {
       h += (d.place ? this.row(N('ui.label_place'),
@@ -253,6 +272,7 @@ const Inspector = {
          + (d.placeKnown ? this.row(N('ui.label_ground'), d.floorName) : '')
          + this.row(N('ui.label_elevation'), d.elevationText)
          + this.row(N('ui.label_footing'), d.footingText)
+         + (d.light ? this.row(N('ui.label_light'), d.light) : '')
          + this.tagsRow(d.tags);
     }
 

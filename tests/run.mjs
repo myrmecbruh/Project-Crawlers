@@ -39,13 +39,45 @@ function assert(cond, why) { if (!cond) throw new Error(why); }
  *
  *     node tests/run.mjs --only=ground,ramp
  *
- * A test runs when its name contains any of the comma-separated words. The two
- * steps that reconcile or build the spreadsheet are skipped too, because neither
- * can be affected by which test is being run and both cost minutes. So a run
- * with --only in it is **never the run that ships**: run without it before
- * committing. */
+ * A test runs when its name contains any of the comma-separated words. The
+ * spreadsheet reconciler is skipped too, because it cannot be affected by which
+ * test is being run. So a run with --only in it is **never the run that ships**:
+ * run without it before committing. */
 const ONLY = (process.argv.slice(2).find((a) => a.startsWith('--only=')) || '')
   .slice('--only='.length).split(',').map((w) => w.trim()).filter(Boolean);
+
+/* The short everyday check, for the work between changes:
+ *
+ *     node tests/run.mjs --quick
+ *
+ * A dozen tests in about a minute, and every one of them guards something a
+ * large number of the other tests assume and would fail on without saying so:
+ * that the file on disk is the version the sources say, that a number in the
+ * spreadsheet reaches the picture, that the labyrinth is walkable at all, that
+ * the picture never paints through the thing in front of it, that the ground
+ * arrives underfoot as the view travels, that the pointing and the harness's own
+ * doors still work, that materials and light still reach the screen, and that
+ * the page raised no errors doing it. It is a smoke alarm, not a survey: a
+ * change that reaches into shared machinery still wants the whole suite.
+ *
+ * --only may be given as well, and the two are run together. */
+const QUICK_WORDS = [
+  'built file reports the version',
+  'hovering a block outlines it',
+  'the labyrinth is rooms and halls',
+  'rock in the way is cut away',
+  'materials reach the screen',
+  'the labyrinth is dark',
+  'the box says how lit it is',
+  'the pointer finds the frontmost shape',
+  'nothing the picture left out can be picked',
+  'crawlers reach the screen',
+  'ground appears as the view travels',
+  'the page raised no errors'
+];
+const QUICK = process.argv.slice(2).includes('--quick');
+const WORDS = QUICK ? QUICK_WORDS.concat(ONLY) : ONLY;
+const PICKED = WORDS.length > 0;
 
 /* Every test is printed as it STARTS, on stderr, because the results are all
  * held back until the end and a full run takes minutes -- a run that is working
@@ -53,7 +85,7 @@ const ONLY = (process.argv.slice(2).find((a) => a.startsWith('--only=')) || '')
  * been killed for it. The line names the test that is running NOW, so the last
  * line before a stop says where it stopped. */
 async function test(name, fn) {
-  if (ONLY.length && !ONLY.some((w) => name.includes(w))) return;
+  if (PICKED && !WORDS.some((w) => name.includes(w))) return;
   const n = results.length + 1;
   process.stderr.write(`  ... ${n} running: ${name}\n`);
   try { await fn(); results.push({ name, ok: true }); }
@@ -63,7 +95,7 @@ async function test(name, fn) {
 /* ---- 1. the spreadsheet reconciler checks itself ------------------------- */
 console.log('\nspreadsheet reconciler');
 try {
-  if (ONLY.length) {
+  if (ONLY.length && !QUICK) {
     console.log(`  skipped -- --only=${ONLY.join(',')} is a test-picking run`);
   } else {
     console.log(execFileSync('python3', [path.join(ROOT, 'build.py'), '--check'],
@@ -73,6 +105,12 @@ try {
   console.error((e.stdout || '') + (e.stderr || ''));
   console.error('the spreadsheet reconciler failed its own self-check');
   process.exit(1);
+}
+
+if (QUICK) {
+  console.log(`\nSHORT CHECK -- ${QUICK_WORDS.length} tests picked by name out of the suite`
+    + `${ONLY.length ? ', plus --only=' + ONLY.join(',') : ''}. Not a full run; the whole`
+    + ' suite is what goes out.\n');
 }
 
 const browser = await chromium.launch({
@@ -1139,14 +1177,27 @@ await test('the same frame painted twice is the same picture, pixel for pixel', 
  *     same nine cases, held to the bounds it has always been held to: under 6%
  *     of the picture moved, no surface moved. This is the control, and it can
  *     fail -- it does fail with the fade left on.
- *  3. THE CENSUS ITSELF IS ALIVE, twice over: every case asks the census about
- *     its own frame with a 20x20 square of backdrop painted into the middle of
- *     it (400 pixels, and every one of them has bare backdrop all round it in a
- *     3x3 square), and it has to find both. It used to be the PICKER that was
- *     asked, on the theory that `pickAt()` answers -1 where nothing was painted
- *     -- and over six cameras, 0 of 14,352 samples of the frame answer -1 at all
- *     (`files/probe-sky.mjs`): the world covers the whole picture now, so that
- *     census could never have failed and guarded nothing.
+ *  3. THE CENSUS ITSELF IS ALIVE, three times over. Every case asks the census
+ *     about its own frame with a 20x20 square of backdrop painted into the
+ *     middle of it (400 pixels, and every one of them has bare backdrop all
+ *     round it in a 3x3 square), and it has to find both; the shape census has
+ *     to ask a few thousand pixels and to have asked every case that moved one
+ *     deeply (lesson 27); and the shape census is run once more on a camera of
+ *     its own with the view turned a quarter, where it MUST find differences --
+ *     a turned view shows a different thing, so a census that cannot see that
+ *     cannot be trusted to say nothing moved (lesson 19). It used to be the
+ *     PICKER that was asked what was under a pixel, on the theory that
+ *     `pickAt()` answers -1 where nothing was painted -- and over six cameras, 0
+ *     of 14,352 samples of the frame answer -1 at all (`files/probe-sky.mjs`):
+ *     the world covers the whole picture now, so that census could never have
+ *     failed and guarded nothing.
+ *  4. WHAT IS ON TOP OF THE PIXELS THAT MOVED, which as of v0.49.0 is the real
+ *     claim and the one the two bounds below are only a proxy for. `pickAt()`
+ *     answers with the SHAPE under a pixel, so asking it on both arms at a pixel
+ *     the clip moved deeply and getting the same answer means that pixel still
+ *     shows the same thing: the wall did not move and nothing was lost, the
+ *     difference is that a dissolving band no longer covers it. See the light
+ *     note below for why the bounds could not carry this alone any more.
  *
  * WHAT COUNTS AS A WINDOW, and why the counting had to get more careful. The
  * leftover bare backdrop is NOT all one-pixel hairlines, which is what this test
@@ -1184,20 +1235,49 @@ await test('the same frame painted twice is the same picture, pixel for pixel', 
  * corners -- 248 pixels in the view they kept pointing at, biggest notch 124 --
  * down to nothing.
  *
+ * WHY THE BOUNDS PAID OUT IN v0.49.0, and what replaced the lost margin. The
+ * light arrived, and the top metre of a wall is now a RAMP between the wall's
+ * own shade and the ground behind it rather than two flat shades, so every
+ * pixel in that band that changes its mind about which of the two it is changes
+ * it by much more than 8/255. The deep count went 3,737 (1.6%) to 9,155 (3.99%)
+ * on one camera, and the bound -- 3.5% -- started failing on a picture that
+ * shows exactly what it should. Two probes said which way to move rather than
+ * letting a bound be widened on a hunch (`files/probe-4.mjs`, `files/probe-5.mjs`):
+ * over all nine cameras, 81,057 pixels moved, 14,988 of them deeply, worst 84,
+ * and of the 10,411 deep pixels asked both ways **all 10,411 still show the same
+ * shape, 0 show a different one and 0 show nothing**. So the count was widened
+ * to where the mechanism says it should be -- and THE COUNT IS NO LONGER THE
+ * CLAIM. What is asserted, per case, is that not one deeply-moved pixel shows a
+ * different thing on top; the percentage is a smoke alarm under it (lesson 15:
+ * presence and confinement are different claims).
+ *
+ * WHERE THE EXTRA COMES FROM, exactly. `paintSide()` refuses to fade a face cut
+ * to no taller than `wallFadeM` (1 m): `fadeDepth` returns 0 and the face is
+ * painted WHOLE and opaque, where the other arm dissolves its top metre. So a
+ * band of pixels legitimately shows ground and rock behind in one arm and the
+ * wall's ghost in the other -- a SEE-THROUGH difference on ground that is still
+ * there, not a moved surface. Measured on the failing camera (seed 1, quarter
+ * 3): the clip's own arm paints 462 banded faces and **12 whole** (12,288 square
+ * pixels of opaque stub), where the unclipped arm paints 736 and none whole; and
+ * `altGrid` -- the whole-metre stop grid added while hunting this -- changes no
+ * pixel at all on any of the nine cameras, so it is not what the difference is.
+ *
  * Measured across all nine cases, settled worlds, buffer 624x368, both arms
  * A/B-ed inside one build. SHIPPED (clip off -> on): bare backdrop 65, 0, 0,
  * 394, 0, 80, 55, 118, 25 pixels, biggest patch 11, 0, 0, 19, 0, 13, 6, 12, 1 --
- * and NOT ONE pixel of it in a patch 3 pixels across; 304 to 17,722 pixels moved
- * (0.1% to 7.7% of the picture), at most 3,737 of them (1.6%) by more than
- * 8/255, worst single pixel 55/255. Wall faces painted 790->511, 674->322,
- * 336->336, 682->356, 406->381, 722->457, 714->443, 1542->1145, 412->200: never
- * more than the full picture paints, and at seed 3 exactly the same, because
- * that camera stands in open floor with no block in front of anything to cut
- * against. WITH EVERY FACE OPAQUE (the control): 0 to 8,062 pixels moved, up to
- * 1,687 deep, worst 17/255, and the clip still cutting wall faces in all nine
- * cases (790->485, 674->295, 336->301, 682->353, 406->357, 722->449, 714->441,
- * 1542->1114, 412->194 -- at seed 3, 35 faces, where the picture does not move
- * at all because what is taken away is exactly what the block in front covers). */
+ * and NOT ONE pixel of it in a patch 3 pixels across; 476 to 17,766 pixels moved
+ * (0.2% to 7.7% of the picture), at most 9,155 of them (3.99%) by more than
+ * 8/255, worst single pixel 84/255 -- and every one of those deep pixels, where
+ * it was asked, showing the same shape it showed before. Wall faces painted
+ * 790->511, 674->322, 336->336, 682->356, 406->381, 722->457, 714->443,
+ * 1542->1145, 412->200: never more than the full picture paints, and at seed 3
+ * exactly the same, because that camera stands in open floor with no block in
+ * front of anything to cut against. WITH EVERY FACE OPAQUE (the control):
+ * 45,368 pixels moved in all, 2,305 of them deeply, worst 23/255, and the clip
+ * still cutting wall faces in all nine cases (790->485, 674->295, 336->301,
+ * 682->353, 406->357, 722->449, 714->441, 1542->1114, 412->194 -- at seed 3, 35
+ * faces, where the picture does not move at all because what is taken away is
+ * exactly what the block in front covers). */
 await test('cutting the buried walls opens no hole and moves a hairline only', async () => {
   const cases = [{ seed: 1 }, { seed: 2 }, { seed: 3 }, { seed: 7 }, { seed: 777 },
                  { seed: 1, quarter: 1 }, { seed: 1, quarter: 3 },
@@ -1234,6 +1314,18 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
     const wasSides = t.rockSides();
     t.rockSides(0);
     const wasZoom = t.buffer().zoom;
+    /* AND THE WALL SMOOTHING IS PINNED OFF WITH THEM (v0.51.0), the third pin and
+       for the third time the same reason. Since v0.51.0 the light is carried
+       ACROSS a wall face, so a face's whole colour is decided by the squares at
+       the two ends of its run -- and taking a wall away changes which faces are
+       corrected at all and repaints faces that are still standing. Measured on
+       this test's own nine cameras: 0.2% to 7.7% of the picture moves with the
+       smoothing off, and 34.7% on seed 1 with it on, which is a number about the
+       smoothing and not about the cut. The subject here is the CUT, and every
+       bound below was taken on the picture as it stood before there was a
+       smoothing. The smoothing's own claim is its own test. */
+    const wasAcross = t.acrossLight();
+    t.acrossLight(false);
     /* The BUFFER, never the page: pickAt() answers in buffer pixels, so a census
        read off the scaled page would ask about the wrong squares at zoom 3. And
        read LIVE, never kept -- `t.zoom()` resizes the buffer, so a width taken
@@ -1334,10 +1426,20 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
     const census = function (offPx, onPx) {
       const w = Render.w, h = Render.h;
       const moved = [];
+      /* THE PIXELS THAT MOVED BY MORE THAN 8/255 ARE KEPT, not just counted.
+         `diff()` counts them too (its NOTICEABLE is 8), but a count cannot say
+         WHERE the difference is or WHAT changed; the list can be asked, and the
+         census below asks it. */
+      const deep = [];
       for (let y = 0, k = 0; y < h; y++) {
         for (let x = 0; x < w; x++, k += 4) {
-          if (offPx[k] !== onPx[k] || offPx[k + 1] !== onPx[k + 1]
-            || offPx[k + 2] !== onPx[k + 2]) moved.push(y * w + x);
+          const dr = Math.abs(offPx[k] - onPx[k]);
+          const dg = Math.abs(offPx[k + 1] - onPx[k + 1]);
+          const db = Math.abs(offPx[k + 2] - onPx[k + 2]);
+          const d = Math.max(dr, dg, db);
+          if (!d) continue;
+          moved.push(y * w + x);
+          if (d > 8) deep.push(y * w + x);
         }
       }
       const back = BACK;
@@ -1357,11 +1459,85 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
         }
       }
       const ctl = hole(punched, w, h, back);
-      return { moved: moved.length, holesOff: offHoles.count, holesOn: onHoles.count,
+      return { moved: moved.length, deep: deep, deepN: deep.length,
+               holesOff: offHoles.count, holesOn: onHoles.count,
                bigOff: offHoles.biggest, bigOn: onHoles.biggest,
                thickOff: offHoles.thick, thickOn: onHoles.thick,
                worstThickOn: onHoles.worstThick,
                control: ctl.count, controlThick: ctl.thick, back: back.join(',') };
+    };
+    /* DOES THE PICTURE STILL SHOW THE SAME THING, where the clip moved a pixel
+       by more than 8/255?
+     *
+     * This is the claim the bounds below are standing in for, and until v0.49.0
+     * they were standing in for it alone. "Few pixels moved deeply" is a proxy
+     * for "no surface moved", and the proxy broke the moment the light arrived:
+     * moving a wall's top metre moves a LOT of pixels by a lot when the ground
+     * behind it and the ghost of the wall differ by the whole light ramp, so the
+     * bound started failing on a picture that shows exactly what it should. A
+     * count cannot tell a moved surface from a band that now lets ground show
+     * through, and the pointer can: `pickAt()` answers with WHAT IS ON TOP of a
+     * pixel, so asking it on both arms at the same pixel and getting the same
+     * answer is that pixel still showing the same thing.
+     *
+     * THE LIST IS SAMPLED, NOT TRUNCATED, when it is long. At the failing case
+     * there are 9,155 deep pixels and the cap is 8,000, so every second one is
+     * asked -- 4,578 of them, spread over the whole set rather than the first
+     * 8,000 of it. `stride` and `asked` go back to the assertions so the test can
+     * say how much of the list it looked at and fail if a case asks nothing.
+     *
+     * `turn` is for the census's OWN control: the same list asked again with the
+     * view turned a quarter, which is a picture that really does show something
+     * else. The control has to find a difference, or the census is a ruler that
+     * cannot fail (lesson 19). The camera is turned back afterwards. */
+    const SHAPE_CAP = 8000;
+    const sameShape = function (deepList, turn) {
+      const w = Render.w, h = Render.h;
+      const stride = deepList.length > SHAPE_CAP
+        ? Math.ceil(deepList.length / SHAPE_CAP) : 1;
+      const list = [];
+      for (let k = 0; k < deepList.length; k += stride) list.push(deepList[k]);
+      const r = new Int32Array(w * h).fill(-2);
+      /* `alphas()` is rebuilt for the batch on every call, and this asks
+         thousands of times without the batch changing, so it is memoised on the
+         batch it was given. Nothing else here is cached: the picture, the batch
+         and the answers are all the renderer's own. */
+      const alphas = Render.alphas;
+      let memoB = null, memoP = null;
+      Render.alphas = function (s, b) {
+        if (b === memoB) return memoP;
+        memoB = b; memoP = alphas.call(this, s, b);
+        return memoP;
+      };
+      const walk = function () {
+        for (let k = 0; k < list.length; k++) {
+          const p = list[k];
+          r[p] = Render.pickAt(Game.state, p % w, (p / w) | 0);
+        }
+      };
+      /* Arm 1 is the look that ships -- the same arm the bound above is about. */
+      t.clipWalls(true); t.repaint(); walk();
+      const on = Int32Array.from(r);
+      t.clipWalls(false); t.repaint(); walk();
+      /* The control asks the SAME look twice and only turns the view between,
+         so the turn is the only thing that differs. */
+      if (turn) {
+        t.rotate(turn); t.clipWalls(true); t.repaint(); walk();
+        t.rotate(-turn);
+      }
+      Render.alphas = alphas;
+      let same = 0, other = 0;
+      const first = [];
+      for (let k = 0; k < list.length; k++) {
+        const p = list[k];
+        if (on[p] === r[p]) same++;
+        else {
+          other++;
+          if (first.length < 4) first.push((p % w) + ',' + ((p / w) | 0));
+        }
+      }
+      return { deep: deepList.length, asked: list.length, stride: stride,
+               same: same, other: other, first: first };
     };
     /* How long the world is given before it is looked at. `advance` costs about
        a tenth of a second per camera, so this is affordable; see its comment. */
@@ -1389,6 +1565,9 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
       const on = t.consumed();
       const onPx = grab();
       const cens = census(offPx, onPx);
+      /* And the same picture asked rather than counted: what is on top of each
+         pixel that moved deeply, on both arms. */
+      const shape = sameShape(cens.deep, 0);
       /* ARM 2: the promise the clip was made under -- every face opaque. The
          WORK is read out of this arm as well as the picture, because with the
          fade off the two pictures are allowed to come out identical: where the
@@ -1408,6 +1587,7 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
       t.wallFade(wasFade);
       out.push({ c: c, pixels: d.pixels, differ: d.differ, worst: d.worst,
                  deep: d.deep, x: d.x, y: d.y, moved: cens.moved,
+                 shape: shape,
                  holesOff: cens.holesOff, holesOn: cens.holesOn,
                  bigOff: cens.bigOff, bigOn: cens.bigOn,
                  thickOff: cens.thickOff, thickOn: cens.thickOn,
@@ -1420,16 +1600,36 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
                          worst: f.worst, x: f.x, y: f.y } });
     }
     t.zoom(wasZoom);
+    /* THE CENSUS'S OWN CONTROL, on a camera of its own: the same list of deep
+       pixels, asked on the arm that ships and then again with the view turned a
+       quarter. The turned view is a picture that shows something else, so the
+       census MUST find differences there -- if it does not, it is a ruler that
+       cannot fail and the `other === 0` assertion above proves nothing. The turn
+       is undone again before the arm is handed back. */
+    t.seed(1);
+    t.advance(GROWN);
+    t.clipWalls(false); t.repaint();
+    const ctlOff = grab();
+    t.clipWalls(true); t.repaint();
+    const ctlCens = census(ctlOff, grab());
+    const ctl = sameShape(ctlCens.deep, 1);
+    t.zoom(wasZoom);
     t.clipWalls(true);
     t.wallSkin(wasSkin);
     t.rockSides(wasSides);
-    return { cases: out, wasSkin: wasSkin, backSkin: t.wallSkin(),
-             wasSides: wasSides, backSides: t.rockSides() };
+    t.acrossLight(wasAcross);
+    return { cases: out, shapeCtl: ctl, wasSkin: wasSkin, backSkin: t.wallSkin(),
+             wasSides: wasSides, backSides: t.rockSides(),
+             wasAcross: wasAcross, backAcross: t.acrossLight() };
   }, cases);
   assert(r.backSkin === r.wasSkin,
     `the rock skin came back as ${r.backSkin} where it started at ${r.wasSkin}`
     + ' -- this test pins it off, and every test after it wants the look that'
     + ' shipped');
+  assert(r.backAcross === r.wasAcross,
+    `the wall smoothing came back as ${r.backAcross} where it started at`
+    + ` ${r.wasAcross} -- this test pins it off, and every test after it wants`
+    + ' the look that ships');
   assert(r.backSides === r.wasSides && r.wasSides === 2,
     `the rock-side rule came back as ${r.backSides} where it started at`
     + ` ${r.wasSides} -- this test pins it to the old look, and every test after`
@@ -1459,6 +1659,13 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
     assert(q.moved === q.differ,
       `${at}: the kept picture moved ${q.differ} pixels and the census found`
       + ` ${q.moved}, so one of the two is reading the wrong canvas`);
+    /* And the list the shape census walks is the same set the ruler above
+       counted -- if the two disagree, the census is answering about pixels that
+       are not the ones that moved. */
+    assert(q.shape.deep === q.deep,
+      `${at}: the ruler found ${q.deep} pixels moved by more than 8/255 and the`
+      + ` census kept a list of ${q.shape.deep}, so the shape census is asked`
+      + ' about pixels that are not the ones that moved');
     /* THE HOLE, which is what the whole version was about: bare backdrop with the
        world all round it. What the cut may not do is open a WINDOW, and a window
        is a patch you could look through -- which takes at least three bare
@@ -1489,16 +1696,29 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
     /* Wide on purpose: with the wall's top metre dissolving, the wall behind it
        shows through, so hiding one moves a shade on a twentieth of the picture.
        These catch gross breakage; the census above is the real claim. Measured
-       on settled worlds: 0.1% to 7.7% moved, up to 1.6% of the picture by more
-       than 8/255, worst single pixel 55/255. */
+       on settled worlds: 0.2% to 7.7% moved, up to 3.99% of the picture by more
+       than 8/255 (the ramp the light puts across the fade band widened this --
+       see the note above), worst single pixel 84/255. */
     assert(q.differ < q.pixels * 0.12,
       `${at}: ${q.differ} of ${q.pixels} pixels moved (${(100 * q.differ / q.pixels).toFixed(1)}%)`);
-    assert(q.deep < q.pixels * 0.035,
+    assert(q.deep < q.pixels * 0.06,
       `${at}: ${q.deep} pixels moved by more than 8/255, which is a surface and not a soft edge`
       + ` (first at ${q.x},${q.y})`);
     assert(q.worst <= 96,
       `${at}: one pixel moved by ${q.worst}/255, which is a surface and not a soft edge`
       + ` (at ${q.x},${q.y})`);
+    /* THE REAL CLAIM, and the one the two numbers above are only a proxy for:
+       every pixel the clip moved deeply still shows the SAME THING on top, on
+       both arms. A wall that had moved would answer with a different shape --
+       or with nothing where there had been something. The count is the census's
+       own, and `stride` says how much of the list it asked: where a case has
+       fewer deep pixels than the cap, all of them. */
+    assert(q.shape.other === 0,
+      `${at}: ${q.shape.other} of the ${q.shape.asked} pixels the clip moved by`
+      + ` more than 8/255 (of ${q.shape.deep}, 1 in ${q.shape.stride}) now show a`
+      + ` DIFFERENT THING on top where they showed something (first at`
+      + ` ${q.shape.first.join(' ')}) -- so the clip moved a surface rather than`
+      + ' letting the ground behind a dissolving band show through');
     /* The control: the same nine cases with every face opaque, held to the
        bounds the clip has always been held to. It fails if the fade stops
        being what makes the difference. The guard is the WORK and not the
@@ -1566,6 +1786,30 @@ await test('cutting the buried walls opens no hole and moves a hairline only', a
     `with the fade off the clip changed not one pixel in any of the`
     + ` ${r.cases.length} cases, so the control arm is not connected to the`
     + ' picture and its bounds prove nothing');
+
+  /* THE CENSUS IS LIVE, and the numbers say how much of it happened. Every case
+     whose list is empty would pass `other === 0` without asking anything, so the
+     asks are counted rather than assumed (lesson 27). Measured when the light
+     arrived: 10,411 of the 14,988 deeply-moved pixels asked, and every case with
+     a deep pixel among them. */
+  const askedN = r.cases.reduce((n, q) => n + q.shape.asked, 0);
+  const deepN = r.cases.reduce((n, q) => n + q.shape.deep, 0);
+  const withDeep = r.cases.filter((q) => q.shape.deep > 0);
+  const skipped = withDeep.filter((q) => q.shape.asked === 0);
+  assert(askedN > 6000 && skipped.length === 0,
+    `the shape census asked ${askedN} pixels out of ${deepN} that the clip moved by`
+    + ` more than 8/255, and ${skipped.length} of the ${withDeep.length} cases with`
+    + ' deep pixels asked none -- so it either did nothing or skipped a case');
+
+  /* AND IT CAN FAIL. The control: one camera's list asked again with the view
+     turned a quarter. A quarter turn is a different picture, so a working census
+     MUST come back with differences; one that cannot is a ruler that cannot fail,
+     and `other === 0` on the cases above would then be worth nothing. */
+  assert(r.shapeCtl.asked > 200 && r.shapeCtl.other > 20,
+    `the shape census found only ${r.shapeCtl.other} difference${r.shapeCtl.other === 1 ? '' : 's'}`
+    + ` in the ${r.shapeCtl.asked} pixels it asked between two quarter turns of one`
+    + ' camera -- a turned view shows a different thing, so a census that cannot'
+    + ' see that cannot be trusted to say nothing moved');
 });
 
 /* THE ROCK ALONG A WALL'S FAR EDGES IS PAINTED ONLY WHERE THE CUT OPENS A GAP.
@@ -2335,6 +2579,19 @@ await test('snapping a foot to a whole metre only ever paints more wall (v0.46.0
        is asked of the faces the feet are on. */
     const wasSkin = t.wallSkin();
     t.wallSkin(false);
+    /* AND THE WALL SMOOTHING OFF (v0.51.0), because it is the one thing in this
+       test's subject that now MOVES. Since v0.51.0 a face's colour is decided
+       from the squares at the two ends of its run and from the altitude its fill
+       is normalised at (`acrossFor`'s ref, which is the face's own FOOT), so
+       snapping a foot to a whole metre moves the level the entire face is
+       repainted at: this test's own pair of pictures goes from 1,347 of 9,185,280
+       pixels to 22,938 of 229,632 on one raised camera. That is a number about
+       the smoothing. The claim here -- a snapped foot only ever paints MORE wall,
+       never one fewer -- is about which faces exist and how tall they are, and
+       every bound below was taken on the picture as it stood before there was a
+       smoothing. */
+    const wasAcross = t.acrossLight();
+    t.acrossLight(false);
     for (const c of CASES) {
       t.seed(c.seed);
       t.advance(2000);
@@ -2363,9 +2620,11 @@ await test('snapping a foot to a whole metre only ever paints more wall (v0.46.0
     t.voxelBlocks(wasFlag);
     t.rockSides(wasSides);
     t.wallSkin(wasSkin);
+    t.acrossLight(wasAcross);
     return { out: out, wasFlag: wasFlag, backFlag: t.voxelBlocks(),
              wasSides: wasSides, backSides: t.rockSides(),
-             wasSkin: wasSkin, backSkin: t.wallSkin() };
+             wasSkin: wasSkin, backSkin: t.wallSkin(),
+             wasAcross: wasAcross, backAcross: t.acrossLight() };
   }, VOXEL_CASES);
   const tot = { walls: 0, px: 0, faded: 0, moved: 0, deep: 0, worst: 0,
                 identical: 0, movedViews: 0, oddPx: 0, odd: 0, pixels: 0,
@@ -2415,6 +2674,10 @@ await test('snapping a foot to a whole metre only ever paints more wall (v0.46.0
     `the rock skin came back as ${r.backSkin} where it started at ${r.wasSkin}`
     + ' -- this test pins it off, and every test after it wants the look that'
     + ' ships');
+  assert(r.backAcross === r.wasAcross && r.wasAcross === true,
+    `the wall smoothing came back as ${r.backAcross} where it started at`
+    + ` ${r.wasAcross} -- this test pins it off, and every test after it wants`
+    + ' the look that ships');
   assert(r.out.length === 40, `${r.out.length} views were looked at`);
   assert(tot.movedViews >= 4 && tot.moved > 0,
     `the picture did not move at all in ${r.out.length - tot.movedViews} of the`
@@ -3796,7 +4059,7 @@ await test('gear does all three things it is supposed to (hybrid)', async () => 
     `a spade took building from ${r.bare.build.ability} to ${r.tooled.ability}`);
 
   assert(r.booted.bonus > 0 && r.booted.ability > r.bare.climb.ability,
-    `boots took clambering from ${r.bare.climb.ability} to ${r.booted.ability}`);
+    `boots took focusing from ${r.bare.climb.ability} to ${r.booted.ability}`);
 
   const find = (list, id) => list.find((a) => a.id === id);
   assert(find(r.packed, 'might').value > find(r.bare.attrs, 'might').value,
@@ -4135,7 +4398,7 @@ await test('rolls really happen in a real match, not only on the bench', async (
   assert(r.actors.every((a) => Object.keys(a.skills).length > 0),
     'some crawler went 600 ticks without practising anything at all');
   assert(r.actors.some((a) => a.skills.clambering > 0),
-    'all that walking about taught nobody any Clambering');
+    'all that walking about taught nobody any Focusing');
 });
 
 await test('crawlers only ever step where the ground actually connects', async () => {
@@ -5178,16 +5441,2061 @@ await test('what a crawler carries is what lights their way', async () => {
 
     window.__test.strip(i);
     window.__test.state.lightDirty = true; computeLight(window.__test.state);
-    return { bare, candle, candleReach, torchReach,
+
+    /* WHAT THEIR OWN SQUARE ACTUALLY GETS, worked out from the sheet rather than
+       chosen. Since v0.49.0 a carried light hangs at its real height
+       (`light.lamp_height`), so the square a crawler stands on sits that far
+       BELOW the flame and is dimmer for it -- which is the whole point of the
+       change, and it is why this bound is not 1.0. Light is also stored in steps
+       (`light.steps`), so half a step of slack is allowed. */
+    const c = window.__test.cfg;
+    const own = 1 - Math.pow(c.lampHeight / candleReach.r, c.falloff);
+    return { bare, candle, candleReach, torchReach, own, half: 0.5 / c.lightSteps,
              gear: window.__test.data.gear };
   });
   assert(r.bare < 0.2, `a crawler with nothing stood in ${r.bare} light`);
-  assert(r.candle > 0.9, `a lit candle gave their own square only ${r.candle}`);
+  assert(r.candle > 0.75, `a lit candle gave their own square only ${r.candle}`);
+  assert(Math.abs(r.candle - r.own) <= r.half + 1e-6,
+    `a lit candle gave their own square ${r.candle}, but the sheet's own falloff`
+    + ` -- a candle reaching ${r.candleReach.r}m, hung ${r.candleReach.z} up --`
+    + ` says ${r.own}, give or take half a step (${r.half})`);
   assert(r.torchReach.r > r.candleReach.r,
     `a torch reaches ${r.torchReach.r}m and a candle ${r.candleReach.r}m`);
   assert(r.gear.torch.light > 0 && r.gear.candle.light > 0 && r.gear.lantern.light > 0,
     'one of the three lights throws none');
   assert(r.gear.jerkin.light === 0, 'a leather jerkin is giving off light');
+});
+
+/* ---- v0.49.0: light with a height to it, and the shade it leaves -------- */
+
+await test('a light hangs in the air, at the height the sheet gives it', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test;
+    t.seed(1);
+    for (let i = 0; i < 45; i++) t.frame(60);
+    const s = Game.state;
+    /* The world's OWN list of sources. Anything built by a second call to
+       lightSourcesIn() is a different set of objects, so the square's
+       lightSrc -- an index into this list -- is the only thing they share. */
+    const ss = s.sources || [];
+
+    /* Every source, and how far above its OWN ground it hangs. Read off the
+       world's own list rather than argued about, so a light that was silently
+       pinned to the floor would show up here. */
+    let lamp = 0, fire = 0;
+    const odd = [];
+    for (const q of ss) {
+      const g = surfaceHeight(s.world.at(q.x, q.y));
+      const up = q.z - g;
+      const should = q.site !== undefined ? CFG.fireHeight : CFG.lampHeight;
+      if (Math.abs(up - should) < 1e-9) { if (q.site !== undefined) fire++; else lamp++; }
+      else odd.push({ x: q.x, y: q.y, up: up, r: q.r });
+    }
+
+    /* The square a FIRE is standing on: distance zero from it, so the light
+       there is the fire's own falloff with nothing in the way. A crawler can
+       legitimately own a square they are standing on instead, so the square is
+       found by asking which lit square the fire below it owns. */
+    let own = null;
+    for (const c of s.world.cells) {
+      if (!(c.light > 0) || c.lightD !== 0) continue;
+      const q = ss[c.lightSrc];
+      if (!q || q.site === undefined) continue;
+      if (!own || c.light > own.c.light) own = { c: c, q: q };
+    }
+    const fc = own ? own.c : null, fq = own ? own.q : null;
+    const foot = fc ? surfaceHeight(fc) : 0;
+    /* Climbing away from the flame, starting AT it, so the walk is monotone
+       whatever the fire is standing next to. */
+    const steps = [0, 0.25, 0.5, 1, 2].map((z) => lightValueAt(s, fc, fq.z + z));
+    return {
+      n: ss.length, lamp: lamp, fire: fire, odd: odd,
+      lh: CFG.lampHeight, fh: CFG.fireHeight, hasOwn: !!own,
+      r: fq ? fq.r : 0, up: fq ? fq.z - foot : 0,
+      own: fq ? 1 - Math.pow((fq.z - foot) / fq.r, CFG.falloff) : -1,
+      floor: fq ? lightValueAt(s, fc, foot) : -1,
+      flame: fq ? lightValueAt(s, fc, fq.z) : -1,
+      steps: steps
+    };
+  });
+  assert(r.odd.length === 0,
+    `${r.odd.length} lights hang at a height the sheet knows nothing about: `
+    + JSON.stringify(r.odd));
+  assert(r.lamp >= 1 && r.fire >= 1,
+    `${r.lamp} carried lights and ${r.fire} fires hang in the air out of ${r.n} `
+    + `sources, but both kinds are supposed to`);
+  assert(r.lh > r.fh,
+    `the sheet hangs a lamp at ${r.lh}m and a fire at ${r.fh}m`);
+  assert(r.hasOwn, 'no fire in the camp owns the square it is standing on');
+  assert(Math.abs(r.up - r.fh) < 1e-9,
+    `the fire's flame sits ${r.up}m over its own ground; the sheet says ${r.fh}m`);
+  /* A light at a height means the square it stands over is NOT the brightest
+     thing it touches -- the brightest is the flame's own height. */
+  assert(Math.abs(r.floor - r.own) < 1e-9,
+    `the fire's own square reads ${r.floor}; its height and reach say ${r.own}`);
+  assert(r.flame === 1, `at the flame's own height the light reads ${r.flame}, not 1`);
+  assert(r.floor < r.flame,
+    `a square UNDER the flame reads ${r.floor} and the flame itself ${r.flame}`);
+  for (let i = 1; i < r.steps.length; i++) {
+    assert(r.steps[i] < r.steps[i - 1],
+      `climbing away from the flame the light went ${r.steps[i - 1]} then `
+      + `${r.steps[i]}: ${JSON.stringify(r.steps)}`);
+  }
+});
+
+await test('a light lights the foot of a wall and leaves the top of it dark', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test;
+
+    /* Seven seeds, because the camp has to be finished before there is a fire
+       at all, and because one seed's answer is one seed's answer (lesson 22).
+       Every rock face any source can reach: half a metre up it against three
+       metres up it. A light pinned to the floor reads the same at both. */
+    const drops = [], close = [];
+    for (let sd = 1; sd <= 7; sd++) {
+      t.seed(sd);
+      for (let i = 0; i < 45; i++) t.frame(60);
+      const s = Game.state;                 /* read AFTER seeding, lesson 27 */
+      for (const c of s.world.cells) {
+        if (!(c.light > 0)) continue;
+        if (TILE(c.tile).tags.indexOf('blocks-sight') < 0) continue;
+        const q = s.sources[c.lightSrc];
+        if (!q) continue;
+        /* Measured from the FACE's own ground, not the fire's: the rock beside
+           a fire three metres above it starts its measurement three metres up.
+           And the source is the one that WON this square -- the rock round the
+           camp is lit by the crawlers' lamps, not by the flame. */
+        const h = surfaceHeight(c);
+        const rec = { sd: sd, x: c.x, y: c.y, walked: c.lightD,
+                      far: Math.hypot(q.x - c.x, q.y - c.y),
+                      d: lightValueAt(s, c, h + 0.5) - lightValueAt(s, c, h + 3) };
+        drops.push(rec);
+        if (c.lightD >= 1 && c.lightD <= 3 && rec.far <= 3.5) close.push(rec);
+      }
+    }
+    drops.sort((a, b) => a.d - b.d);
+    close.sort((a, b) => a.d - b.d);
+
+    /* The negative control: with the height taken out of the falloff a sample
+       half a metre up a face and a sample three metres up it are the same
+       distance from the light, so every face must read the same at both. The
+       same faces of the same world -- nothing is re-flooded -- so the only
+       thing that changed is the height. */
+    const s7 = Game.state;
+    const faces = s7.world.cells.filter((c) =>
+      c.light > 0 && TILE(c.tile).tags.indexOf('blocks-sight') >= 0 &&
+      s7.sources[c.lightSrc]);
+    const was = CFG.heightFalloff;
+    let ctrl = 0;
+    try {
+      CFG.heightFalloff = 0;
+      for (const c of faces) {
+        const h = surfaceHeight(c);
+        if (lightValueAt(s7, c, h + 0.5) - lightValueAt(s7, c, h + 3) > 1e-9) ctrl++;
+      }
+    } finally {
+      CFG.heightFalloff = was;
+    }
+
+    /* And those faces reaching the PICTURE as a fade rather than one flat fill.
+       Each face's own foot is handed to faceBase(), which is what the renderer
+       works out for it, so this census asks the question the wall asks. */
+    const quad = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 96 }, { x: 0, y: 96 }];
+    let rock = 0, faded = 0, unlitFlat = 0;
+    for (const c of s7.world.cells) {
+      if (TILE(c.tile).tags.indexOf('blocks-sight') < 0) continue;
+      rock++;
+      const got = Render.faceBase(s7, c, TILE(c.tile).side, CFG.shadeLeft, quad, 0,
+                                  surfaceHeight(c));
+      if (got !== null && typeof got === 'object') faded++;
+      else if (!(c.light > 0)) unlitFlat++;
+    }
+
+    const mid = (a) => (a.length ? a[Math.floor(a.length / 2)].d : 0);
+    return {
+      n: drops.length, median: mid(drops),
+      best: drops.length ? drops[drops.length - 1] : null,
+      thinnest: drops.length ? drops[0].d : 0,
+      over05: drops.filter((q) => q.d > 0.05).length,
+      zero: drops.filter((q) => q.d <= 1e-9).length,
+      closeN: close.length, closeMedian: mid(close),
+      closeZero: close.filter((q) => q.d <= 1e-9).length,
+      closeOver05: close.filter((q) => q.d > 0.05).length,
+      ctrl: ctrl, ctrlN: faces.length,
+      rock: rock, faded: faded, unlitFlat: unlitFlat,
+      rise: CFG.rise, fh: CFG.fireHeight };
+  });
+  const cm = (c) => (c ? `(${c.x},${c.y}) seed ${c.sd}` : 'nowhere');
+  assert(r.n >= 300,
+    `only ${r.n} rock faces across seven seeds are lit by any source`);
+  /* A light pinned to the floor -- the way it was before this version -- reads
+     the same at 0.5m up a face and at 3m up it, so every one of these drops
+     would be exactly 0. Measured over seeds 1-7: 463 faces, the median face
+     falling 0.165 over 2.5m of height and the steepest 0.465. */
+  assert(r.median > 0.08,
+    `halfway down ${r.n} lit rock faces the light falls only ${r.median} over `
+    + `2.5m of height (steepest ${r.best && r.best.d} at ${cm(r.best)}, `
+    + `thinnest ${r.thinnest}, and ${r.zero} faces showing no drop at all)`);
+  assert(r.best && r.best.d > 0.2,
+    `the steepest of ${r.n} lit rock faces falls only ${r.best && r.best.d} over `
+    + `2.5m of height, at ${cm(r.best)}`);
+  assert(r.over05 * 10 >= r.n * 7,
+    `${r.n - r.over05} of ${r.n} lit rock faces fall less than 0.05 over 2.5m of `
+    + `height, so most of them are not showing the height at all`);
+  assert(r.zero * 20 <= r.n * 3,
+    `${r.zero} of ${r.n} lit rock faces show no drop at all over 2.5m of height`);
+  /* The faces the light is fully on, rather than the dim rim of its pool. */
+  assert(r.closeN >= 20,
+    `only ${r.closeN} lit rock faces are within 3.5m of the source that lit them`);
+  assert(r.closeMedian > 0.15 && r.closeOver05 === r.closeN && r.closeZero === 0,
+    `of ${r.closeN} rock faces within 3.5m of their own light only `
+    + `${r.closeOver05} fall more than 0.05 over 2.5m of height (median `
+    + `${r.closeMedian}, ${r.closeZero} showing no drop)`);
+  /* The knob that turns the height off turns every one of these drops off. */
+  assert(r.ctrl === 0,
+    `${r.ctrl} of ${r.ctrlN} rock faces still fall off with height with `
+    + `height_falloff set to 0, so the drop is not coming from the height`);
+  assert(r.faded >= 1,
+    `no rock face in the world reaches the picture as a fade (${r.rock} faces)`);
+  assert(r.rock >= r.faded * 4,
+    `${r.faded} of ${r.rock} rock faces are faded; the fade is meant to be on `
+    + `the faces a light can reach, not on the rock`);
+  assert(r.unlitFlat >= 1,
+    'every rock face in the world is faded, so none of them is dark');
+});
+
+/* Rule 8 says anything visible can be hovered and says what it is, and the one
+   fact every kind of thing in the box can be asked is how lit it is where it
+   stands. The world has kept that number on the square since v0.49.0 --
+   `lightAt` is the game's own answer, and the picture and the light map are both
+   drawn from it -- but until v0.50.0 nothing told the player.
+
+   Both halves of the split the inspector is built on are checked: that the
+   DESCRIPTION carries the world's own answer for that square, and that the words
+   reached the screen. The description is read for all three kinds of thing --
+   ground, a crawler, and the camp's own structures -- because one number is only
+   useful if it means the same thing everywhere it is shown. The screen is read
+   through the harness's own door and never the real mouse, so nothing here can
+   be about where a previous test left the pointer (lesson 28), and every screen
+   case names the square it landed in and refuses the ones something was standing
+   over.
+
+   The floors are sampled across the WHOLE piece rather than around the fire, so
+   a box that always said "100%" -- the value a description with no light in it
+   would have to fake -- shows up as one level and fails. */
+await test('the box says how lit it is where the thing stands', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test;
+    const pct = (cell) => Math.round(lightAt(Game.state, cell) * 100) + '%';
+    const wrong = [];
+    const levels = {};
+    let floors = 0, actors = 0, sites = 0, dark = 0, fire = 0;
+
+    for (const sd of [1, 5, 9]) {
+      t.seed(sd);
+      for (let i = 0; i < 45; i++) t.frame(60);   /* the camp has to be built */
+      const s = Game.state;                       /* read AFTER seeding */
+
+      for (let k = 0; k < s.world.cells.length; k += 13) {
+        const c = s.world.cells[k];
+        if (!c) continue;
+        const d = t.describe(k);
+        if (!d || d.kind !== 'ground') continue;
+        const want = pct(c);
+        floors++;
+        if (d.light !== want) {
+          wrong.push({ sd: sd, kind: 'ground', at: d.at, said: d.light, want: want });
+        }
+        levels[d.light] = 1;
+        if (d.light === '0%') dark++;
+      }
+
+      /* A crawler: the light of the square they are standing in, read back
+         through the pick table rather than through the actor. */
+      for (let i = 0; i < s.actors.length; i++) {
+        const a = s.actors[i];
+        const d = t.describe(Render.actorBase(s) + i);
+        const cell = s.world.at(a.x, a.y);
+        if (!d || d.kind !== 'crawler' || !cell) continue;
+        const want = pct(cell);
+        actors++;
+        if (d.light !== want) {
+          wrong.push({ sd: sd, kind: 'crawler', at: a.x + ', ' + a.y, said: d.light, want: want });
+        }
+        levels[d.light] = 1;
+        if (d.light === '0%') dark++;
+      }
+
+      /* And the camp's own buildings, the fire first among them: the square a
+         fire is burning on has to read full, or the number is not the light. */
+      for (let i = 0; i < s.camp.sites.length; i++) {
+        const site = s.camp.sites[i];
+        const d = t.describe(Render.siteBase(s) + i);
+        const cell = s.world.at(site.x, site.y);
+        if (!d || d.kind !== 'site' || !cell) continue;
+        const want = pct(cell);
+        sites++;
+        if (d.light !== want) {
+          wrong.push({ sd: sd, kind: 'site', at: d.at, said: d.light, want: want });
+        }
+        levels[d.light] = 1;
+        if (site.built && STRUCT(site.structure).light > 0 && d.light === '100%') fire++;
+      }
+    }
+
+    /* ---- and the same number reaches the picture's two surfaces ---------- */
+    t.seed(7);
+    for (let i = 0; i < 45; i++) t.frame(60);
+    let s = Game.state;
+    const shown = [], levelsShown = {}, seen = {};
+    let first = -1, tried = 0;
+    /* Ask the picture the way a player does: put the pointer on a pixel and read
+       the words. A grid of pixels, not a list of squares -- the match holds many
+       pieces and only what is on the picture can be pointed at, so projecting a
+       square says nothing about whether a pointer could reach it. */
+    const bufW = Render.bctx.canvas.width, bufH = Render.bctx.canvas.height;
+    for (let by = 8; by < bufH && shown.length < 12; by += 16) {
+      for (let bx = 8; bx < bufW && shown.length < 12; bx += 16) {
+        tried++;
+        const hv = t.point(bx, by);
+        s = Game.state;                      /* the paint can lay ground */
+        if (hv < 0 || hv >= s.world.cells.length) continue;  /* not a square */
+        if (seen[hv]) continue;              /* the same square, another pixel */
+        const d = t.describe(hv);
+        const tip = t.tooltipOnScreen();
+        if (!d || d.kind !== 'ground' || !tip) continue;
+        seen[hv] = 1;
+        shown.push({ at: bx + ',' + by, said: d.light,
+                     ok: tip.text.indexOf(N('ui.label_light') + ' ' + d.light) >= 0,
+                     text: tip.text });
+        levelsShown[d.light] = 1;
+        if (first < 0) first = hv;
+      }
+    }
+
+    /* A crawler through the pointer, and the pinned panel over a square. */
+    const found = t.pointAtAnyActor();
+    const crawled = t.tooltipOnScreen();
+    const dc = found.found ? t.describe(found.pick) : null;
+
+    let panel = null, panelSaid = null;
+    if (first >= 0) {
+      t.select(first);
+      panel = t.panelOnScreen();
+      panelSaid = t.describe(first).light;
+    }
+    return {
+      word: N('ui.label_light'),
+      floors: floors, actors: actors, sites: sites, wrong: wrong,
+      levels: Object.keys(levels).length, dark: dark, fire: fire,
+      shown: shown, shownLevels: Object.keys(levelsShown).length, tried: tried,
+      crawled: found.found ? { said: dc.light, text: crawled ? crawled.text : null } : null,
+      panel: panel ? { said: panelSaid, text: panel.text } : null
+    };
+  });
+  console.log('  ... the box carries the light on ' + (r.floors + r.actors + r.sites)
+    + ' things (' + r.floors + ' squares, ' + r.actors + ' crawlers, ' + r.sites
+    + ' camp sites) over 3 seeds, ' + r.levels + ' different levels, '
+    + r.dark + ' of them dark and ' + r.fire + ' at full light');
+  console.log('  ... ' + r.shown.length + ' squares pointed at on screen out of '
+    + r.tried + ' pixels tried, ' + r.shownLevels
+    + ' different levels, and the words agree with lightAt');
+
+  if (r.wrong.length) {
+    throw new Error(`${r.wrong.length} of ${r.floors + r.actors + r.sites} descriptions `
+      + `are not the light the world keeps on that square, first: `
+      + JSON.stringify(r.wrong.slice(0, 4)));
+  }
+  assert(r.floors >= 100,
+    `only ${r.floors} squares of the world were described at all`);
+  assert(r.actors >= 3, `only ${r.actors} crawlers were described`);
+  assert(r.sites >= 3, `only ${r.sites} camp sites were described`);
+  assert(r.levels >= 3,
+    `the whole world only ever showed ${r.levels} different light levels, so the `
+    + `number is not tracking the light: ${JSON.stringify(r.levelsSeen || [])}`);
+  assert(r.dark >= 1,
+    'no square in the world read as unlit, so a dark corner says it is bright');
+  assert(r.fire >= 1,
+    `${r.fire} burning fires read anything other than full light on their own square`);
+
+  assert(r.shown.length >= 3,
+    `only ${r.shown.length} of the squares pointed at (of ${r.tried} pixels tried) `
+    + `were reached by the pointer`);
+  for (const c of r.shown) {
+    assert(c.ok, `the tooltip says "${c.text}" but the square's light is ${c.said}`);
+  }
+  assert(r.shownLevels >= 2,
+    `every square the pointer reached read ${r.shown[0] && r.shown[0].said}, so the `
+    + `tooltip is showing one number everywhere`);
+  assert(r.crawled, 'the pointer could not reach a crawler to read their light');
+  assert(r.crawled.text.indexOf(r.word + ' ' + r.crawled.said) >= 0,
+    `hovering a crawler, the tooltip says "${r.crawled.text}" and their square's `
+    + `light is ${r.crawled.said}`);
+  assert(r.panel, 'nothing was pinned, so the panel never showed a light');
+  assert(r.panel.text.indexOf(r.word) >= 0 && r.panel.text.indexOf(r.panel.said) >= 0,
+    `the pinned panel says "${r.panel.text}" and never mentions the light (${r.panel.said})`);
+});
+
+/* THE TOP METRE OF A WALL IS THE SAME SURFACE AS THE METRE BENEATH IT, so it
+   takes the same light -- which makes it the one place nobody thinks to look,
+   because the picture is dissolving away there.
+
+   A material somebody DREW arrives as a picture with the fade already baked into
+   its own alpha, and the light reaches it as a second fill in multiply. Where the
+   light is FLAT across the face nothing can go wrong: the colour comes with the
+   picture. Where the light RAMPS -- every face standing beside a fire or a
+   carried lamp -- the two fills have to agree about where the ramp LANDS. They
+   did not: the multiply was painted over the solid part of the face only, so the
+   top metre stood at the raw brightness of the picture whatever light reached
+   it, and the brightest stripe of a wall was the part being dissolved.
+
+   Measured where it cannot be argued with: the brightness of the band's own
+   pixels against the brightness of the pixels just below it, each divided by the
+   light the world keeps on that square at that height. Light that lands gives
+   about 1; the raw picture above a lit foot gives about 1.8 on the shipped build.
+
+   Only the RAMPS are judged. The flat arm of the same painting -- a band with no
+   ramp in it -- is counted and reported rather than asserted on, and the pixels
+   are only ones the pointer says the wall owns, so a crawler or a half-built camp
+   standing in front of the face cannot be counted as wall. And every measured
+   pixel has to be well short of full light, because at full light the picture and
+   the light on it are the same number and this ruler could not fail. */
+await test('the dissolving top of a wall takes the light that reaches it',
+  async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, R = Render;
+    t.setTexture(1); t.smoothLight(1); t.lightShadows(false);
+
+    const lum = (c) => {
+      const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(c);
+      return m ? 0.299 * +m[1] + 0.587 * +m[2] + 0.114 * +m[3] : -1;
+    };
+    const out = { seeds: 0, faces: 0, flats: 0, px: 0, dim: 0, full: 0,
+                  band: 0, want: 0, worst: 0, ratios: [], median: 0, ratio: 0 };
+
+    for (let sd = 1; sd <= 3; sd++) {
+      t.seed(sd);
+      for (let i = 0; i < 45; i++) t.frame(60);
+      const s = Game.state;                 /* read AFTER seeding, lesson 27 */
+
+      /* Every wall face the painter was handed a band for, and the quad it was
+         given -- the face's own geometry, not a guess at it. */
+      const recs = [];
+      const orig = R.paintSide;
+      R.paintSide = function (ctx, quad, metres, colour, fill, band, base, over) {
+        if (band) {
+          recs.push({ q: [{ x: quad[0].x, y: quad[0].y },
+                          { x: quad[1].x, y: quad[1].y },
+                          { x: quad[3].x, y: quad[3].y }],
+                      m: metres, over: !!over });
+        }
+        return orig.apply(this, arguments);
+      };
+      t.redraw();
+      R.paintSide = orig;
+
+      for (const rec of recs) {
+        if (!rec.over) { out.flats++; continue; }
+        const q = rec.q, fd = R.fadeDepth(rec.m);
+        if (!(fd > 0)) continue;
+        const d = fd * CFG.rise;
+        let fb = 0, fw = 0, n = 0;
+        for (const fr of [0.35, 0.5, 0.65]) {
+          const x = Math.round(q[0].x + (q[1].x - q[0].x) * fr);
+          const yTop = q[0].y + (q[1].y - q[0].y) * fr;
+          const yFoot = yTop + (q[2].y - q[0].y);
+          const y0 = Math.round(yTop + d) - 2;
+          if (!(y0 + 5 < yFoot - 1)) continue;    /* no room for BOTH arms */
+          const L = t.line(x, y0, x, y0 + 5);
+          if (L.n !== 5) continue;
+          const owner = L.pick[0];
+          let clean = owner >= 0;
+          for (const p of L.pick) if (p !== owner) clean = false;
+          if (!clean) continue;                   /* something else owns a row */
+          const cell = s.world.cells[owner];
+          if (!cell || TILE(cell.tile).tags.indexOf('blocks-sight') < 0) continue;
+          const h = surfaceHeight(cell);
+          const lift = Math.round((1 + cell.h * CFG.heightTint) * 100) / 100;
+          const f = (CFG.shadeLeft + CFG.shadeRight) / 2 * lift;
+          for (let k = 0; k < 3; k++) {
+            const zB = h - (y0 + k - yTop) / CFG.rise;
+            const zL = h - (y0 + 3 + k - yTop) / CFG.rise;
+            const gb = lum(litShade('#ffffff', f, lightValueAt(s, cell, zB)));
+            const gl = lum(litShade('#ffffff', f, lightValueAt(s, cell, zL)));
+            if (!(gb > 0) || !(gl > 0)) continue;
+            out.px++;
+            if (gl > 0.7 * 255) { out.full++; continue; }
+            out.dim++;
+            out.band += L.lum[k];
+            out.want += L.lum[3 + k] * (gb / gl);
+            fb += L.lum[k]; fw += L.lum[3 + k] * (gb / gl); n++;
+          }
+        }
+        if (n) {
+          const ratio = fb / fw;
+          out.faces++; out.ratios.push(ratio);
+          if (ratio > out.worst) out.worst = ratio;
+        }
+      }
+      out.seeds++;
+    }
+    out.ratios.sort((a, b) => a - b);
+    if (out.ratios.length) {
+      out.median = out.ratios[Math.floor(out.ratios.length / 2)];
+    }
+    out.ratio = out.want > 0 ? out.band / out.want : 0;
+    return out;
+  });
+  assert(r.faces >= 12,
+    `only ${r.faces} wall faces across ${r.seeds} seeds were both lit by a ramp `
+    + `and clean enough to measure (${r.flats} more bands were lit flat, which is `
+    + `the other arm rather than a failure to find one)`);
+  assert(r.px >= 200,
+    `${r.px} pixels were asked for across ${r.faces} faces, which is too few to `
+    + `judge the band by`);
+  assert(r.dim === r.px,
+    `${r.full} of ${r.px} measured pixels were at 70% brightness or more, where `
+    + `the picture and the light on it are the same number -- the ruler has to `
+    + `stand somewhere it can fail, or it is measuring nothing`);
+  assert(r.band > 0 && r.want > 0,
+    `the band reads ${r.band} and what the light allows reads ${r.want}, so `
+    + `there is nothing here to compare`);
+  assert(r.ratio > 0.55 && r.ratio < 1.35,
+    `the dissolving top of ${r.faces} lit wall faces reads ${r.ratio.toFixed(2)} `
+    + `times what the light there allows (median face ${r.median.toFixed(2)}, `
+    + `worst ${r.worst.toFixed(2)}, ${r.px} pixels over ${r.seeds} seeds) -- the `
+    + `band of a wall is painting itself at the picture's own brightness instead `
+    + `of at the light that reaches it`);
+  assert(r.median < 1.35,
+    `the middle face reads ${(r.median * 100).toFixed(0)}% of what the light `
+    + `there allows (median over ${r.faces} faces), so the aggregate is being `
+    + `carried by a few faces rather than the band following the light as a rule`);
+  console.log(`  ... ${r.faces} lit wall faces over ${r.seeds} seeds, ${r.px} `
+    + `pixels: the band reads ${(r.ratio * 100).toFixed(0)}% of what the light `
+    + `allows (median face ${(r.median * 100).toFixed(0)}%, worst `
+    + `${(r.worst * 100).toFixed(0)}%), with ${r.flats} more bands lit flat`);
+});
+
+await test('the light reaches the band, and the difference is the band', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, R = Render;
+    t.setTexture(1); t.smoothLight(1); t.lightShadows(false);
+    const out = { seeds: 0, faces: 0, same: 0, differ: 0, inBand: 0, outBand: 0,
+                  px: 0, q: [0, 0, 0, 0], delta: [0, 0, 0, 0],
+                  mean: [0, 0, 0, 0], worstOut: 0 };
+    for (let sd = 1; sd <= 2; sd++) {
+      t.seed(sd);
+      for (let i = 0; i < 45; i++) t.frame(60);
+      out.seeds++;
+
+      /* The faces the painter is handed a band for, in the order it paints them,
+         captured while the frame is built -- which is where the band, and where
+         the light lands on it, are decided. */
+      let got = [];
+      const orig = R.paintSide;
+      R.paintSide = function (ctx, quad, metres, colour, fill, band, base, over) {
+        if (band) {
+          got.push({ q: [{ x: quad[0].x, y: quad[0].y },
+                         { x: quad[1].x, y: quad[1].y }], m: metres, over: !!over });
+        }
+        return orig.apply(this, arguments);
+      };
+      t.bandLight(false);
+      got = []; t.redraw();
+      const offFaces = got.length;
+      const off = R.bctx.getImageData(0, 0, R.w, R.h);
+      t.bandLight(true);
+      got = []; t.redraw();
+      const onFaces = got.length;
+      const on = R.bctx.getImageData(0, 0, R.w, R.h);
+      R.paintSide = orig;
+      out.faces += onFaces;
+      if (offFaces === onFaces) out.same++;
+
+      /* Every band, as the shape the painter covered -- so a pixel that moved can
+         be placed: in one of these, or somewhere it has no business being. */
+      const bands = [];
+      for (const b of got) {
+        if (!b.over) continue;                 /* only a ramped face is at issue */
+        const fd = R.fadeDepth(b.m);
+        if (!(fd > 0)) continue;
+        const d = fd * CFG.rise;
+        bands.push({ pts: R.bandQuad(b.q, d), d: d, span: b.q[1].x - b.q[0].x,
+                     x0: b.q[0].x, y0: b.q[0].y, slope: b.q[1].y - b.q[0].y });
+      }
+      out.px += R.w * R.h;
+      const a = off.data, c = on.data;
+      for (let y = 0; y < R.h; y++) {
+        for (let x = 0; x < R.w; x++) {
+          const i = (y * R.w + x) * 4;
+          const d0 = a[i] - c[i], d1 = a[i + 1] - c[i + 1], d2 = a[i + 2] - c[i + 2];
+          if (!(d0 || d1 || d2)) continue;
+          const dd = Math.max(Math.abs(d0), Math.abs(d1), Math.abs(d2));
+          out.differ++;
+          let hit = -1;
+          for (let k = 0; k < bands.length; k++) {
+            if (R.inShape(bands[k].pts, x + 0.5, y + 0.5)) { hit = k; break; }
+          }
+          if (hit < 0) {
+            out.outBand++;
+            if (dd > out.worstOut) out.worstOut = dd;
+            continue;
+          }
+          const b = bands[hit];
+          const fr = b.span ? (x + 0.5 - b.x0) / b.span : 0.5;
+          const u = (y + 0.5 - (b.y0 + b.slope * fr)) / b.d;
+          const k = u < 0.25 ? 0 : u < 0.5 ? 1 : u < 0.75 ? 2 : 3;
+          out.inBand++; out.q[k]++; out.delta[k] += dd;
+        }
+      }
+    }
+    for (let k = 0; k < 4; k++) out.mean[k] = out.q[k] ? out.delta[k] / out.q[k] : 0;
+    out.ships = t.bandLight();
+    return out;
+  });
+  const pc = (n) => (100 * n / (r.px || 1)).toFixed(2) + '%';
+  assert(r.faces >= 12,
+    `only ${r.faces} wall faces across ${r.seeds} seeds carried a band, which is `
+    + `too few to say anything about where the light lands`);
+  assert(r.same === r.seeds,
+    `the band was handed to a different set of faces with the light reaching it `
+    + `(${r.same} of ${r.seeds} seeds agreed), so the flag is moving the faces `
+    + `themselves rather than only the light on them`);
+  assert(r.differ > 0,
+    `the light reaching the band changed no pixel at all, so the flag is wired `
+    + `to nothing`);
+  assert(r.outBand === 0,
+    `${r.outBand} pixels moved OUTSIDE every band (worst by ${r.worstOut} levels) `
+    + `-- the change is supposed to be the top metre of a wall and nothing else, `
+    + `and anything outside it is the ground, the figures or the rock behind`);
+  assert(r.inBand > 200,
+    `only ${r.inBand} pixels moved inside the bands, which is too few to be the `
+    + `top metre of ${r.faces} wall faces`);
+  assert(r.mean[0] < r.mean[3] / 2,
+    `the band moved by ${r.mean[0].toFixed(1)} levels a pixel where it is `
+    + `dissolving and ${r.mean[3].toFixed(1)} where it is solid -- the light has `
+    + `to fade out WITH the band, not cut off at the top of it, or the wall `
+    + `ends in a hard edge against the room beyond`);
+  assert(r.ships === true,
+    `the game ships with the band lit (bandLight() says ${r.ships}), which is `
+    + `the way it is meant to be played and is the only way a test may measure `
+    + `the shipped picture`);
+  console.log(`  ... ${r.inBand} pixels moved inside bands (${pc(r.inBand)} of the`
+    + ` picture) and ${r.outBand} outside them; levels a pixel by depth, top`
+    + ` quarter down: ${r.mean.map((m) => m.toFixed(1)).join(', ')} over`
+    + ` ${r.faces} faces on ${r.seeds} seeds`);
+});
+
+await test('the brightness of the floor is the light the world keeps on it', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test;
+    t.seed(1);
+    for (let i = 0; i < 45; i++) t.frame(60);
+    const s = Game.state, R = Render;
+    const lum = (rgb) => {
+      const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(rgb);
+      return m ? 0.299 * +m[1] + 0.587 * +m[2] + 0.114 * +m[3] : -1;
+    };
+    /* Where the crawlers are standing, and where the flames' shade falls, both
+       read with the shade pass switched ON: a square with somebody standing on
+       it shows their legs, and a square inside a shade shows the shade, and
+       neither is a reading of the floor's own light. Both exclusions were
+       earned -- the first run of this test blamed a square that had a crawler
+       on it AND a shade across it, and read 11 levels dark for it. */
+    const stand = new Set();
+    for (const a of t.actors()) stand.add(a.x + ',' + a.y);
+    t.lightShadows(true); t.smoothLight(0); t.redraw();
+    const shades = [];
+    for (const it of R.batch) if (it.kind === 'shadow') shades.push(it.poly);
+    const shaded = (x, y) => {
+      let n = 0;
+      for (const q of shades) if (R.inShape(q, x + 0.5, y + 0.5)) n++;
+      return n;
+    };
+    t.lightShadows(false);
+
+    /* Every flat, lit floor square with nothing on it and no shade over it:
+       what the picture actually painted at its middle, against what the world
+       says the light there is. The pick tells us the floor square owns that
+       pixel; the fade plan tells us the frame did not cut that square away. */
+    const refused = { offBuffer: 0, offPick: 0, offCut: 0, shade: 0, stand: 0 };
+    const shot = () => {
+      const px = R.bctx.getImageData(0, 0, R.w, R.h).data;
+      const alpha = R.alphas(s, R.batch).list;
+      const alphaOf = new Map();
+      for (let k = 0; k < R.batch.length; k++) {
+        if (R.batch[k].kind === 'cell') alphaOf.set(R.batch[k].i, alpha[k]);
+      }
+      const cells = s.world.cells, rows = [];
+      for (let i = 0; i < cells.length; i++) {
+        const c = cells[i];
+        if (c.slope !== SLOPE_FLAT) continue;
+        if (TILE(c.tile).tags.indexOf('blocks-sight') >= 0) continue;
+        if (!(lightAt(s, c) > 0.3)) continue;
+        const h = surfaceHeight(c);
+        const p = R.project(s, c.x + 0.5, c.y + 0.5, h);
+        const bx = Math.floor(p.x), by = Math.floor(p.y);
+        if (bx < 2 || by < 2 || bx > R.w - 3 || by > R.h - 3) { refused.offBuffer++; continue; }
+        if (R.pickAt(s, bx, by) !== i) { refused.offPick++; continue; }
+        if (alphaOf.get(i) !== 1) { refused.offCut++; continue; }
+        if (shaded(bx, by) > 0) { refused.shade++; continue; }
+        if (stand.has(c.x + ',' + c.y)) { refused.stand++; continue; }
+        const k = (by * R.w + bx) * 4;
+        const lift = Math.round((1 + c.h * CFG.heightTint) * 100) / 100;
+        const top = TILE(c.tile).top;
+        rows.push({ i: i, x: c.x, y: c.y,
+          got: 0.299 * px[k] + 0.587 * px[k + 1] + 0.114 * px[k + 2],
+          smooth: lum(litShade(top, lift, lightValueAt(s, c, h))),
+          stepped: lum(litShade(top, lift, lightAt(s, c))) });
+      }
+      return rows;
+    };
+    t.setTexture(0); t.lightShadows(false);
+    t.smoothLight(1); t.redraw();
+    const A = shot();
+    t.smoothLight(0); t.redraw();
+    const B = shot();
+    t.smoothLight(1); t.setTexture(1); t.lightShadows(true);
+    return { n: A.length, n2: B.length, refused: refused, A: A, B: B };
+  });
+  assert(r.n >= 30,
+    `only ${r.n} lit floor squares were clean enough to measure, of which ` 
+    + `${r.refused.offBuffer} fell outside the picture, ${r.refused.offPick} ` 
+    + `were painted over by something, ${r.refused.offCut} were cut away, ` 
+    + `${r.refused.shade} lay under a shade and ${r.refused.stand} had somebody ` 
+    + `standing on them`);
+  assert(r.n2 === r.n, `the two readings looked at ${r.n} and ${r.n2} squares`);
+  assert(r.refused.shade >= 1,
+    `no floor square in the picture lies under a shade, so nothing was excluded ` 
+    + `for being shaded and this test cannot tell a shade from a light`);
+  let ws = 0, med = [], wt = 0, wsAt = null, wtAt = null, differ = 0, span = 0;
+  for (let i = 0; i < r.A.length; i++) {
+    const d = Math.abs(r.A[i].got - r.A[i].smooth);
+    med.push(d);
+    if (d > ws) { ws = d; wsAt = r.A[i]; }
+    const e = Math.abs(r.B[i].got - r.B[i].stepped);
+    if (e > wt) { wt = e; wtAt = r.B[i]; }
+    if (Math.abs(r.A[i].smooth - r.A[i].stepped) > 1) differ++;
+    span = Math.max(span, Math.abs(r.A[i].smooth - r.B[i].stepped));
+  }
+  med.sort((a, b) => a - b);
+  /* Measured on seed 1: 57 clean squares, every one of them within 1 level of
+     the light the world keeps on it. The reading is the MIDDLE pixel of the
+     square, so a square the light runs across is allowed a whole level of
+     disagreement and no more. */
+  assert(ws <= 1.05,
+    `the floor is painted ${ws} levels away from the light the world keeps on it, ` 
+    + `at (${wsAt && wsAt.x},${wsAt && wsAt.y}): picture ${wsAt && wsAt.got}, ` 
+    + `world ${wsAt && wsAt.smooth}`);
+  assert(med[Math.floor(med.length / 2)] <= 0.8,
+    `halfway down ${r.n} clean floor squares the picture is ` 
+    + `${med[Math.floor(med.length / 2)]} levels from the light`);
+  /* With the smooth picture off, the floor is one flat fill of its own square's
+     light, and the pixel reads that number exactly -- which is what makes the
+     two arms comparable rather than two guesses. */
+  assert(wt <= 1,
+    `with the smooth picture off the floor is ${wt} levels away from its own ` 
+    + `stepped light, at (${wtAt && wtAt.x},${wtAt && wtAt.y})`);
+  assert(differ >= Math.max(10, r.n / 2),
+    `the smooth picture and the stepped one agree on ${r.n - differ} of ${r.n} ` 
+    + `squares, so this proves nothing about the change`);
+  assert(span >= 4, `the smooth light never moves a floor pixel by more than ` 
+    + `${span} levels, which is not a light with a slope to it`);
+});
+
+/* Two squares of floor that share an edge are two ramps meeting, and the light is
+   one function over the world -- so they must claim the same number along that
+   edge. Asked of the game's OWN ramp rather than of the picture: the boundary
+   pixel of a picture is a blend of two squares, a material has joints of its own,
+   and two neighbours may be different tiles. `rampEnds()` is a straight line
+   between two published numbers and needs no picture at all.
+
+   Three ways, in ONE build (lesson 21), over the SAME edges: what ships
+   (field + conjugate), the field off, and the conjugate off. */
+await test('two squares of floor sharing an edge agree about the light', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, R = Render;
+    t.seed(1);
+    for (let i = 0; i < 45; i++) t.frame(60);
+    const s = Game.state;
+
+    const key = (x, y) => x + ',' + y;
+    const map = new Map();
+    for (const c of s.world.cells) map.set(key(c.x, c.y), c);
+    const flat = (c) => !!c && c.slope === SLOPE_FLAT;
+
+    /* The light a ramp claims at a point, exactly as a canvas linear gradient
+       reads it: project onto the segment, and pad past the ends. */
+    const onRamp = (e, px, py) => {
+      const vx = e.far.x - e.near.x, vy = e.far.y - e.near.y;
+      const n2 = vx * vx + vy * vy;
+      let u = n2 > 0 ? ((px - e.near.x) * vx + (py - e.near.y) * vy) / n2 : 0.5;
+      u = u < 0 ? 0 : (u > 1 ? 1 : u);
+      return e.p1 + (e.p2 - e.p1) * u;
+    };
+
+    const ARMS = [['sown', true, true], ['noField', false, true],
+                  ['noConjugate', true, false]];
+
+    const pairAt = (a, b) => {
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const tx = -dy, ty = dx;                       /* along the shared edge */
+      const h = surfaceHeight(a);
+      const ax0 = a.x + 0.5, ay0 = a.y + 0.5, bx0 = b.x + 0.5, by0 = b.y + 0.5;
+      /* A HAIR either side of the same edge, over the middle half of it. Both on
+         the far side of their own squares is 1.94 m apart and measures two
+         unrelated places on the floor -- which it did. */
+      const pts = [];
+      for (let k = 0; k < 9; k++) {
+        const along = -0.25 + k * 0.0625;
+        for (const into of [0.03, 0.15]) {
+          const px = ax0 + dx * (0.5 - into) + tx * along;
+          const py = ay0 + dy * (0.5 - into) + ty * along;
+          const qx = bx0 - dx * (0.5 - into) + tx * along;
+          const qy = by0 - dy * (0.5 - into) + ty * along;
+          const pa = R.project(s, px, py, h), pb = R.project(s, qx, qy, h);
+          pts.push({ ax: pa.x, ay: pa.y, bx: pb.x, by: pb.y });
+        }
+      }
+      const arms = {};
+      let nRamp = 0;
+      for (const arm of ARMS) {
+        t.rampField(arm[1]); t.gradExact(arm[2]);
+        const ea = R.rampEnds(s, a, h), eb = R.rampEnds(s, b, h);
+        if (!ea || !eb) { arms[arm[0]] = null; continue; }
+        nRamp++;
+        let worst = 0, sum = 0;
+        for (const p of pts) {
+          const d = Math.abs(onRamp(ea, p.ax, p.ay) - onRamp(eb, p.bx, p.by));
+          if (d > worst) worst = d;
+          sum += d;
+        }
+        arms[arm[0]] = { worst: worst, mean: sum / pts.length };
+      }
+      return { arms: arms, nRamp: nRamp };
+    };
+
+    const pairs = [];
+    for (const a of s.world.cells) {
+      if (!flat(a) || !(lightAt(s, a) > 0.2)) continue;
+      for (const dir of [[1, 0], [0, 1]]) {
+        const b = map.get(key(a.x + dir[0], a.y + dir[1]));
+        if (!flat(b) || b.h !== a.h || !(lightAt(s, b) > 0.2)) continue;
+        pairs.push([a, b]);
+      }
+    }
+    const raw = pairs.map((p) => pairAt(p[0], p[1]));
+    /* Only the edges EVERY arm found a ramp on, so the three numbers are about
+       the same floor and not about three different sets of edges. */
+    const rows = raw.filter((x) => x.nRamp === ARMS.length);
+    const q = (a, f) => (a.length ? a[Math.min(a.length - 1, (a.length * f) | 0)] : 0);
+    const stat = (name) => {
+      const w = rows.map((x) => x.arms[name].worst).sort((x, y) => x - y);
+      const m = rows.map((x) => x.arms[name].mean);
+      return { median: +q(w, 0.5).toFixed(5), p90: +q(w, 0.9).toFixed(5),
+        worst: +(w[w.length - 1] || 0).toFixed(5),
+        mean: +(m.reduce((x, y) => x + y, 0) / (m.length || 1)).toFixed(5),
+        over005: w.filter((x) => x > 0.05).length };
+    };
+
+    /* IS THE RAMP INVENTING LIGHT? Its claim at a square's own middle is compared
+       with the square's own light, which is a number the world already held --
+       so this cannot pass by construction. */
+    const fidelity = (field, exact) => {
+      t.rampField(field); t.gradExact(exact);
+      let asked = 0, nulls = 0, centreWorst = 0, agree = 0, bad = 0;
+      for (const c of s.world.cells) {
+        if (!flat(c) || !(lightAt(s, c) > 0.2)) continue;
+        asked++;
+        const h = surfaceHeight(c);
+        const e = R.rampEnds(s, c, h);
+        if (!e) { nulls++; continue; }
+        const own = lightValueAt(s, c, h);
+        const mid = R.project(s, c.x + 0.5, c.y + 0.5, h);
+        const midErr = Math.abs(onRamp(e, mid.x, mid.y) - own);
+        if (midErr > centreWorst) centreWorst = midErr;
+        if (Math.abs((e.p1 + e.p2) / 2 - own) < 1e-9) agree++; else bad++;
+      }
+      return { asked: asked, noRamp: nulls, centreWorst: +centreWorst.toFixed(5),
+        midAgree: agree, midBad: bad };
+    };
+    const fidSown = fidelity(true, true);
+    const fidOld = fidelity(false, true);
+    t.rampField(true); t.gradExact(true);
+
+    return { pairs: pairs.length, kept: rows.length, sown: stat('sown'),
+      noField: stat('noField'), noConjugate: stat('noConjugate'),
+      fidSown: fidSown, fidOld: fidOld,
+      missed: ARMS.map((a2) => [a2[0], raw.filter((x) => !x.arms[a2[0]]).length]) };
+  });
+  assert(r.kept >= 200,
+    `only ${r.kept} of ${r.pairs} shared edges of lit floor are edges every arm ` 
+    + `can paint (refused: ${JSON.stringify(r.missed)})`);
+  assert(r.sown.median <= 0.05,
+    `along the middle of ${r.kept} shared edges the two squares disagree by ` 
+    + `${r.sown.median} of light (p90 ${r.sown.p90}, worst ${r.sown.worst})`);
+  assert(r.sown.p90 <= 0.08,
+    `9 in 10 of ${r.kept} shared edges agree to ${r.sown.p90} of light, not 0.08`);
+  assert(r.sown.mean <= 0.032,
+    `the average shared edge disagrees by ${r.sown.mean} of light`);
+  assert(r.sown.worst <= 0.25,
+    `the worst of ${r.kept} shared edges disagrees by ${r.sown.worst} of light`);
+  /* The field is what pays, and the same build says so with it switched off. */
+  assert(r.sown.median <= r.noField.median * 0.8,
+    `with the field off the median edge agrees to ${r.noField.median} against ` 
+    + `${r.sown.median} with it on, so the field is not doing the work`);
+  assert(r.sown.mean <= r.noField.mean * 0.7,
+    `with the field off the average edge agrees to ${r.noField.mean} against ` 
+    + `${r.sown.mean} with it on`);
+  assert(r.sown.over005 <= r.noField.over005 * 0.6,
+    `${r.sown.over005} of ${r.kept} edges disagree by more than 0.05 of light ` 
+    + `with the field on against ${r.noField.over005} with it off`);
+  /* And the conjugate, which is about the direction the ramp runs in. */
+  assert(r.sown.median < r.noConjugate.median && r.sown.p90 * 2 < r.noConjugate.p90,
+    `with the ramp pointed the old way the median edge agrees to ` 
+    + `${r.noConjugate.median} and the 9th decile to ${r.noConjugate.p90}, ` 
+    + `against ${r.sown.median} and ${r.sown.p90} now`);
+  /* A ramp may not invent light: at the square's own middle it lands on the
+     square's own number exactly, and the old direction does not. */
+  assert(r.fidSown.midBad === 0 && r.fidSown.midAgree >= 150,
+    `${r.fidSown.midBad} of ${r.fidSown.midAgree + r.fidSown.midBad} ramps miss ` 
+    + `their own square's light at its middle`);
+  assert(r.fidSown.centreWorst < 0.005,
+    `a ramp misses the middle of its own square by ${r.fidSown.centreWorst} of ` 
+    + `light`);
+  assert(r.fidOld.midBad > 0,
+    'the old direction lands on its own square\u2019s light at the middle too, so ' 
+    + 'the field is not what puts it there');
+});
+
+/* The person\u2019s words were "a crawler walking past a fire drags a shadow with
+   them", and the shade is the only part of this that is aesthetics rather than
+   the game\u2019s light. So it is counted on a flat-coloured picture, where nothing
+   else is moving, and turned off in the same build to prove the count is about
+   the shade. */
+await test('a solid thing standing in the light lays a shadow on the ground', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test;
+    t.seed(1);
+    for (let i = 0; i < 45; i++) t.frame(60);
+    t.setTexture(0);
+    t.smoothLight(1);
+
+    const run = (frames) => {
+      const acc = { made: 0, painted: 0, byActors: 0, casters: 0, short: 0 };
+      for (let f = 0; f < frames; f++) {
+        t.frame(4);
+        const sh = t.shades();
+        acc.made += sh.made; acc.painted += sh.painted;
+        acc.byActors += sh.byActors;
+        if (sh.casters > acc.casters) acc.casters = sh.casters;
+        if (sh.painted !== sh.made) acc.short++;
+      }
+      return acc;
+    };
+
+    t.lightShadows(true);
+    const on = run(30);
+    t.redraw();
+    t.keep();
+    t.lightShadows(false);
+    t.redraw();
+    const d = t.diff();
+    const off = run(30);
+    t.lightShadows(true); t.smoothLight(1); t.setTexture(1); t.redraw();
+    return { on: on, off: off, differ: d.differ, worst: d.worst, pix: d.pixels };
+  });
+  assert(r.on.made > 0,
+    `no shade at all was worked out in 30 frames (${r.on.made} made)`);
+  assert(r.on.painted === r.on.made,
+    `${r.on.made - r.on.painted} of ${r.on.made} shades were worked out and ` 
+    + `never reached the picture, across ${r.on.short} frames`);
+  assert(r.on.casters >= 1,
+    `nothing in the frame was counted as standing in the light (${r.on.casters})`);
+  assert(r.on.byActors > 0,
+    'no crawler ever laid a shade in 30 frames, so walking past a fire drags ' 
+    + 'nothing');
+  assert(r.off.made === 0 && r.off.painted === 0 && r.off.byActors === 0 &&
+         r.off.casters === 0,
+    `with the shade turned off it still made ${r.off.made} and painted ` 
+    + `${r.off.painted} (${r.off.byActors} from crawlers)`);
+  assert(r.differ > 0 && r.worst > 8,
+    `turning the shade off changed ${r.differ} of ${r.pix} pixels, worst by ` 
+    + `${r.worst} levels, so the shade is barely on the screen`);
+});
+
+/* A shade is paint, not a thing: it lies over the floor it darkens, and the
+   pointer must go on naming the floor. `pickAt` walks the picture\u2019s own list
+   backwards and skips the shades, which is the whole guard. */
+await test('a shadow never answers the pointer', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, R = Render;
+    t.seed(1);
+    for (let i = 0; i < 45; i++) t.frame(60);
+    t.lightShadows(true);
+    t.redraw();
+
+    const grid = [];
+    for (let y = 4; y < R.h - 4; y += 11) {
+      for (let x = 4; x < R.w - 4; x += 11) grid.push([x, y]);
+    }
+    const ask = () => grid.map((p) => R.pickAt(Game.state, p[0], p[1]));
+
+    const on = ask();
+    let shades = 0;
+    for (const it of R.batch) if (it.kind === 'shadow') shades++;
+
+    t.lightShadows(false);
+    t.redraw();
+    const off = ask();
+    t.lightShadows(true);
+    t.redraw();
+
+    let differ = 0, first = null, hits = 0;
+    for (let i = 0; i < on.length; i++) {
+      if (on[i] !== off[i]) { differ++; if (!first) first = grid[i]; }
+      if (on[i] >= 0) hits++;
+    }
+    return { asks: on.length, differ: differ, first: first, hits: hits,
+      shades: shades, w: R.w, h: R.h };
+  });
+  assert(r.asks >= 800,
+    `only ${r.asks} places on a ${r.w}x${r.h} picture were asked about`);
+  assert(r.shades > 0,
+    'the frame laid no shade at all, so this test proves nothing');
+  assert(r.hits > 0, 'every ask in the grid came back empty');
+  assert(r.differ === 0,
+    `${r.differ} of ${r.asks} pointer answers changed when the shade was turned ` 
+    + `off, the first at ${r.first}`);
+});
+
+/* A square of floor used to be ONE FLAT COLOUR, so the light it was painted with
+   was the light at its middle and nothing else: walking across it, the brightness
+   did not move, and then it jumped at the next square's edge. The floor is a RAMP
+   now -- a straight line of light across each square, aimed along the way the
+   light itself is changing -- and this is the test that says so from the PICTURE
+   rather than from the game's own arithmetic.
+
+   It finds a row of floor squares across the view and walks the middle line of it
+   one pixel at a time, twice. Two claims, and each is the other's control:
+
+     * WITH the ramp: inside a square the brightness moves, and it agrees with the
+       light the world keeps at every pixel of it;
+     * WITHOUT it: inside a square the brightness does not move by so much as a
+       level, and it disagrees with the world.
+
+   The two pixels at each end of a square are left out of every reading. A boundary
+   pixel is a blend of the two squares meeting there and of two materials, and
+   counting it as the square's own light measures the seam rather than the light.
+
+   The claim is worked out along the SAME line the samples were taken on, and that
+   is only exact because the projection is flat: a world offset arrives on the
+   picture as the same offset, so the point a sample landed on is the point on the
+   world segment with the same fraction along it. No inverse is needed and nothing
+   is guessed. */
+await test('the floor of one square is a slope, not one flat colour', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, R = Render;
+    t.seed(1);
+    for (let i = 0; i < 45; i++) t.frame(60);
+    const s = Game.state;
+    const refused = { offScreen: 0, standing: 0, short: 0, dark: 0, torn: 0 };
+
+    const key = (x, y) => x + ',' + y;
+    const map = new Map();
+    s.world.cells.forEach((c, i) => map.set(key(c.x, c.y), i));
+    const lum = (col) => {
+      const m = col.match(/-?\d+/g);
+      return +m[0] * 0.299 + +m[1] * 0.587 + +m[2] * 0.114;
+    };
+
+    /* The floor as the picture can show it: materials off, so a square is one
+       colour per square and a ramp across it, and no shade lying over it. */
+    t.setTexture(0);
+    t.lightShadows(false);
+    t.smoothLight(1);
+    t.gradExact(true);
+    t.rampField(true);
+    t.redraw();
+
+    /* A row of floor squares at one height, all lit, all on the screen, and well
+       clear of anything standing. Found rather than chosen: the world is made
+       from a seed, and a test that hard-codes a square is a test of one seed. */
+    let best = null, found = 0;
+    for (const c of s.world.cells) {
+      if (c.slope !== SLOPE_FLAT) continue;
+      let len = 1;
+      while (len < 9) {
+        const n = map.get(key(c.x + len, c.y));
+        const cell = n === undefined ? null : s.world.cells[n];
+        if (!cell || cell.slope !== SLOPE_FLAT || cell.h !== c.h) break;
+        if (!(lightAt(s, cell) > 0.2)) { refused.dark++; break; }
+        len++;
+      }
+      if (len < 4) { refused.short++; continue; }
+      if (!(lightAt(s, c) > 0.2)) { refused.dark++; continue; }
+      const p0 = R.project(s, c.x + 0.5, c.y + 0.5, c.h);
+      const p1 = R.project(s, c.x + len - 0.5, c.y + 0.5, c.h);
+      if (Math.min(p0.x, p1.x) < 30 || Math.min(p0.y, p1.y) < 30
+        || Math.max(p0.x, p1.x) > R.w - 30 || Math.max(p0.y, p1.y) > R.h - 30) {
+        refused.offScreen++; continue;
+      }
+      /* How far the nearest thing standing is from the middle of the row. */
+      let clear = 99;
+      for (let k = 0; k < len; k++) {
+        const cx = c.x + k + 0.5, cy = c.y + 0.5;
+        for (const q of ((s.camp && s.camp.sites) || [])) {
+          clear = Math.min(clear, Math.hypot(q.x + 0.5 - cx, q.y + 0.5 - cy));
+        }
+        for (const a of s.actors) {
+          clear = Math.min(clear, Math.hypot(a.x + 0.5 - cx, a.y + 0.5 - cy));
+        }
+      }
+      if (clear < 1.5) { refused.standing++; continue; }
+      found++;
+      if (!best || len > best.len) {
+        best = { x: c.x, y: c.y, h: c.h, len: len, clear: clear,
+                 picks: [] };
+        for (let k = 0; k < len; k++) best.picks.push(map.get(key(c.x + k, c.y)));
+      }
+    }
+
+    const walk = (smooth) => {
+      t.smoothLight(smooth);
+      t.redraw();
+      const a = R.project(s, best.x + 0.5, best.y + 0.5, best.h);
+      const b = R.project(s, best.x + best.len - 0.5, best.y + 0.5, best.h);
+      const L = t.line(a.x, a.y, b.x, b.y);
+      const mine = new Set(best.picks);
+      const groups = [];
+      for (let i = 0; i < L.lum.length; i++) {
+        if (L.lum[i] < 0) continue;
+        const p = L.pick[i], last = groups[groups.length - 1];
+        if (last && last.pick === p) { last.to = i; last.vals.push(L.lum[i]); }
+        else groups.push({ pick: p, from: i, to: i, vals: [L.lum[i]] });
+      }
+      const G = groups.filter((g) => mine.has(g.pick) && g.vals.length > 5);
+      refused.torn += groups.length - G.length;
+
+      const out = { groups: G.length, ranges: [], flat: 0, slope: 0,
+                    worst: 0, samples: 0, misses: 0, at: null };
+      for (const g of G) {
+        /* Two pixels inside each end, which is the control that beat the seam. */
+        const inner = g.vals.slice(2, -2);
+        const range = Math.max.apply(null, inner) - Math.min.apply(null, inner);
+        out.ranges.push(+range.toFixed(2));
+        if (range === 0) out.flat++;
+        if (range > 1) out.slope++;
+        if (range > out.worst) out.worst = range;
+
+        /* What this square CLAIMS at each pixel: the straight line between the
+           two ends `rampEnds()` publishes, read at the fraction along it the
+           pixel sits at. That is exactly what a canvas gradient paints. */
+        const cell = s.world.cells[g.pick];
+        const e = R.rampEnds(s, cell, surfaceHeight(cell));
+        if (!e) continue;
+        const lift = Math.round((1 + cell.h * CFG.heightTint) * 100) / 100;
+        const top = TILE(cell.tile).top;
+        const c1 = lum(litShade(top, lift, e.p1));
+        const c2 = lum(litShade(top, lift, e.p2));
+        const vx = e.far.x - e.near.x, vy = e.far.y - e.near.y;
+        const n2 = vx * vx + vy * vy;
+        for (let i = g.from + 2; i <= g.to - 2; i++) {
+          const u0 = i / L.n;
+          const sx = Math.round(a.x + (b.x - a.x) * u0);
+          const sy = Math.round(a.y + (b.y - a.y) * u0);
+          let u = n2 > 0 ? ((sx - e.near.x) * vx + (sy - e.near.y) * vy) / n2 : 0.5;
+          u = u < 0 ? 0 : (u > 1 ? 1 : u);
+          const d = Math.abs(c1 + (c2 - c1) * u - L.lum[i]);
+          out.samples++;
+          if (d > 3) out.misses++;
+          if (!out.at || d > out.at.d) out.at = { d: d, x: sx, y: sy };
+        }
+      }
+      out.mean = out.ranges.length
+        ? +(out.ranges.reduce((x, y) => x + y, 0) / out.ranges.length).toFixed(3)
+        : 0;
+      return out;
+    };
+
+    const ramp = best ? walk(1) : null;
+    const step = best ? walk(0) : null;
+    t.smoothLight(1); t.setTexture(1); t.lightShadows(true); t.redraw();
+    return { best: best, found: found, refused: refused, ramp: ramp, step: step };
+  });
+
+  assert(r.best,
+    `no row of four lit floor squares was found across a ${r.refused.offScreen} `
+    + `off-screen / ${r.refused.standing} with-something-standing-on-it / `
+    + `${r.refused.short} too-short / ${r.refused.dark} too-dark census`);
+  const where = `(${r.best.x},${r.best.y}) over ${r.best.len} squares, the `
+    + `nearest thing standing ${r.best.clear.toFixed(2)} m away`;
+  assert(r.found >= 5,
+    `only ${r.found} rows of floor were clean enough to measure, so a ruler `
+    + `about one row is a ruler about that row`);
+  assert(r.ramp.groups >= 4,
+    `the row at ${where} came back in ${r.ramp.groups} pieces, so the line spent `
+    + `most of its length somewhere else`);
+  assert(r.refused.torn === 0,
+    `${r.refused.torn} pieces of the two lines were not floor at all`);
+
+  /* WITH the ramp: every square slopes. */
+  assert(r.ramp.flat === 0,
+    `${r.ramp.flat} of ${r.ramp.groups} squares of floor are still one flat `
+    + `colour inside, so the ramp is not reaching the picture (ranges `
+    + `${r.ramp.ranges.join(',')})`);
+  assert(r.ramp.slope >= r.ramp.groups - 1,
+    `only ${r.ramp.slope} of ${r.ramp.groups} squares move by more than a level `
+    + `across themselves (ranges ${r.ramp.ranges.join(',')})`);
+  assert(r.ramp.worst > 1.5 && r.ramp.mean > 0.6,
+    `the steepest square of floor only moves ${r.ramp.worst} levels across `
+    + `itself and the average is ${r.ramp.mean}, which is not a light that `
+    + `changes over a metre`);
+
+  /* WITHOUT it: one flat colour a square, which is what the ramp replaced. */
+  assert(r.step.flat === r.step.groups,
+    `${r.step.flat} of ${r.step.groups} squares are flat with the ramp off, so `
+    + `this ruler cannot tell a slope from a step (ranges `
+    + `${r.step.ranges.join(',')})`);
+
+  /* And the ramp is pointed the way the WORLD says the light changes, not just
+     any way that happens to slope. */
+  assert(r.ramp.misses <= 2,
+    `${r.ramp.misses} of ${r.ramp.samples} pixels of floor disagree with the `
+    + `light the world keeps at that pixel by more than 3 levels, the worst at `
+    + `${r.ramp.at ? r.ramp.at.x + ',' + r.ramp.at.y + ' by ' + r.ramp.at.d : ''}`);
+  assert(r.step.misses >= 20,
+    `with the ramp off only ${r.step.misses} of ${r.step.samples} pixels `
+    + `disagree with the world, so the claim above cannot fail and is not a `
+    + `ruler`);
+});
+
+/* The light is laid over a surface by filling the same shape AGAIN, in multiply.
+   If that shape is handed over with corners between pixels, then the light it
+   carries is a fraction of a pixel wider than the surface it belongs to, and the
+   square next door takes a hairline of somebody else's light. `Render.snapOver`
+   rounds those corners, and this is the ruler that watches the calls themselves:
+   only the points the light overlay hands over, so what is counted is the overlay
+   and nothing else.
+
+   The overlay is marked by wrapping `Render.lightOver`, and NOT by asking the
+   canvas whether it is in multiply: since v0.49.0 the cast shade is painted in
+   that same composite (shadeMultiply), its shapes are silhouettes of anything
+   solid and are handed over exactly as they were worked out, and so a filter that
+   said "multiply" counted 246 shade corners as light and reported the light as
+   broken on a camera that had stopped moving. What the shade does with a fraction
+   of a pixel is its own business -- it is a picture of a shadow, not a surface,
+   and no light spills anywhere -- so the flag is set for the one call that has
+   the requirement and every assert below is left exactly as it was.
+
+   Two camera states count as evidence -- mid-swing and mid-tilt, while the view
+   is sliding -- because a settled camera has whole pixels to start with, and the
+   test says so rather than assuming it. */
+await test('the light laid over a surface lands on whole pixels', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, R = Render;
+    t.seed(1);
+    for (let i = 0; i < 45; i++) t.frame(60);
+    const s = Game.state;
+    t.setTexture(1);
+    t.smoothLight(1);
+    t.lightShadows(true);
+
+    const N = { pts: 0, frac: 0, worst: 0, over: 0 };
+    let inOver = false;              /* true only inside the light overlay */
+    const proto = CanvasRenderingContext2D.prototype;
+    const om = proto.moveTo, ol = proto.lineTo;
+    const watch = (raw) => function (x, y) {
+      if (inOver) {
+        N.pts++;
+        const f = Math.max(Math.abs(x - Math.round(x)), Math.abs(y - Math.round(y)));
+        if (f > 1e-9) N.frac++;
+        if (f > N.worst) N.worst = f;
+      }
+      return raw.call(this, x, y);
+    };
+    proto.moveTo = watch(om);
+    proto.lineTo = watch(ol);
+    const overFn = R.lightOver;
+    R.lightOver = function (ctx, pts, shade) {
+      N.over++;
+      inOver = true;
+      try { return overFn.call(this, ctx, pts, shade); }
+      finally { inOver = false; }
+    };
+
+    const snap = (on) => {
+      R.snapOver = on;
+      N.pts = 0; N.frac = 0; N.worst = 0; N.over = 0;
+      t.redraw();
+      return { over: N.over, pts: N.pts, frac: N.frac,
+               worst: +N.worst.toFixed(3) };
+    };
+    const held = { yaw: s.cam.yaw, pitch: s.cam.pitch };
+    const out = {};
+    out.settled = { off: snap(false), on: snap(true) };
+    s.cam.yaw = 2.0; camRefresh(s);
+    out.swing = { off: snap(false), on: snap(true) };
+    s.cam.yaw = Math.PI; s.cam.pitch = 0.55; camRefresh(s);
+    out.tilt = { off: snap(false), on: snap(true) };
+
+    /* Back to a still camera, and paint the SAME moment both ways: rounding
+       corners that are already whole must not move a single pixel. */
+    s.cam.yaw = held.yaw; s.cam.pitch = held.pitch; camRefresh(s);
+    R.snapOver = false; t.redraw(); t.keep();
+    R.snapOver = true; t.redraw();
+    const d = t.diff();
+
+    proto.moveTo = om;
+    proto.lineTo = ol;
+    R.lightOver = overFn;
+    return { out: out, differ: d.differ, worst: d.worst, pix: d.pixels };
+  });
+
+  const st = r.out.settled, sw = r.out.swing, ti = r.out.tilt;
+  assert(st.off.over > 0,
+    'the light was laid over no surface at all in the whole frame, so this test '
+    + 'never looked at the thing it is about');
+  assert(st.off.over === st.on.over && sw.off.over === sw.on.over,
+    `rounding the corners changed how many times the light was laid over a `
+    + `surface (${st.off.over}/${st.on.over} still, ${sw.off.over}/${sw.on.over} `
+    + `mid-swing), so the two arms are not the same painting`);
+  assert(sw.off.pts > 200 && ti.off.pts > 200,
+    `only ${sw.off.pts} points of light were handed over mid-swing and `
+    + `${ti.off.pts} mid-tilt, which is too little to judge`);
+  assert(st.off.frac === 0,
+    `${st.off.frac} of ${st.off.pts} points of light are between pixels on a `
+    + `camera that has stopped moving`);
+  assert(sw.off.frac >= sw.off.pts * 0.9 && sw.off.worst > 0.2,
+    `sliding the view left just ${sw.off.frac} of ${sw.off.pts} points of light `
+    + `between pixels (${ti.off.frac} of ${ti.off.pts} mid-tilt), so this ruler `
+    + `cannot fail`);
+  assert(sw.on.frac === 0 && ti.on.frac === 0,
+    `rounding the corners left ${sw.on.frac} of ${sw.on.pts} points of light `
+    + `between pixels mid-swing and ${ti.on.frac} mid-tilt, worst `
+    + `${sw.on.worst}`);
+  assert(r.differ === 0,
+    `painting a still picture both ways changed ${r.differ} of ${r.pix} pixels, `
+    + `worst by ${r.worst} levels`);
+});
+
+/* A surface that wears a material is painted from a picture dropped into the
+   sheet, and the light is laid over it as a second fill in multiply. That is the
+   only road the smooth light has onto such a surface -- the colour is already
+   spoken for -- and a road with no traffic looks exactly like a road that works.
+
+   So this counts the overlay calls AND asks the picture: with no materials there
+   is nothing to lay the light over and the count is nought, which is what makes
+   the count the overlay's own rather than a number about the frame.
+
+   THE WALL SMOOTHING IS PINNED OFF TO KEEP THAT TRUE (v0.51.0). Since v0.51.0
+   there is a SECOND road the light takes onto a wall face -- the gradient that
+   carries it across the face so two blocks meet (`acrossFace`) -- and it is laid
+   with the same `lightOver` call whether or not the face wears a picture, 28
+   times on this frame with the materials off. That is why the bare arm stopped
+   reading nought: not because a picture surface was painted without a picture.
+   Pinning the smoothing off leaves the count measuring the one road this test is
+   about, and the other road has its own test directly below. */
+await test('the light reaches a surface that wears a dropped-in picture', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, R = Render;
+    t.seed(1);
+    for (let i = 0; i < 45; i++) t.frame(60);
+    t.smoothLight(1);
+    t.lightShadows(true);
+    const wasAcross = t.acrossLight();
+    t.acrossLight(false);
+
+    const N = { over: 0, flat: 0 };
+    const overFn = R.lightOver;
+    R.lightOver = function (ctx, pts, shade) {
+      N.over++;
+      if (typeof shade === 'string') N.flat++;
+      return overFn.call(this, ctx, pts, shade);
+    };
+
+    const look = (tex, smooth) => {
+      t.setTexture(tex);
+      t.smoothLight(smooth);
+      t.redraw();
+      N.over = 0; N.flat = 0;
+      t.redraw();
+      return { over: N.over, flat: N.flat };
+    };
+
+    const bare = look(0, 1);          /* no pictures to lay anything over */
+    const on = look(1, 1);            /* the shipped look */
+    const off = look(1, 0);           /* the ramp taken away */
+    const back = look(1, 1);
+
+    t.redraw(); t.keep();
+    t.redraw();
+    const d0 = t.diff();              /* nothing changed: the control */
+    t.smoothLight(0); t.redraw();
+    const d1 = t.diff();
+    t.smoothLight(1); t.redraw();
+    const d2 = t.diff();
+
+    R.lightOver = overFn;
+    t.setTexture(1); t.smoothLight(1); t.lightShadows(true);
+    t.acrossLight(wasAcross); t.redraw();
+    return { bare: bare, on: on, off: off, back: back, pix: d0.pixels,
+             wasAcross: wasAcross, backAcross: t.acrossLight(),
+             control: { differ: d0.differ, worst: d0.worst },
+             gone: { differ: d1.differ, worst: d1.worst },
+             again: { differ: d2.differ, worst: d2.worst } };
+  });
+
+  assert(r.wasAcross === true && r.backAcross === true,
+    `the wall smoothing came back as ${r.backAcross} where it started at`
+    + ` ${r.wasAcross} -- this test pins it off, and every test after it wants`
+    + ' the look that ships');
+  assert(r.on.over > 0,
+    'the light was laid over no picture surface at all, so the smooth light '
+    + 'never reaches a surface that wears a material');
+  assert(r.on.flat === 0,
+    `${r.on.flat} of ${r.on.over} of those were one flat colour rather than a `
+    + `ramp, so they are not the smooth light`);
+  assert(r.bare.over === 0,
+    `with the materials off the light was still laid over a surface `
+    + `${r.bare.over} times, so this count is not about picture surfaces`);
+  assert(r.off.over > 0 && r.on.over > r.off.over,
+    `turning the ramp away left the count at ${r.off.over} against `
+    + `${r.on.over}, so the extra fills are not the ramp`);
+  assert(r.on.over === r.back.over,
+    `turning the ramp off and on again left a different number of fills `
+    + `(${r.on.over} then ${r.back.over})`);
+  assert(r.control.differ === 0,
+    `painting the same moment twice changed ${r.control.differ} of ${r.pix} `
+    + `pixels, so this picture is not the same picture twice and nothing below `
+    + `can be blamed on the ramp`);
+  assert(r.gone.differ > 1000 && r.gone.worst > 8,
+    `taking the ramp away changed ${r.gone.differ} of ${r.pix} pixels, worst by `
+    + `${r.gone.worst} levels, so the smooth light is barely on a textured `
+    + `surface`);
+  assert(r.again.differ === 0,
+    `putting the ramp back did not put the picture back (${r.again.differ} `
+    + `pixels, worst by ${r.again.worst} levels)`);
+});
+
+/* THE LIGHT RUNS ACROSS A WALL FACE, so the two blocks either side of a seam
+   meet on one brightness instead of each quitting on its own number.
+
+   Asked for in as many words: "the light isn't smooth BETWEEN wall blocks
+   though. I see the vertical edges of each wall unit because the light stops
+   and starts." `edges()` is the ruler: it walks the pixels the frame actually
+   painted, keeps the ones inside ONE wall face, and calls a pair adjacent that
+   is the same facet of two DIFFERENT blocks -- which is a seam and nothing
+   else. A crease between two faces of one block is a fold in the rock and is
+   lit differently on purpose, so it is not counted.
+
+   Both ways round in ONE build with nothing between them but the flag, so the
+   two numbers differ by the correction and by nothing else. The flag is turned
+   off, read, put back, read again, and the second reading must MATCH the first:
+   a ruler that cannot repeat itself is worth less than no ruler (lesson 2), and
+   `steady` is the negative control that lets every claim below be able to fail.
+   The distinct-world count is printed for the same reason a battery prints it
+   (lesson 27): eight readings of one frozen picture would be a tidy nothing. */
+await test('the light runs across a wall face, so two blocks of a wall can meet',
+  async () => {
+    const sc = await page.evaluate(() =>
+      window.__test.edgesScan({ seeds: [1, 2, 3, 4], turns: 2, settle: 2700,
+                                threshold: 16 }));
+    assert(sc.cases === 8 && sc.worlds === sc.cases,
+      `the ruler looked at ${sc.cases} moments but only reached ${sc.worlds} `
+      + `different worlds, so it measured the same picture more than once ` +
+      `(lesson 27)`);
+    assert(sc.steady,
+      'turning the correction off, on and off again did not come back to the ' +
+      'same numbers, so this ruler cannot repeat itself and none of the below ' +
+      'can be blamed on the correction');
+    assert(sc.pairsOff > 1000 && sc.seams > 50,
+      `only ${sc.pairsOff} side-by-side pairs of wall pixels in ${sc.seams} ` +
+      `seams were found, so there is barely any wall in these views and ` +
+      `nothing here is a measurement of one`);
+    assert(sc.offAcrossed === 0 && sc.onAcrossed > 100,
+      `with the correction off ${sc.offAcrossed} faces were still corrected ` +
+      `and with it on ${sc.onAcrossed} were, so the switch is not the switch`);
+    assert(sc.offHard > 20,
+      `the uncorrected picture only stepped at ${sc.offHard} of ${sc.seams} ` +
+      `seams, so there is nothing here for the correction to have fixed and ` +
+      `this test cannot fail`);
+    assert(sc.onHard * 2 <= sc.offHard,
+      `the correction left ${sc.onHard} of ${sc.seams} seams stepping by a ` +
+      `whole 16 levels or more against ${sc.offHard} before it, so the light ` +
+      `still stops and starts between wall blocks`);
+    assert(sc.offJump - sc.onJump >= 15,
+      `the worst seam in the picture stepped by ${sc.offJump} levels before ` +
+      `the correction and ${sc.onJump} after, so the correction barely moved ` +
+      `the thing the complaint was about`);
+    assert(sc.onCount < sc.offCount,
+      `${sc.onCount} pixel rows step across a seam with the correction ` +
+      `against ${sc.offCount} without it, so the correction made the stepping ` +
+      `more common rather than less`);
+    assert(sc.onHardBoth * 20 > sc.onHardNone && sc.onHardBoth > sc.onHardOne,
+      `most of what still steps is on a face the correction never reached ` +
+      `(${sc.onHardBoth} rows with both ends corrected, ${sc.onHardOne} with ` +
+      `one, ${sc.onHardNone} with neither), so the correction is not where the ` +
+      `remaining seams are`);
+  });
+
+/* AND NOTHING ELSE MOVED. The correction is an addition, and an addition is
+   proved against the same build with it switched off, not against the one
+   before (lesson 21). Three claims, all of them censuses:
+
+     the picture is the same picture twice with nothing between the two,
+     every pixel the correction changes lies inside a face it actually painted,
+     and no pixel is moved by as much as a whole step of the light scale.
+
+   The first alone would pass on a correction that drew nothing at all, so the
+   second and third are what make it a measurement of the right thing: a pixel
+   moved somewhere the correction never drew would fail the mask, and a wall
+   that jumped a whole light step would fail the bound. The mask counts a pixel
+   as covered if it is inside a corrected face's quad widened by one, because a
+   canvas antialiases the edge of a fill. */
+await test('the wall smoothing moves the picture only where it paints',
+  async () => {
+    const r = await page.evaluate(() => {
+      const t = window.__test, R = Render;
+      t.seed(1);
+      t.advance(2700, 6);
+      const W = R.w, H = R.h, n = W * H;
+      const grab = () => R.bctx.getImageData(0, 0, W, H).data;
+      /* One step of the light scale as a whole channel value: `lightSteps` 6
+         turns 255 into 42.5, so the widest a single step can come out is 44.
+         A pixel the correction moved by that much has been moved by as much as
+         the light itself moves between two of its levels. */
+      const step = Math.ceil(255 / CFG.lightSteps) + 1;
+
+      /* Nothing between these two: the control that lets the rest mean
+         something. */
+      t.acrossLight(false); t.redraw();
+      const c0 = grab();
+      t.redraw();
+      const c1 = grab();
+      let control = 0;
+      for (let i = 0; i < c0.length; i += 4) {
+        if (c0[i] !== c1[i] || c0[i + 1] !== c1[i + 1] || c0[i + 2] !== c1[i + 2]) control++;
+      }
+
+      t.acrossLight(false); t.redraw();
+      const off = grab();
+
+      /* Ask the correction itself which faces it painted, rather than guessing
+         from where the picture changed. */
+      const real = R.acrossFor;
+      const boxes = [];
+      R.acrossFor = function (ctx, s, it, cA, cB, quad) {
+        const out = real.apply(this, arguments);
+        if (out) {
+          let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+          for (const p of quad) {
+            if (p.x < x0) x0 = p.x;
+            if (p.x > x1) x1 = p.x;
+            if (p.y < y0) y0 = p.y;
+            if (p.y > y1) y1 = p.y;
+          }
+          boxes.push([x0, y0, x1, y1]);
+        }
+        return out;
+      };
+      t.acrossLight(true);
+      t.redraw();
+      const acrossed = R.consumed.acrossed;
+      const on = grab();
+      R.acrossFor = real;
+      t.acrossLight(false); t.redraw();
+
+      const mask = new Uint8Array(n);
+      let maskPx = 0;
+      for (const b of boxes) {
+        for (let y = Math.max(0, Math.floor(b[1]) - 1);
+             y <= Math.min(H - 1, Math.ceil(b[3]) + 1); y++) {
+          for (let x = Math.max(0, Math.floor(b[0]) - 1);
+               x <= Math.min(W - 1, Math.ceil(b[2]) + 1); x++) mask[y * W + x] = 1;
+        }
+      }
+      for (let i = 0; i < n; i++) if (mask[i]) maskPx++;
+      let differ = 0, outside = 0, worst = 0, atOrOver = 0;
+      for (let i = 0, p = 0; i < on.length; i += 4, p++) {
+        const d = Math.max(Math.abs(on[i] - off[i]),
+                           Math.abs(on[i + 1] - off[i + 1]),
+                           Math.abs(on[i + 2] - off[i + 2]));
+        if (!d) continue;
+        differ++;
+        if (d > worst) worst = d;
+        if (d >= step) atOrOver++;
+        if (!mask[p]) outside++;
+      }
+      t.acrossLight(true); t.redraw();
+      return { pixels: n, control: control, differ: differ, outside: outside,
+               worst: worst, atOrOver: atOrOver, step: step, maskPx: maskPx,
+               faces: boxes.length, acrossed: acrossed,
+               wallPx: R.consumed.wallPx };
+    });
+
+    assert(r.control === 0,
+      `painting the same moment twice with nothing between the two changed ` +
+      `${r.control} of ${r.pixels} pixels, so this picture is not the same ` +
+      `picture twice and nothing below can be blamed on the correction`);
+    assert(r.faces === r.acrossed && r.faces > 10,
+      `the correction reported ${r.acrossed} faces and painted a gradient on ` +
+      `${r.faces} of them, so what it says it did is not what it did`);
+    assert(r.differ > 1000,
+      `switching the correction on changed only ${r.differ} of ${r.pixels} ` +
+      `pixels, so it is barely reaching the picture`);
+    assert(r.outside === 0,
+      `${r.outside} of the ${r.differ} pixels the correction moved are outside ` +
+      `every face it painted a gradient on, so it is changing the picture ` +
+      `somewhere it never drew`);
+    assert(r.maskPx < r.pixels * 0.9,
+      `the faces the correction painted cover ${r.maskPx} of the picture's ` +
+      `${r.pixels} pixels, so "every moved pixel is inside one of them" is a ` +
+      `claim about the whole picture rather than about the correction`);
+    assert(r.atOrOver === 0,
+      `${r.atOrOver} pixels were moved by a whole step of the light scale ` +
+      `(${r.step} levels, worst ${r.worst}), so the correction is not ` +
+      `smoothing a seam, it is repainting a face`);
+    assert(r.differ <= r.wallPx,
+      `the correction moved ${r.differ} pixels, more than all ${r.wallPx} ` +
+      `pixels of wall the frame painted, so it is changing something that is ` +
+      `not a wall`);
+  });
+
+/* Every number the sheet grew for this job has to reach the picture, and the way
+   to prove that is to move each one and see the picture move -- a knob wired to
+   nothing is a knob pretending. The control that makes the ruler able to fail is
+   the same comparison with NOTHING changed, which must come out at nought: if
+   merely redrawing could move a pixel, every one of the eight would pass and
+   none would mean anything.
+
+   A dial is silent only if the light it moves cannot reach a DRAWN surface, and
+   a light the camera is not pointed at reaches none. Measured on this seed: the
+   camp is at (11,23) and the fire lights 167 of the 230 squares on the screen,
+   while the two lamps are 18 and 34 squares away and off the screen entirely --
+   so moving the lamp's height at the camp moves nothing, and that is the camera's
+   doing, not the dial's. Each dial is therefore moved with the view where its
+   light lands: the camp for the fire and the shadows, and the crawler carrying
+   the lantern for the lamp.
+
+   Which of those a view actually lights is measured and asserted too, because it
+   is the framing that makes the rest of the test able to fail: if the lamp's
+   light ever stopped reaching a painted square, the lamp's dial would go silent
+   and this test would have no way of knowing. */
+await test('every light knob the sheet carries reaches the picture', async () => {
+  const r = await page.evaluate(() => {
+    const t = window.__test, R = Render;
+    t.seed(1);
+    for (let i = 0; i < 45; i++) t.frame(60);
+    t.setTexture(1);
+    t.smoothLight(1);
+    t.lightShadows(true);
+
+    /* Which source lit each square of ground the frame actually paints. */
+    const litBy = () => {
+      const s = Game.state;
+      s.lightDirty = true;
+      t.redraw();
+      const plan = R.alphas(s, R.batch);
+      const seen = { lamp: 0, fire: 0, none: 0 };
+      for (let k = 0; k < R.batch.length; k++) {
+        const it = R.batch[k];
+        if (it.kind !== 'cell' || !(plan.list[k] > 0)) continue;
+        const src = it.cell.light > 0 ? s.sources[it.cell.lightSrc] : null;
+        seen[src ? (src.site ? 'fire' : 'lamp') : 'none']++;
+      }
+      return seen;
+    };
+
+    /* Where everyone is, and what light they are carrying. */
+    const who = Game.state.actors.map((a, i) => {
+      let best = 0;
+      for (const k in a.worn) { const g = GEAR(a.worn[k]); if (g.light > best) best = g.light; }
+      return { i: i, x: a.x, y: a.y, light: best };
+    });
+    const carrier = who.filter((a) => a.light > 0).sort((a, b) => b.light - a.light)[0];
+    const fire = Game.state.sources.filter((s) => s.site)[0];
+    let anchor = null;
+    if (fire) {
+      let near = Infinity;
+      for (const a of who) {
+        const d = Math.hypot(a.x - fire.x, a.y - fire.y);
+        if (d < near) { near = d; anchor = a; }
+      }
+    }
+
+    /* The view the match opens with, and the view on the lamp. */
+    const campView = litBy();
+    if (carrier) t.centreOn(carrier.i);
+    const lampView = litBy();
+
+    /* Put the camera where a dial can show, and take the picture to compare. */
+    const go = (where) => {
+      if (where === 'lamp' && carrier) t.centreOn(carrier.i);
+      else if (anchor) t.centreOn(anchor.i);
+      t.redraw();
+      t.keep();
+    };
+
+    const turn = (name, to, where) => {
+      go(where);
+      const was = CFG[name];
+      const held = { name: name, was: was, to: to, where: where, known: name in CFG };
+      CFG[name] = to;
+      Game.state.lightDirty = true;
+      t.setTexture(CFG.texStrength);
+      t.redraw();
+      const d = t.diff();
+      CFG[name] = was;
+      Game.state.lightDirty = true;
+      t.setTexture(CFG.texStrength);
+      t.redraw();
+      held.pixels = d.differ;
+      held.worst = d.worst;
+      return held;
+    };
+
+    /* The same comparison with nothing changed, in both framings. */
+    const still = (where) => { go(where); t.redraw(); const d = t.diff(); return d; };
+    const c0 = still('camp');
+    const c1 = still('lamp');
+
+    /* Nine asks: the eight new dials, and one with nothing changed. */
+    const flips = [['lampHeight', 1.6, 'lamp'], ['fireHeight', 1.2, 'camp'],
+                   ['heightFalloff', 4, 'camp'], ['lightSmooth', 0, 'camp'],
+                   ['shadeStrength', 0.9, 'camp'], ['shadeGive', 0.8, 'camp'],
+                   ['shadeReach', 4.5, 'camp'], ['shadeGirth', 0.6, 'camp']];
+    go('camp');
+    t.redraw();
+    const d0 = t.diff();
+    const pix = d0.pixels;
+    const done = [];
+    for (const f of flips) done.push(turn(f[0], f[1], f[2]));
+    go('camp');
+    t.setTexture(1); t.smoothLight(1); t.lightShadows(true); t.redraw();
+    return { control: { differ: d0.differ, worst: d0.worst }, pix: pix, done: done,
+             carrier: carrier || null, anchor: anchor || null,
+             campView: campView, lampView: lampView,
+             stillCamp: { differ: c0.differ, worst: c0.worst },
+             stillLamp: { differ: c1.differ, worst: c1.worst } };
+  });
+
+  assert(r.control.differ === 0 && r.control.worst === 0,
+    `painting the same moment twice changed ${r.control.differ} of ${r.pix} `
+    + `pixels, worst by ${r.control.worst} levels, so redrawing alone moves the `
+    + `picture and nothing below can be blamed on a knob`);
+  assert(r.stillCamp.differ === 0 && r.stillLamp.differ === 0,
+    `the view moved ${r.stillCamp.differ} pixels settling at the camp and `
+    + `${r.stillLamp.differ} on the lamplighter, so a dial measured there would `
+    + `be measured against a picture that was moving on its own`);
+  assert(r.campView.fire > 0,
+    `the campfire lights nothing the frame paints from the view the match opens `
+    + `with (${JSON.stringify(r.campView)}), so the knobs about the fire have `
+    + `nowhere to show and this test would pass on a world with no fire in it`);
+  assert(r.carrier,
+    `no crawler in the match is carrying a light, so the height a carried light `
+    + `hangs at has no surface to reach and nothing to prove`);
+  assert(r.lampView.lamp > 0,
+    `with the view on the crawler carrying the lamp, no square the frame paints `
+    + `is lit by a lamp (${JSON.stringify(r.lampView)}), so the lamp's height `
+    + `could not reach the picture and this test could not tell`);
+  const silent = [];
+  for (const k of r.done) {
+    assert(k.known, `the sheet has no dial called ${k.name}, so the test is `
+      + `polishing a name nothing uses`);
+    if (k.pixels === 0) silent.push(k);
+  }
+  assert(silent.length === 0,
+    `${silent.length} of ${r.done.length} dials changed the picture not at all `
+    + `with the value moved from ${silent.map((k) => k.name + ' ' + k.was + ' to '
+      + k.to + ' with the view ' + k.where).join(', ')}, so they are connected to `
+    + `nothing (the rest moved ${r.done.length - silent.length}: `
+    + `${r.done.map((k) => k.name + ' ' + k.pixels + 'px').join(', ')})`);
+});
+
+/* A SHADE IS A LIGHT LAYER, NOT A SURFACE (v0.49.0).
+ *
+ * A shadow takes brightness away from what is under it; it does not cover it up.
+ * That is a claim about the ARITHMETIC, and the arithmetic says the two ways of
+ * laying it down are the same picture: the shade's own colour is black, so
+ * `multiply` gives (1 - a) x destination and painting it over the top gives the
+ * same (1 - a) x destination. What is NOT the same is what a census of the frame
+ * can see.
+ *
+ * `fillKinds()` counts what each fill was MADE of, and a shade laid over the top
+ * is a gradient object, so it is counted as a `band` -- the same count a wall's
+ * fade gets. A shade laid as light goes down in the same composite as the light
+ * and is counted as neither, which is the only reason the census can go on
+ * saying "this much of the picture is a surface wearing a material" now that
+ * every lit square paints twice.
+ *
+ * So this test asks both halves: the picture is the same to within a rounding of
+ * 255 (measured worst 2, and never more than NOTICEABLE), and the census tells
+ * the two apart by EXACTLY the number of patches of shade that reached the
+ * screen -- no more, so it is not counting something else as well, and no fewer,
+ * so it is not skipping real work. The two are asked on separate frames,
+ * because the census SKIPS a fill that is not `source-over` -- which is what a
+ * shade laid as light is -- and a picture taken through it has the shade missing
+ * in one arm and painted in the other. That mistake measured 40,368 pixels of
+ * difference at 87/255 and would have said the two ways disagree completely.
+ *
+ * Measured on seeds 1, 4 and 7 at 229,632 pixels: 3.0-6.3% of the picture moves
+ * by one or two levels between the two ways, 0 pixels by more than 8, and the
+ * census band count differs by exactly the shade count in every case. */
+
+await test('a shade is laid as light, not painted on (v0.49.0)', async () => {
+  const CASES = [{ seed: 1, up: 0, q: 0 }, { seed: 4, up: 0, q: 0 },
+                 { seed: 7, up: 1, q: 1 }];
+  const r = await page.evaluate((CASES) => {
+    const t = window.__test, rows = [];
+    const wasShade = t.shadeMultiply();
+    t.pause(); t.unpoint();
+    for (const c of CASES) {
+      t.seed(c.seed);
+      t.advance(2000);
+      t.tilt(!!c.up);
+      t.rotate(c.q);
+      t.settle();
+      t.unpoint();
+      /* THE PIXELS, from two REAL frames. The census cannot be in this loop:
+         it skips a fill that is not `source-over`, which is exactly what a
+         shade laid as light is, so a picture taken through the census is a
+         picture with the shade MISSING in one arm and painted in the other --
+         and it measures the shade's presence rather than the way it is laid
+         (measured: 40,368 pixels and 87/255 that way, against 6.3% and 2/255
+         on real frames). Census and pixels are two questions; ask them apart. */
+      t.shadeMultiply(true);
+      t.repaint();
+      const on = t.shades();
+      t.keep();
+      t.shadeMultiply(false);
+      t.repaint();
+      const off = t.shades();
+      const d = t.diff();
+      /* AND THE CENSUS, on its own two frames. */
+      t.shadeMultiply(true);
+      const kOn = t.fillKinds();
+      t.shadeMultiply(false);
+      const kOff = t.fillKinds();
+      rows.push({ seed: c.seed, up: c.up, q: c.q, kOn: kOn, kOff: kOff,
+                  on: on, off: off, d: d });
+    }
+    t.shadeMultiply(wasShade);
+    t.redraw();
+    return { rows: rows, wasShade: wasShade, backShade: t.shadeMultiply() };
+  }, CASES);
+
+  const tot = { moved: 0, deep: 0, worst: 0, band: 0, shaded: 0, pixels: 0 };
+  assert(r.wasShade === true,
+    'the shade is laid over the top of the picture rather than as a light layer');
+  for (const q of r.rows) {
+    const at = `seed ${q.seed}${q.up ? ' raised' : ''}`;
+    /* The same patches of shade reach the screen either way, so the comparison
+       below is about HOW they are laid and not about how many there are. */
+    assert(q.on.painted > 0 && q.off.painted === q.on.painted,
+      `${at}: ${q.on.painted} patches of shade reached the picture laid as light`
+      + ` and ${q.off.painted} painted over the top, and the same patches have to`
+      + ' be there either way');
+    assert(!q.d.error, q.d.error || 'nothing was kept');
+    /* THE ARITHMETIC: the two ways leave the same picture. */
+    assert(q.d.deep === 0 && q.d.worst <= 2,
+      `${at}: laying the shade as light instead of painting it over moved`
+      + ` ${q.d.differ} pixels, worst by ${q.d.worst}/255 and ${q.d.deep} of them`
+      + ' by more than 8 -- multiply by black and painting black are the same'
+      + ' arithmetic, so this is a shade that is not black');
+    assert(q.d.differ < q.d.pixels * 0.10,
+      `${at}: ${q.d.differ} of ${q.d.pixels} pixels moved between the two ways of`
+      + ` laying the shade, ${(100 * q.d.differ / q.d.pixels).toFixed(2)}% of the`
+      + ' picture, where the worst measured is 6.3%');
+    /* AND THE CENSUS CAN TELL THEM APART -- which is what the flag is for. */
+    assert(q.kOn.plain === q.kOff.plain && q.kOn.pattern === q.kOff.pattern
+        && q.kOn.ground === q.kOff.ground && q.kOn.wall === q.kOff.wall,
+      `${at}: laying the shade as light changed the census of SURFACES (${q.kOn.plain}`
+      + ` plain / ${q.kOn.pattern} patterned / ${q.kOn.ground} ground / ${q.kOn.wall}`
+      + ` wall fills against ${q.kOff.plain} / ${q.kOff.pattern} / ${q.kOff.ground}`
+      + ` / ${q.kOff.wall}), where only the light layer may move`);
+    assert(q.kOff.band - q.kOn.band === q.on.painted,
+      `${at}: the census counted ${q.kOff.band} gradient fills with the shade`
+      + ` painted over and ${q.kOn.band} with it laid as light -- a difference of`
+      + ` ${q.kOff.band - q.kOn.band} where exactly the ${q.on.painted} patches of`
+      + ' shade that reached the picture have to account for it');
+    assert(q.kOff.band > 0,
+      `${at}: with the shade painted over the top the census counted no gradient`
+      + ' fill at all, so it cannot be seeing the shade and the difference above'
+      + ' is a difference of nothing');
+    /* There is no assert that the flag ON leaves a gradient in the census: on a
+       frame where no wall has been cut to a band, the shade is the ONLY gradient
+       in the picture, and skipping it leaves `band` at zero -- which is the
+       point. What is asserted above is that the difference is exactly the number
+       of patches of shade, so a census that had stopped counting gradients
+       cannot pass this by reporting zero either way. */
+    tot.moved += q.d.differ; tot.deep += q.d.deep; tot.band += q.kOff.band - q.kOn.band;
+    tot.shaded += q.on.painted; tot.pixels += q.d.pixels;
+    tot.worst = Math.max(tot.worst, q.d.worst);
+  }
+  assert(r.backShade === true,
+    'the shade came back painted over the top, where every later test wants the'
+    + ' light layer that ships');
+  assert(tot.shaded > 0 && tot.band === tot.shaded,
+    `${tot.band} fills of gradient appeared when the shade was painted over`
+    + ` against ${tot.shaded} patches of shade, so the census is not counting the`
+    + ' shade and this test would pass on a frame with no shadow in it');
+  console.log(`  ... ${r.rows.length} frames, ${tot.pixels} pixels: the shade laid`
+    + ` as light moved ${tot.moved} of them (${(100 * tot.moved / tot.pixels).toFixed(2)}%),`
+    + ` worst ${tot.worst}/255, none deep; the census counted`
+    + ` ${tot.shaded} patches of shade as gradients with it painted over and none`
+    + ' with it laid as light');
+});
+
+/* THE LIGHT UP A FACE IS SAMPLED ON THE WORLD'S OWN GRID (v0.49.0).
+ *
+ * Light fades with height, so a wall face is painted as a gradient -- a light
+ * line up it. Where that line is SAMPLED matters as soon as the face does not
+ * stand a whole number of metres, which is exactly what snapping a foot to a
+ * metre is about: sample the fade at equal fractions of the face and a face
+ * whose foot has moved is a different picture, sample it on the whole metres of
+ * the world and the light you read is the light the world is holding.
+ *
+ * `Render.altGrid` is that choice, and this is the test that says it is
+ * CONNECTED -- because a flag that changes nothing is worse than no flag (a
+ * probe of the clip test's own nine cameras found it moved not one pixel there,
+ * and the honest answer was not "it is dead": it was "those cameras have no
+ * part-metre feet to sample").
+ *
+ * The measurement is the snapping test's own pair of pictures -- the feet as
+ * they stand against the feet snapped -- with the flag on and off, on the
+ * cameras where a foot is a part of a metre (the raised angle) and on the flat
+ * angle as the control, where no foot is.
+ *
+ * Measured over seeds 1, 2 and 7 at the raised angle, 229,632 pixels a frame:
+ * the light grid samples make the pair move 130-345 pixels a frame and equal
+ * fractions 1,754-5,177 -- between 15 and 40 times as much -- while the flat
+ * angle is byte-identical either way. The worst single move against the picture
+ * is the 0.15% the snapping test already allows, and nothing here is deeper than
+ * 13/255, so what the grid buys is a foot that moved by a fraction of a metre
+ * leaving the light on the face where it was. */
+
+await test('the light up a face is sampled on the world\'s own grid (v0.49.0)', async () => {
+  const CASES = [{ seed: 1, up: 1, q: 0 }, { seed: 1, up: 1, q: 1 },
+                 { seed: 2, up: 1, q: 0 }, { seed: 7, up: 1, q: 0 },
+                 { seed: 1, up: 0, q: 0 }];
+  const r = await page.evaluate((CASES) => {
+    const t = window.__test, rows = [];
+    const wasVox = t.voxelBlocks(), wasGrid = t.altGrid();
+    const wasSides = t.rockSides(), wasSkin = t.wallSkin();
+    t.pause(); t.unpoint();
+    t.rockSides(0); t.wallSkin(false);
+    /* AND THE WALL SMOOTHING OFF (v0.51.0). This test measures one thing: how far
+       a pair of pictures moves when a foot is snapped, with the light sampled two
+       ways. Since v0.51.0 the smoothing normalises a face's fill at an altitude
+       derived from that face's own foot, so snapping the foot repaints whole
+       faces at a different level and the movement being measured becomes mostly
+       the smoothing's -- 22,938 pixels where the 0.15% bound at the foot of this
+       file's sibling test allows 344. Pin it off, and what is left is the thing
+       this test exists for: the two SAMPLINGS of the light, 130-345 pixels
+       against 1,754-5,177. */
+    const wasAcross = t.acrossLight();
+    t.acrossLight(false);
+
+    const grab = function () {
+      return Render.bctx.getImageData(0, 0, Render.w, Render.h);
+    };
+    const cmp = function (a, b) {
+      let moved = 0, deep = 0, worst = 0;
+      for (let i = 0; i < a.data.length; i += 4) {
+        const d = Math.max(Math.abs(a.data[i] - b.data[i]),
+                           Math.max(Math.abs(a.data[i + 1] - b.data[i + 1]),
+                                    Math.abs(a.data[i + 2] - b.data[i + 2])));
+        if (d > 0) moved++;
+        if (d > 8) deep++;
+        if (d > worst) worst = d;
+      }
+      return { moved: moved, deep: deep, worst: worst, pixels: a.data.length / 4 };
+    };
+    /* The snapping test's own pair, in its own order, so what is measured here
+       is the picture that test measures. */
+    const pair = function () {
+      t.voxelBlocks(false);
+      const feet = t.wallMetres();
+      t.repaint();
+      const off = grab();
+      t.voxelBlocks(true);
+      t.repaint();
+      return { d: cmp(off, grab()), odd: feet.odd, oddPx: feet.oddPx };
+    };
+
+    for (const c of CASES) {
+      t.seed(c.seed);
+      t.advance(2000);
+      t.tilt(!!c.up);
+      t.rotate(c.q);
+      t.settle();
+      t.unpoint();
+      t.altGrid(true);
+      const on = pair();
+      t.altGrid(false);
+      const off = pair();
+      rows.push({ seed: c.seed, up: c.up, q: c.q, on: on, off: off });
+    }
+    t.altGrid(wasGrid); t.voxelBlocks(wasVox);
+    t.rockSides(wasSides); t.wallSkin(wasSkin);
+    t.acrossLight(wasAcross);
+    t.redraw();
+    return { rows: rows, wasGrid: wasGrid, backGrid: t.altGrid(),
+             wasAcross: wasAcross, backAcross: t.acrossLight() };
+  }, CASES);
+
+  const tot = { on: 0, off: 0, raised: 0, flat: 0 };
+  assert(r.wasAcross === true && r.backAcross === true,
+    `the wall smoothing came back as ${r.backAcross} where it started at`
+    + ` ${r.wasAcross} -- this test pins it off, and every test after it wants`
+    + ' the look that ships');
+  assert(r.wasGrid === true && r.backGrid === true,
+    `the light came back sampled at equal fractions of the face (${r.backGrid})`
+    + ' where the look that ships takes it from the world\'s own metres');
+  for (const q of r.rows) {
+    const at = `seed ${q.seed}${q.up ? ' raised' : ''}${q.q ? ' turned ' + q.q : ''}`;
+    if (!q.up) {
+      /* THE CONTROL: at the flat angle no face stands a part of a metre, so the
+         two ways of sampling have nothing to disagree about. If they differed
+         here, the difference above would be about the flag rather than about
+         part-metre feet. */
+      assert(q.on.odd === 0 && q.off.odd === 0,
+        `${at}: ${q.on.odd} faces stand a part of a metre at the flat angle, so`
+        + ' this is not the control it claims to be');
+      assert(q.on.d.moved === 0 && q.off.d.moved === 0,
+        `${at}: the flag moved ${q.on.d.moved}/${q.off.d.moved} pixels on a frame`
+        + ' with no part-metre foot in it, where the two ways of sampling have to'
+        + ' agree exactly');
+      tot.flat++;
+      continue;
+    }
+    assert(q.on.odd > 0,
+      `${at}: no face in this frame stands a part of a metre, so there is nothing`
+      + ' here for the flag to move and the numbers below mean nothing');
+    assert(q.on.d.moved > 0 && q.on.d.moved <= q.on.d.pixels * 0.0015,
+      `${at}: with the light sampled on the whole metres, snapping the feet moved`
+      + ` ${q.on.d.moved} of ${q.on.d.pixels} pixels (worst ${q.on.d.worst}/255,`
+      + ` ${q.on.d.deep} of them deep) where the snapping test allows 0.15%`);
+    assert(q.off.d.moved >= q.on.d.moved * 8,
+      `${at}: sampling the light at equal fractions of the face moved`
+      + ` ${q.off.d.moved} pixels and sampling it on the world's own metres moved`
+      + ` ${q.on.d.moved} -- not the 8 times the grid is worth, so either the flag`
+      + ' is doing nothing or the picture has stopped carrying the light up a face');
+    tot.on += q.on.d.moved; tot.off += q.off.d.moved; tot.raised++;
+  }
+  assert(r.rows.length === CASES.length, `${r.rows.length} frames were looked at`);
+  assert(tot.raised > 0 && tot.flat > 0,
+    `${tot.raised} raised and ${tot.flat} flat frames: both are needed, one to`
+    + ' measure the flag and one to show it is about part-metre feet');
+  assert(tot.on < tot.off / 8,
+    `the light grid moved ${tot.on} pixels over ${tot.raised} frames against`
+    + ` ${tot.off} for equal fractions -- a tenth of the movement, not the`
+    + ` ${(tot.off / tot.on).toFixed(1)}th it was measured at`);
+  console.log(`  ... ${tot.raised} raised frames, ${tot.flat} flat: snapping the`
+    + ` feet moved ${tot.on} pixels with the light sampled on the world's metres`
+    + ` and ${tot.off} with it sampled at equal fractions of the face, and the`
+    + ' flat frames were byte-identical either way');
 });
 
 /* ---- v0.12.0: the crawler you are watching ------------------------------ */
@@ -5518,6 +7826,12 @@ await test('the pointer finds the frontmost shape all over the picture (v0.22.0)
         /* A square the picture skipped is not an answer either. This is the same
            question pickAt() asks, and the only way the two can agree. */
         if (Render.cutOut(it)) continue;
+        /* A patch of shade is not a thing anybody can point at -- pickAt()
+           skips it and so does drawPick(), and this walk has to skip it too or
+           the two answers cannot agree. Since v0.49.0 the picture lays shade on
+           the ground, so a walk that did not know about it read `parts` off a
+           shape that has none. */
+        if (it.kind === 'shadow') continue;
         let yes = false;
         if (it.kind === 'cell') {
           if (it.solid) {
@@ -6782,11 +9096,20 @@ await test('a number changed in the spreadsheet reaches the screen (rule 9)', as
 console.log('');
 for (const r of results) console.log(`  ${r.ok ? 'ok  ' : 'FAIL'} ${r.name}${r.ok ? '' : '\n         ' + r.why}`);
 const failed = results.filter((r) => !r.ok).length;
-if (ONLY.length) {
-  console.log(`\n${results.length - failed}/${results.length} passed -- `
-    + `TESTS WERE PICKED OUT BY NAME (--only=${ONLY.join(',')}), so this is not `
-    + 'a full run\n');
+/* A quick word that matches NO test is a check that has quietly gone missing --
+   a ruler that reads short. It is reported and it fails, because a short check
+   whose size nobody notices is worth less than the minutes it saves. */
+const missing = QUICK
+  ? QUICK_WORDS.filter((w) => !results.some((r) => r.name.includes(w))) : [];
+if (PICKED) {
+  console.log(`\n${results.length - failed}/${results.length} passed -- TESTS WERE PICKED OUT BY `
+    + `NAME (${QUICK ? '--quick' : '--only'}${ONLY.length ? ' --only=' + ONLY.join(',') : ''}), `
+    + 'so this is not a full run\n');
 } else {
   console.log(`\n${results.length - failed}/${results.length} passed\n`);
 }
-process.exit(failed ? 1 : 0);
+if (missing.length) {
+  console.log(`QUICK CHECK: ${missing.length} of ${QUICK_WORDS.length} parts of the short check `
+    + `matched no test -- ${missing.join(', ')}\n`);
+}
+process.exit(failed || missing.length ? 1 : 0);

@@ -32,6 +32,21 @@ window.__test = {
      a test must ask rather than assume. */
   buffer() { return { w: Render.w, h: Render.h, zoom: Game.state.cam.zoom }; },
 
+  /* The picture's own pixels, as brightness. `keep()` and `diff()` compare two
+     whole pictures and hand back COUNTS, which is the right answer to "did this
+     change" and no answer at all to "what shape is the change" -- and a step and
+     a slope can have the same count. This is the thing those counts are counts
+     of, so a ruler can print the row it is talking about instead of summarizing
+     it. Read-only, and nothing in the game calls it. */
+  pixels(x, y, w, h) {
+    const px = Render.bctx.getImageData(x, y, w, h).data;
+    const lum = [];
+    for (let i = 0; i < px.length; i += 4) {
+      lum.push(Math.round(0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]));
+    }
+    return { w: w, h: h, lum: lum };
+  },
+
   get state() { return Game.state; },
 
   /* Stop the animation clock. Without this a test races the real loop and
@@ -55,6 +70,11 @@ window.__test = {
     s.pointer.over = true;
     s.pointer.bx = bx; s.pointer.by = by;
     s.pointer.clientX = 40; s.pointer.clientY = 40;
+    /* A pointer that arrives somewhere IS a pointer that moved, and a move is
+       what lets the tooltip speak again after a click. Without this the tip can
+       stay dumb for the rest of the file, for a reason that lives in an earlier
+       test and nowhere in the game. */
+    s.pointer.quiet = false;
     Game.render();
     return s.hover;
   },
@@ -126,6 +146,65 @@ window.__test = {
     return lightAt(s, s.world.at(x, y));
   },
   lightSources() { return lightSourcesIn(Game.state); },
+  /* The picture's own answer to "how bright is this square, at a height of your
+     choosing", beside the game's stepped one. They agree at floor level, which is
+     what makes the smooth picture a picture of the SAME light rather than a second
+     opinion about it. */
+  lightValue(x, y, z) {
+    const s = Game.state;
+    const c = s.world.at(x, y);
+    return z === undefined ? lightValueAt(s, c) : lightValueAt(s, c, z);
+  },
+  /* Whether the picture paints a smooth ramp across a face of this square, and
+     whether it lays a shade on it. */
+  smoothLight(on) {
+    if (on !== undefined) {
+      CFG.lightSmooth = on ? 1 : 0;
+      Render.skinCache = {};
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return CFG.lightSmooth;
+  },
+  lightShadows(on) {
+    if (on !== undefined) {
+      Render.lightShadows = !!on;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.lightShadows;
+  },
+  /* Whether a shade is laid as a LIGHT LAYER (multiply) or painted over the top
+     as black. The two have to leave the same picture, and a census of what
+     reached the screen has to be able to tell a shade from a surface -- which is
+     what the flag is for. */
+  shadeMultiply(on) {
+    if (on !== undefined) {
+      Render.shadeMultiply = !!on;
+      Game.state.geomDirty = true;
+    }
+    return Render.shadeMultiply;
+  },
+  /* Where a face's light stops are taken from: the whole metres of the world, or
+     equal fractions of the face as painted. */
+  altGrid(on) {
+    if (on !== undefined) {
+      Render.altGrid = !!on;
+      Game.state.geomDirty = true;
+    }
+    return Render.altGrid;
+  },
+  /* One line per finished frame's worth of shade: how many patches were worked
+     out and how many reached the picture. Two numbers rather than one, because
+     "made but not painted" is a builder with no consumer and "painted zero" is a
+     pass that fired at nothing -- see the comment on `consumed.shadows`. The
+     last two are the same thing for the CRAWLERS alone, which is the claim the
+     person actually made ("a crawler walking past a fire drags a shadow"). */
+  shades() {
+    const c = Render.consumed || {};
+    return { made: c.shadowMade || 0, painted: c.shadows || 0,
+             byActors: c.shadowActor || 0, casters: c.shadowCasters || 0 };
+  },
   litCells() {
     const s = Game.state;
     let lit = 0, dark = 0;
@@ -402,6 +481,65 @@ window.__test = {
     return Render.mappedGround;
   },
 
+  /* Put the light laid over a surface onto whole pixels, the way the game
+     ships. Turning this OFF is the old way -- paint the overlay at the fraction
+     it projected to -- for proving the new way against it: at the fraction, two
+     neighbouring squares leave a hairline of multiply painted twice between
+     them. Called with nothing it only reports which way it is set. See
+     lightOver(). */
+  snapOver(on) {
+    if (on !== undefined) {
+      Render.snapOver = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.snapOver;
+  },
+
+  /* Let the light laid over a wall reach the metre of it that is dissolving, the
+     way the game ships. Turning this OFF is the way it shipped before -- the
+     multiply over the solid part of the face only -- and it is the yardstick the
+     confinement of the change is measured against: with the band unlit, its
+     brightness stops tracking the light and the metre above the foot of a lit
+     wall comes out BRIGHTER than the foot, which is upside down. It costs the
+     same either way; this only says where the one multiply lands. Called with
+     nothing it only reports which way it is set. See paintSide(). */
+  bandLight(on) {
+    if (on !== undefined) {
+      Render.bandLight = !!on;
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return Render.bandLight;
+  },
+
+  /* Ask the ground's light ramp along the direction a line across the PICTURE
+     means, the way the game ships. Turning this OFF is the old way -- ask it
+     along the world direction to the fire -- for proving the new way against
+     it: a canvas gradient measures along the line it is handed in the picture,
+     and the picture is not to scale the same way in every direction, so the old
+     way samples up to 4.5x the wrong distance and two squares sharing an edge
+     read the light slightly differently. Called with nothing it only reports
+     which way it is set. See groundBase(). */
+  gradExact(on) {
+    if (on !== undefined) {
+      Render.gradExact = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.gradExact;
+  },
+
+  /* Take the ground's light ramp from the field of square levels, the way the
+     game ships, or from the source's own falloff sampled inside the one square,
+     which is the old rule and the yardstick the ramp tests measure against.
+     Called with nothing it only reports which way it is set. See rampEnds(). */
+  rampField(on) {
+    if (on !== undefined) {
+      Render.rampField = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.rampField;
+  },
+
   /* A square of ground may only skip its own placement while the pattern still
      carries that floor's plane, the way the game ships. Turning this OFF is the
      old rule -- skip and hope -- which is what let a ramp's sloped transform be
@@ -427,6 +565,85 @@ window.__test = {
       Game.state.viewDirty = true;
     }
     return Render.ringStored;
+  },
+
+  /* Let a painted wall face run the light ACROSS its own metre, so the two
+     faces either side of a seam agree where they meet, the way the game ships.
+     Turning this OFF is exactly how the picture was built before: one flat
+     colour, or one straight ramp down the face, sampled at the block's own
+     centre -- which is why the light stopped and started at every wall unit.
+     It is the control the smoothing is proved against. Called with nothing it
+     only reports which way it is set. See acrossFace(). */
+  acrossLight(on) {
+    if (on !== undefined) {
+      Render.acrossLight = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.acrossLight;
+  },
+
+  /* Let a painted wall face read its light off is-altitude lines in the face's
+     own plane, the way the game ships. Turning this OFF is how it was: the ramp
+     built straight up the screen, so a screen row -- which is a height PLUS
+     however far along the wall the pixel is -- gave the far column of a
+     one-metre face a different altitude from the near one, and the two faces at
+     a join read their own leading sides. It is the control the axis is proved
+     against. Called with nothing it only reports which way it is set.
+     See faceBase(). */
+  faceAxis(on) {
+    if (on !== undefined) {
+      Render.faceAxis = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.faceAxis;
+  },
+
+  /* EVERY WALL FACE AT ONE LIGHT, which is the control that splits a seam into
+     the light's half and the stonework's half: with this on the light cannot
+     vary across the world or up a face, so it cannot make a seam, and whatever
+     the probe still finds is the material's own doing. Off is the game, and
+     that is how it ships. Called with nothing it only reports which way it is
+     set. See faceLight(). */
+  flatLight(on) {
+    if (on !== undefined) {
+      Render.flatLight = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.flatLight;
+  },
+
+  /* ASK THE SQUARE'S OWN LIGHT WHETHER IT IS LIT, not that number rounded onto
+     the six-step ladder.
+
+     `lightAt` rounds, so a square at the rim of a pool -- light 0.06, which the
+     light map really holds -- has a stepped value of exactly 0. Every guard in
+     the light path used that 0 to mean "no light here", so a whole band of wall
+     and floor at the edge of every fire was painted as if unlit; and because the
+     level a face is painted at was then rounded UP onto a rung (see
+     acrossFace), the wall at the rim came out 2.87x its neighbour at the join.
+     It is the control the fix is proved against, and OFF IS THE OLD PICTURE --
+     the one with the vertical edge at every block.
+
+     Called with nothing it only reports which way it is set. See lightFix. */
+  lightFix(on) {
+    if (on !== undefined) {
+      Render.lightFix = !!on;
+      Game.state.viewDirty = true;
+    }
+    return Render.lightFix;
+  },
+
+  /* Every wall face's own run, recorded: which square it stands on, and the two
+     squares past the ends of that run (or a mark, and whether ground was drawn
+     there) with the light it read from each. An instrument for reading a seam
+     that did NOT move, so it can be told whether the two faces either side of it
+     were ever each other's neighbours along a run. See acrossFace(). */
+  acrossLog(on) {
+    if (on === true) { Render.acrossLog = []; return 0; }
+    if (on === false) { Render.acrossLog = null; return 0; }
+    const log = Render.acrossLog || [];
+    Render.acrossLog = null;
+    return log;
   },
 
   /* ---- the ramps, and the proof that repairing them costs nothing --------
@@ -637,6 +854,24 @@ window.__test = {
     return Render.mappedWalls;
   },
 
+  /* How many pixels in from each edge of a dropped-in picture are averaged into
+     the opposite edge as it becomes a tiling surface -- see Render.wrapTile().
+     A tile is a metre square and so is a block's face, so without this the
+     picture's own left edge is laid against its own right edge at every join of
+     every wall. Setting it to 0 paints the material exactly as it was drawn,
+     which is what the seam is measured against. The pictures and every pattern
+     built from them are thrown away, because they are cached with the blend
+     already in them. */
+  wrapBlend(k) {
+    if (k !== undefined) {
+      CFG.wrapBlend = Math.max(0, Math.round(k));
+      Render.forgetMaterials();
+      Game.state.geomDirty = true;
+      Game.state.viewDirty = true;
+    }
+    return CFG.wrapBlend;
+  },
+
   /* Compose each material from the pictures somebody dropped into
      textures/<material>/ rather than generating it, which is the way the game
      ships when there are any. Turning it OFF is how every surface in the game
@@ -760,6 +995,36 @@ window.__test = {
     }
     return { w: k.w, h: k.h, pixels: k.w * k.h, differ: n, deep: deep,
              worst: worst, x: fx, y: fy };
+  },
+
+  /* A LINE OF THE PICTURE, AS BRIGHTNESS -- one sample a pixel along whichever
+     way the line runs further, so a test can look for a STEP across it: light
+     that is a ramp across a square shows up as a gentle slope, light that is one
+     number per square shows up as a cliff at every boundary. -1 marks a sample
+     that fell outside the picture, so a test cannot quietly count a shorter line
+     than it asked for.
+     
+     `pick` is who the picture says owns each sample (the same answer the pointer
+     gets, `Render.pickAt`), so a test can tell a step ACROSS a square's edge
+     from one within a square, and can throw away every sample that is not the
+     floor it chose -- a wall crossing the line would otherwise be counted as
+     light. */
+  line(x0, y0, x1, y1) {
+    const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+    if (!(n > 0) || n > 4095) return { n: 0, lum: [], pick: [] };
+    const px = Render.bctx.getImageData(0, 0, Render.w, Render.h);
+    const lum = [], pick = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const x = Math.round(x0 + (x1 - x0) * t), y = Math.round(y0 + (y1 - y0) * t);
+      if (x < 0 || y < 0 || x >= px.width || y >= px.height) {
+        lum.push(-1); pick.push(-1); continue;
+      }
+      const o = (y * px.width + x) * 4;
+      lum.push(px.data[o] * 0.299 + px.data[o + 1] * 0.587 + px.data[o + 2] * 0.114);
+      pick.push(Render.pickAt(Game.state, x, y));
+    }
+    return { n: n, lum: lum, pick: pick, w: px.width, h: px.height };
   },
 
   actors() {
@@ -1325,6 +1590,11 @@ window.__test = {
   setTexture(strength) {
     CFG.texStrength = strength;
     Render.patCache = {};
+    /* The skins are half-material, half-light and carry the strength they were
+       drawn at, so they have to be thrown away with the patterns they came
+       from -- a skin kept across a strength change is a face painted at the
+       strength before. See skinFor(). */
+    Render.skinCache = {};
     Game.state.geomDirty = true; Game.state.viewDirty = true;
     return { strength: CFG.texStrength, on: CFG.texStrength > 0,
              materials: Object.keys(Render.mats || {}).length };
@@ -1367,6 +1637,16 @@ window.__test = {
      squares wear a material, and how many wall sides do -- without asking which
      frame `Render.consumed` belongs to now.
 
+     `cells` IS THE SQUARES, NOT THE PATCHES. Since v0.49.0 a cast shade reaches
+     the canvas through the same counter as everything else -- `drawn++`, because
+     a shape that was painted must be counted as painted whatever it is -- so
+     `consumed.count` holds one shade for every patch of floor they lie on as
+     well as one for every square. A shade is not a surface: it is brightness
+     TAKEN OFF a surface that is already in the count. So the shades come back
+     off here, beside the crawlers and the camp sites, and `cells` keeps meaning
+     what every test that reads it thinks it means: how many squares of the world
+     the frame drew.
+
      This counts FILLS, and a count of fills is not the same as a share of the
      picture: since v0.42.0 one wall side paints up to four of them (the face, the
      band above it, and the strip of rock along each far edge). `fillMap()` is the
@@ -1397,6 +1677,14 @@ window.__test = {
     };
 
     ctx.fill = function () {
+      /* A LIGHT LAYER IS NOT A SURFACE. Since v0.49.0 a lit square wearing a
+         picture paints twice: its material, and then the light that falls on it
+         through a `multiply` composite. This census is about what a thing is
+         MADE of, so the light layer is skipped rather than counted -- otherwise
+         the answer would be "flat colour", because a blend of a material with
+         the light on it is neither of the two things this counts. What IS asked
+         about the light layer is `consumed` in the smooth-light test. */
+      if (this.globalCompositeOperation !== 'source-over') return;
       const f = this.fillStyle;
       if (f && typeof f === 'object') {
         if (typeof f.addColorStop === 'function') band++;   /* a fade, not a surface */
@@ -1424,7 +1712,7 @@ window.__test = {
     const c = Render.consumed;
     return { plain: plain, pattern: pattern, band: band, things: c.count,
              ground: ground, wall: wall, other: other,
-             cells: c.count - c.people - c.structures,
+             cells: c.count - c.people - c.structures - (c.shadows || 0),
              walls: c.walls, banded: c.banded, backs: c.backs,
              body: c.body, capsOff: c.capsOff };
   },
@@ -1481,6 +1769,8 @@ window.__test = {
     for (const k in INK) ofPixel.set(given(INK[k]), k);
     ofPixel.set(given(BACKDROP), 'backdrop');
     ctx.fill = function () {
+      /* The light layer is skipped here for the reason given in `fillKinds()`. */
+      if (this.globalCompositeOperation !== 'source-over') return;
       const f = this.fillStyle;
       let k = 'plain';
       if (f && typeof f === 'object') {
@@ -1523,6 +1813,330 @@ window.__test = {
       seen[px[i] + ',' + px[i + 1] + ',' + px[i + 2]] = 1;
     }
     return Object.keys(seen).length;
+  },
+
+  /* HOW HARD THE LIGHT STEPS FROM ONE WALL UNIT TO THE ONE BESIDE IT.
+   *
+   * They said it in their own words -- "I see the vertical edges of each wall
+   * unit because the light stops and starts" -- so that is the thing to count,
+   * and the only place it can be counted is the picture. An argument about
+   * ratios proves the arithmetic is continuous and says nothing about what
+   * reached the canvas; `Render.consumed.acrossed` proves the correction ran
+   * and says nothing about whether it worked.
+   *
+   * A wall face is a vertical run one metre long and its seams are its two
+   * ends, so a seam is a pair of side-by-side pixels. Which pairs count:
+   *
+   *   - both pixels must sit inside a PAINTED wall face. The faces are worked
+   *     out here exactly as the picture works them out -- wallsPainted() with
+   *     the same plan of what is standing in front of what -- so the ruler
+   *     measures the wall as it was drawn, not as it was listed.
+   *   - both must belong to the SAME KIND of face. The two faces of one block
+   *     that meet at its near corner -- its left against its right -- are lit
+   *     from different directions on purpose; that crease is a fold in the
+   *     rock, not a seam in the light. A run of wall joins left-to-left and
+   *     right-to-right, so matching the kind keeps the fold out of the count.
+   *   - they must belong to DIFFERENT blocks. This is the one that matters and
+   *     the one that was wrong first time: a pair inside one face is the
+   *     material's own edges -- a masonry joint, a crack in the rock -- and
+   *     averaging those in drowns a seam of a tenth of a light level in a
+   *     texture that steps by eighty levels wherever it likes. The face's own
+   *     pixel span has to be worked out WITHOUT a gutter too, or two faces that
+   *     meet edge to edge never come out side by side at all and the ruler
+   *     counts nothing but texture. It did, and reported a 10% improvement on a
+   *     fix that removes the seam entirely.
+   *
+   * What is left is a horizontal step in the light where one block ends and the
+   * next begins. A seam is judged by the MEAN step over its whole height, not
+   * by its worst pixel, so one stray pixel cannot call a seam hard: `hard` is
+   * how many seams average at least `threshold` levels of one colour channel,
+   * `seams` how many were found at all, and `jump` the worst mean anywhere on a
+   * wall -- with `at`, so a failing case can be looked at rather than guessed
+   * about. `count` is the raw number of boundary pixels that step that far, for
+   * a caller that wants the unsmoothed version. `wallPx` says how much wall the
+   * frame held at all, which is how a caller tells a picture with no wall in it
+   * from a picture whose walls are smooth.
+   *
+   * Two blocks of DIFFERENT wall are a different question and are counted
+   * apart. Where two kinds of stone meet, or where a picture of rock meets a
+   * picture of laid stone, the boundary steps whatever the light is doing --
+   * that is what the two materials ARE, and no amount of smoothing takes it
+   * away. So every seam is recorded twice over: `hard`/`jump`/`at` are all of
+   * them, and `hardSame`/`jumpSame`/`atSame` are only the ones where both
+   * blocks are the SAME KIND OF WALL, which is where "the light stops and
+   * starts" is a fair thing to say and the only place the correction can be
+   * asked to help.
+   *
+   * Cases are counted, never assumed: `worlds` says how many DIFFERENT moments
+   * were measured (lesson 27), so a battery that reaches one world in a hundred
+   * cases knows it has a broken probe and not a tidy result. */
+  edges(threshold) {
+    const t = threshold === undefined ? 16 : threshold;
+    const s = Game.state, w = Render.w, h = Render.h;
+    const cs = Render.buf.getContext('2d');
+    /* 0 = not wall; 1..4 = which kind of wall face. `fid` says WHICH block the
+       pixel belongs to, so a boundary inside one face is not a seam. `tid` says
+       which wall it is, so a seam between two different walls can be told from
+       a seam inside one. */
+    const kind = new Uint8Array(w * h);
+    const fid = new Int32Array(w * h);
+    const tid = new Uint16Array(w * h);
+    const cor = new Uint8Array(w * h);   /* did this face get the across light? */
+    const cellOf = new Map();            /* which SQUARE each block number is */
+    let faces = 0;
+    /* A face is a PARALLELOGRAM, sheared: its top edge slopes by half a step,
+       so over the rows it covers its x-range slides sideways. Marking it by its
+       bounding box therefore claims, at the top of every face, up to half its
+       width of pixels it does not paint -- which belong to the face next door.
+       That is not a nicety: the ruler's whole job is to say which block a pixel
+       belongs to, and a box says the wrong block along two triangles of every
+       face. So the test is the one canvas itself makes -- a pixel is in, if its
+       CENTRE is in. Four half-planes, which is exact for a convex quad. */
+    const inside = (q, px, py) => {
+      let inn = false;
+      for (let i = 0, j = 3; i < 4; j = i++) {
+        const xi = q[i].x, yi = q[i].y, xj = q[j].x, yj = q[j].y;
+        if (((yi > py) !== (yj > py)) &&
+            (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inn = !inn;
+      }
+      return inn;
+    };
+    const put = (q, id, who, tile, across) => {
+      if (!q || q.length < 4) return;
+      const a = Math.max(0, Math.floor(Math.min(q[0].x, q[1].x, q[2].x, q[3].x) - 0.5));
+      const b = Math.min(w - 1, Math.ceil(Math.max(q[0].x, q[1].x, q[2].x, q[3].x) + 0.5));
+      const y0 = Math.max(0, Math.floor(Math.min(q[0].y, q[1].y, q[2].y, q[3].y) - 0.5));
+      const y1 = Math.min(h - 1, Math.ceil(Math.max(q[0].y, q[1].y, q[2].y, q[3].y) + 0.5));
+      for (let y = y0; y <= y1; y++) {
+        const row = y * w;
+        for (let x = a; x <= b; x++) {
+          if (!inside(q, x + 0.5, y + 0.5)) continue;
+          kind[row + x] = id; fid[row + x] = who; tid[row + x] = tile;
+          cor[row + x] = across;
+        }
+      }
+    };
+    const alphaOf = Render.alphas(s, Render.batch).list;
+    const b = Render.batch;
+    for (let k = 0; k < b.length; k++) {
+      const it = b[k];
+      if (it.kind !== 'cell' || !it.solid) continue;
+      if (it.maxX < 0 || it.minX > w || it.maxY < 0 || it.minY > h) continue;
+      const f = Render.wallsPainted(it, alphaOf);
+      faces++;
+      cellOf.set(faces, it.cell);
+      const tile = it.cell.tile + 1;
+      const across = it.across ? 1 : 0;
+      put(f.bl, 1, faces, tile, across); put(f.br, 2, faces, tile, across);
+      put(f.l, 3, faces, tile, across); put(f.r, 4, faces, tile, across);
+    }
+    const px = cs.getImageData(0, 0, w, h).data;
+    const seams = new Map();
+    /* The material's OWN noise, measured the same way as a seam: how much two
+       pixels side by side differ when both belong to the very same face. A
+       seam smaller than this is not a light step, it is the texture. */
+    let inSum = 0, inN = 0, inHard = 0;
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x + 1 < w; x++) {
+        const kd = kind[row + x];
+        if (!kd || kind[row + x + 1] !== kd) continue;
+        if (fid[row + x] !== fid[row + x + 1]) continue;
+        const i = (row + x) * 4;
+        const d = Math.max(Math.abs(px[i] - px[i + 4]),
+                           Math.abs(px[i + 1] - px[i + 5]),
+                           Math.abs(px[i + 2] - px[i + 6]));
+        inSum += d; inN++; if (d >= t) inHard++;
+      }
+    }
+    const out = { count: 0, pairs: 0, hard: 0, seams: 0, jump: 0, at: null,
+                  span: null, cols: null, same: 0, countSame: 0, hardSame: 0,
+                  jumpSame: 0, atSame: null, spanSame: null, colsSame: null,
+                  wallPx: 0, rows: 0, faces: faces, thr: t, sign: '',
+                  hardBoth: 0, hardOne: 0, hardNone: 0 };
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      let any = false;
+      for (let x = 0; x + 1 < w; x++) {
+        const kd = kind[row + x];
+        if (!kd || kind[row + x + 1] !== kd) continue;
+        const a = fid[row + x], c = fid[row + x + 1];
+        if (a === c) continue;
+        const i = (row + x) * 4;
+        const d = Math.max(Math.abs(px[i] - px[i + 4]),
+                           Math.abs(px[i + 1] - px[i + 5]),
+                           Math.abs(px[i + 2] - px[i + 6]));
+        const key = a < c ? a * 1048576 + c : c * 1048576 + a;
+        let rec = seams.get(key);
+        if (!rec) {
+          rec = { sum: 0, n: 0, sumSame: 0, nSame: 0, x: x, y0: y, y1: y,
+                  y0Same: y, y1Same: y, both: 0, one: 0, none: 0,
+                  kA: kind[row + x], kB: kind[row + x + 1],
+                  cA: cellOf.get(a), cB: cellOf.get(c), nA: a, nB: c };
+          seams.set(key, rec);
+        }
+        rec.sum += d; rec.n++;
+        rec.y1 = y;
+        /* Which of the two faces at this seam had the across light put on it.
+           A seam only closes when BOTH did, because each one arrives at the
+           shared edge from its own side. */
+        const nCor = cor[row + x] + cor[row + x + 1];
+        if (nCor === 2) { rec.both++; if (d >= t) out.hardBoth++; }
+        else if (nCor === 1) { rec.one++; if (d >= t) out.hardOne++; }
+        else { rec.none++; if (d >= t) out.hardNone++; }
+        const same = tid[row + x] === tid[row + x + 1];
+        if (same) {
+          rec.sumSame += d; rec.nSame++;
+          rec.y1Same = y;
+          out.countSame += d >= t ? 1 : 0;
+        }
+        out.pairs++;
+        if (d >= t) out.count++;
+        any = true;
+      }
+      if (any) out.rows++;
+    }
+    const cols = (rec, y0, y1) => {
+      const list = [];
+      for (let y = y0; y <= y1; y++) {
+        const i = (y * w + rec.x) * 4;
+        list.push([px[i], px[i + 1], px[i + 2], px[i + 4], px[i + 5], px[i + 6]]);
+      }
+      return list;
+    };
+    const seen = (rec) => Math.round(rec.sum / rec.n * 10) / 10;
+    const all = [];
+    for (const rec of seams.values()) {
+      const mean = rec.sum / rec.n;
+      all.push({ x: rec.x, y0: rec.y0, y1: rec.y1,
+                 mean: Math.round(mean * 10) / 10, n: rec.n,
+                 both: rec.both, one: rec.one, none: rec.none,
+                 kA: rec.kA, kB: rec.kB,
+                 ax: rec.cA ? rec.cA.x : -1, ay: rec.cA ? rec.cA.y : -1,
+                 bx: rec.cB ? rec.cB.x : -1, by: rec.cB ? rec.cB.y : -1 });
+      out.seams++;
+      if (mean >= t) out.hard++;
+      /* `at` is the MIDDLE row of the seam, not its first: a seam runs up the
+         whole height of a wall face, so the topmost pixel of the worst one is
+         usually off the top of the picture and tells a caller nothing. */
+      const yMid = Math.round((rec.y0 + rec.y1) / 2);
+      if (mean > out.jump || out.at === null) {
+        out.jump = mean; out.at = { x: rec.x, y: yMid };
+        out.span = [rec.y0, rec.y1];
+        out.cols = cols(rec, rec.y0, rec.y1);
+      }
+      if (!rec.nSame) continue;
+      out.same++;
+      const ms = rec.sumSame / rec.nSame;
+      if (ms >= t) out.hardSame++;
+      const yS = Math.round((rec.y0Same + rec.y1Same) / 2);
+      if (ms > out.jumpSame || out.atSame === null) {
+        out.jumpSame = ms; out.atSame = { x: rec.x, y: yS };
+        out.spanSame = [rec.y0Same, rec.y1Same];
+        out.colsSame = cols(rec, rec.y0Same, rec.y1Same);
+      }
+    }
+    out.jump = Math.round(out.jump * 10) / 10;
+    out.jumpSame = Math.round(out.jumpSame * 10) / 10;
+    /* Worst first, so a caller can look at the edge that is actually being
+       complained about instead of a summary of all of them. A seam is keyed by
+       its two faces and carries its own pixel column and row range, so the same
+       one can be found again in the other arm. */
+    out.seamList = all.sort((p, q) => q.mean - p.mean).slice(0, 8);
+    out.inside = inN ? Math.round(inSum / inN * 10) / 10 : 0;
+    out.insidePx = inN;
+    out.insideHard = inHard;
+    for (let i = 0; i < fid.length; i++) if (fid[i]) out.wallPx++;
+    out.sign = s.world.seed + '|' + s.world.live.length + '|' + s.actors.length
+             + '|' + s.tick + '|' + Math.round(s.cam.yaw * 1000) + '|'
+             + s.cam.zoom + '|' + w + 'x' + h;
+    return out;
+  },
+
+  /* The ruler above, run over the range instead of the sample (lesson 22): so
+     many seeds, a few camera turns each, both ways round in ONE build, no
+     rebuild in between -- which is the only way the two numbers differ by
+     anything but the flag. Lesson 21 applies: what is being proved is that
+     putting the correction back moves the picture and nothing else, so the same
+     moments are measured with it off, then on, then off again, and the second
+     and third readings of every case must MATCH -- a ruler that cannot repeat
+     itself is worth less than no ruler (lesson 2).
+   *
+   * The distinct-world count is printed because an instrument that cannot tell
+   * you it did nothing will tell you nothing, loudly (lesson 27): a battery
+   * that reaches one world in `cases` cases has measured one picture `cases`
+   * times, and its numbers mean nothing. */
+  edgesScan(opts) {
+    const o = opts || {};
+    const seeds = o.seeds || [1, 2, 3, 4];
+    const turns = o.turns === undefined ? 4 : o.turns;
+    const settle = o.settle === undefined ? 2700 : o.settle;
+    const thr = o.threshold === undefined ? 16 : o.threshold;
+    const was = Render.acrossLight;
+    const seen = new Set();
+    const off = { count: 0, pairs: 0, jump: 0, hard: 0, seams: 0, wallPx: 0,
+                  acrossed: 0, hardSame: 0, jumpSame: 0, countSame: 0, same: 0,
+                  hardBoth: 0, hardOne: 0, hardNone: 0 };
+    const on = { count: 0, pairs: 0, jump: 0, hard: 0, seams: 0, wallPx: 0,
+                 acrossed: 0, hardSame: 0, jumpSame: 0, countSame: 0, same: 0,
+                 hardBoth: 0, hardOne: 0, hardNone: 0 };
+    const cases = [];
+    for (let si = 0; si < seeds.length; si++) {
+      this.seed(seeds[si]);
+      /* Let the camp go up before anything is looked at: a world with no fire
+         lit has no falloff to be smooth about, and would report a perfect
+         nothing. `advance` steps forward without painting every frame. */
+      this.advance(settle, 6);
+      for (let q = 0; q < turns; q++) {
+        if (q) { this.rotate(1); this.advance(1, 4); }
+        this.acrossLight(false);
+        const ao = this.redraw(), eo = this.edges(thr);
+        this.acrossLight(true);
+        const an = this.redraw(), en = this.edges(thr);
+        this.acrossLight(false);
+        const ap = this.redraw(), ep = this.edges(thr);
+        seen.add(eo.sign);
+        const tally = (acc, e, c) => {
+          acc.count += e.count; acc.pairs += e.pairs; acc.wallPx += e.wallPx;
+          acc.hard += e.hard; acc.seams += e.seams; acc.acrossed += c.acrossed;
+          acc.same += e.same; acc.hardSame += e.hardSame;
+          acc.hardBoth += e.hardBoth; acc.hardOne += e.hardOne;
+          acc.hardNone += e.hardNone;
+          acc.countSame += e.countSame;
+          if (e.jump > acc.jump) acc.jump = e.jump;
+          if (e.jumpSame > acc.jumpSame) acc.jumpSame = e.jumpSame;
+        };
+        tally(off, eo, ao);
+        tally(on, en, an);
+        cases.push({ seed: seeds[si], q: q, walls: ao.walls, seams: eo.seams,
+                     off: eo.hard, on: en.hard,
+                     offJump: eo.jump, onJump: en.jump,
+                     acrossed: an.acrossed,
+                     offSame: eo.hardSame, onSame: en.hardSame,
+                     offJumpSame: eo.jumpSame, onJumpSame: en.jumpSame,
+                     same: eo.same,
+                     repeat: eo.count === ep.count && eo.jump === ep.jump
+                          && eo.hard === ep.hard && eo.countSame === ep.countSame
+                          && eo.hardSame === ep.hardSame
+                          && eo.jumpSame === ep.jumpSame });
+      }
+    }
+    Render.acrossLight = was === undefined ? true : was;
+    Game.state.viewDirty = true;
+    const steady = cases.every((c) => c.repeat);
+    return { cases: cases.length, worlds: seen.size, thr: thr, steady: steady,
+             wallPx: off.wallPx, pairsOff: off.pairs, pairsOn: on.pairs,
+             offCount: off.count, onCount: on.count,
+             offHard: off.hard, onHard: on.hard, seams: off.seams,
+             offJump: off.jump, onJump: on.jump,
+             same: off.same, offSame: off.hardSame, onSame: on.hardSame,
+             offCountSame: off.countSame, onCountSame: on.countSame,
+             offJumpSame: off.jumpSame, onJumpSame: on.jumpSame,
+             offHardBoth: off.hardBoth, offHardOne: off.hardOne,
+             offHardNone: off.hardNone, onHardBoth: on.hardBoth,
+             onHardOne: on.hardOne, onHardNone: on.hardNone,
+             offAcrossed: off.acrossed, onAcrossed: on.acrossed,
+             per: cases };
   },
 
   /* Draw the same moment again, without advancing it. A test comparing two

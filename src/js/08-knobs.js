@@ -182,6 +182,16 @@ const CFG = {
   warmth:      K('light.warmth'),
   lightSteps:  K('light.steps'),
   falloff:     K('light.falloff'),
+  lampHeight:  K('light.lamp_height'),
+  fireHeight:  K('light.fire_height'),
+  heightFalloff: K('light.height_falloff'),
+  lightSmooth: K('light.smooth'),
+  acrossMin:   K('light.across_min'),
+  wrapBlend:   K('render.wrap_blend'),
+  shadeStrength: K('light.shade_strength'),
+  shadeGive:   K('light.shade_give'),
+  shadeReach:  K('light.shade_reach'),
+  shadeGirth:  K('light.shade_girth'),
   figureNominal: G('figure.nominal_height_m'),
   metresPerTile: G('world.metres_per_tile'),
   isoRatio:    G('render.iso_ratio')
@@ -226,3 +236,39 @@ function litShade(hex, f, light) {
    well it would come out nearly black -- a picture's own mid-brown against
    packed earth's brown is about a tenth as bright as either. */
 function lightShade(f, light) { return litShade('#ffffff', f, light); }
+
+/* WHAT TO MULTIPLY ONE BRIGHTNESS BY TO TURN IT INTO ANOTHER -- a colour a
+   `multiply` fill can wear, worked out from two light levels and nothing else.
+
+   It does not depend on the surface, and that is the whole of why this is
+   possible: the ratio between two finishes of `litShade()` is the same for every
+   colour and every facing, because the colour and the facing are multiplied
+   through both of them and cancel. So it is worked out ONCE, at a facing of a
+   half -- which is also the only facing that does not clip a channel against 255
+   on the way in, and a channel that clipped would take the ratio with it.
+
+   `ref` must be the brighter of the two or the answer would be a brightening,
+   which multiplying cannot do; the caller paints the surface at `ref` first and
+   multiplies it back down. */
+const RATIO = Object.create(null);
+function shadeRatio(ref, e) {
+  if (!(e < ref)) return '#ffffff';
+  const key = Math.round(ref * 256) * 65536 + Math.round(e * 256);
+  const had = RATIO[key];
+  if (had) return had;
+  const a = litShade('#ffffff', 0.5, ref), b = litShade('#ffffff', 0.5, e);
+  const na = a.slice(4, -1).split(','), nb = b.slice(4, -1).split(',');
+  const ch = (i) => {
+    const d = Number(na[i]);
+    if (!(d > 0)) return 255;      /* nothing to take away from */
+    return Math.max(0, Math.min(255, Math.round(255 * Number(nb[i]) / d)));
+  };
+  const out = 'rgb(' + ch(0) + ',' + ch(1) + ',' + ch(2) + ')';
+  /* A memo and not a table: the ladder the light is stepped to keeps this to a
+     hundred or so entries, and a face whose light ramps as well asks at whatever
+     heights it reaches. Told to forget rather than allowed to grow for ever --
+     it costs one `litShade` to ask again. */
+  if (Object.keys(RATIO).length > 4096) for (const k in RATIO) delete RATIO[k];
+  RATIO[key] = out;
+  return out;
+}

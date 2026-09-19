@@ -99,12 +99,13 @@ releases. Ask before anything is numbered here. Everything else goes under
 **Decisions so far** below, where it can be changed without ceremony.
 
 **1. Characters improve by failing forward. Succeeding teaches them NOTHING.**
-Failure is the only teacher; failing narrowly teaches most of all. A crawler who
+A crawler improves only by attempting something and not getting it. A crawler who
 has mastered something stops improving entirely until the labyrinth gives them
 something harder. The slowdown in rule 1 is therefore never a curve in the code:
 it is what happens when someone stops failing. Any progression that speeds up
 with mastery is wrong, and so is any system that punishes failure with nothing
-but lost time.
+but lost time. Grading failures -- paying more for a close one, less for a bad
+one -- is wrong for the same reason.
 
 **2. Every roll comes from a skill; every skill is one PAIR of the six natural
 attributes; all fifteen pairs exist. Ask, never invent.** There is one framework for how characters and
@@ -160,9 +161,10 @@ is written here now.
 ## Commands
 
 ```
-python3 build.py       # assemble the whole game into one playable file
-node tests/run.mjs     # run the headless tests against that built file
-python3 publish.py     # build, then put that file on the link at the top of this file
+python3 build.py               # assemble the whole game into one playable file
+node tests/run.mjs             # run the headless tests against that built file
+node tests/run.mjs --quick     # the short everyday check -- see below
+python3 publish.py             # build, then put that file on the link at the top of this file
 ```
 
 **Run the build after every change, and hand the game over.** The tests run
@@ -221,6 +223,19 @@ nobody moved. It prints that it was a partial run, so no later session mistakes
 it for a full one. If you cannot name the substrings, you have not understood the
 change yet. And a red result anywhere is still worth stopping for.
 
+**`--quick` is the floor under a change whose blast radius is not obvious**: a
+dozen tests picked by name, and every one of them guards something scores of the
+others quietly assume. The file on disk is the version the sources say; a number
+in the spreadsheet reaches the picture; the labyrinth is walkable at all; the
+picture never paints through the thing in front of it; the ground arrives
+underfoot as the view travels; pointing and the harness's own doors still work;
+materials and light still reach the screen; and the page raised no errors doing
+it. It is a smoke alarm, not a survey — a change that reaches into shared
+machinery (world generation, the renderer's depth and pick passes, the harness,
+the build) still wants the whole suite afterwards. It prints its own size and it
+**fails if one of its parts matches no test**, because a short check that has
+lost a test looks exactly like a short check that passed.
+
 The start-up script (`.claude/hooks/session-start.sh`) installs what a session
 needs before work begins, so the first build never fails on a missing tool.
 
@@ -275,9 +290,9 @@ six attributes  ->  a skill (one PAIR of them)  ->  ability  ->  one roll
 - **A skill is exactly one pair of the six, and all fifteen pairs exist.** That
   makes the skill list a complete grid rather than a list somebody keeps adding
   to. The build refuses to build if a pair is missing, doubled, self-paired, or
-  drawn from anything but the six. Clambering is MGT+AGI, Labouring MGT+END,
+  drawn from anything but the six. Focusing is MGT+AGI, Labouring MGT+END,
   Building MGT+INT, Studying INT+WIL, and so on for all fifteen.
-- Each skill is a FAMILY of work, not one action: Crafting covers cooking,
+- Each skill is a FAMILY of work, not one action: Tinkering covers cooking,
   sewing and mending; Studying covers lore, mapmaking and deciphering.
 - `ability = average of the pair + practice`, and then **2d6 is thrown on top**
   and the sum is compared with a difficulty. Both weights are 1, so the number
@@ -618,6 +633,20 @@ Two surfaces, and the difference is the point:
 page. Split so a test can prove both that the description is right and that it
 reached the screen.
 
+**Every kind of thing in the box is asked the same question: how lit is it where
+it stands** (v0.50.0). A square of ground, a crawler and one of the camp's
+structures each carry the light of THEIR own square, and `Inspector.lightText()`
+is the single function that turns a position into the words, so the three cannot
+drift apart. It is the game's own answer -- `lightAt` in `12-world.js`, the number
+both the light map and the picture are drawn from -- **stepped by `light.steps`
+and shown as a percentage**, so the box reads 0 / 17 / 33 / 50 / 67 / 83 / 100%.
+That is the light AT that place, not the reach of the lamp someone is carrying
+(the gear rows already carry that). 0% is "no light reaches this square", not
+"nothing is visible": `light.ambient` in the picture is what lifts a dark square
+to something a person can see. The word lives in the sheet
+(`ui.label_light` = "light"). The tooltip carries it as a suffix on its one line
+and the panel as its own row.
+
 **A selection outranks the pointer.** The ring is drawn on `state.selected` and
 falls back to `state.hover`, so the crawler you pinned keeps their outline while
 they walk away from where you were pointing. It was the other way round once, and
@@ -752,7 +781,7 @@ the angle opens the ground out (`tile_h`) and leaves wall heights alone, so the
 ### Gear does three things at once
 
 A piece of gear SHIFTS an attribute (a pack is +1 Might, -1 Agility), BONUSES a
-skill (boots are +2 Clambering), and some work REQUIRES it (Building bare-handed
+skill (boots are +2 Focusing), and some work REQUIRES it (Building bare-handed
 is 6 points harder, which on a scale of about a dozen is close to impossible). All three go through
 `ability()`, so there is still exactly one place anything is resolved. A gear row
 carries its look and its effect on the same line of the sheet, so the two cannot
@@ -1163,6 +1192,12 @@ false` puts it back, and `texture.strength` 0 turns every material off.
 The labyrinth is dark. `light.ambient` is 0.14 — you can just make out shapes.
 Light is something you carry into it or build.
 
+Two things, kept apart on purpose (v0.49.0): the light **level** a square carries
+is game-mechanical, and the **shade** a solid thing lays on the ground is only
+ever a picture. They share a source and nothing else.
+
+### The level, which is mechanical
+
 - Worked out **per square**, not as a glow on the screen: each source floods
   outwards through whatever does not block sight, so a fire lights its room and
   the hall out of it and **not the room through the wall**. Rock catches the
@@ -1171,6 +1206,18 @@ Light is something you carry into it or build.
 - Sources are a `light` column on **gear** and on **structures**, in metres:
   candle 3, lantern 6, torch 8, campfire 9. A crawler uses the brightest thing
   they carry. Add a row with a `light` value and it lights the way.
+- **The source hangs in the air at a real height** — `light.fire_height` 0.35,
+  `light.lamp_height` 0.9 — so brightness falls off with the **true** distance to
+  it and not the flat one: a wall is bright at the foot and dark at the crown.
+  `lightFall()` in `12-world.js` is the ONE place that decides, and it takes
+  `max(route-around, true distance)` so the old cost of walking an indirect way
+  still counts. **`light.height_falloff` 0 (row 73) makes the distance flat again
+  and every vertical drop exactly zero** — the honest negative control, and the
+  thing six of the ten light tests are A/B-ed against.
+- `lightAt(state, cell)` is the number a square carries: the value at the square's
+  OWN surface, quantised by `light.steps`. That is the game-mechanical answer to
+  "how bright is this floor". `lightValueAt(state, cell, z)` is the same value at
+  an absolute height, and `lightPoint(...)` is the renderer's doorway into it.
 - Light is **stepped** (`light.steps`), so the picture reads as painted pools
   rather than a smooth gradient -- and so the pattern cache underneath stays
   small.
@@ -1180,6 +1227,168 @@ Light is something you carry into it or build.
   by the room, because it IS the light.
 - `state.lightDirty` is set when a light-carrier moves or a fire is finished;
   the map is rebuilt then, not every frame.
+
+### The picture of it: one ramp per square
+
+A square used to get one flat colour. With `light.smooth` (row 74) on it gets a
+ramp between two sampled brightnesses instead.
+
+- `floorGrad(s, cell, h)` takes a **central difference of `lightValueAt` over the
+  square's four neighbours** — the direction and steepness of the light across
+  that square, read off the light itself rather than off the square's quantised
+  step, so a ramp does not come out as a staircase.
+- `rampEnds()` places the two ends along the direction **conjugate to the world
+  perpendicular under the projection** (`Render.gradExact`), because the
+  projection is affine and a screen-space line is not a ground line. Without it
+  the ramp's own fidelity error was 2.15 levels (median); with it, 0.97.
+- `Render.rampField: true` anchors the pair to that gradient rather than to the
+  square's own diagonal. The checkerboard the old anchoring produced — two
+  neighbouring squares disagreeing by **7.6 levels at their shared centre** — is
+  **0** now, and the range across one square's faces is a median of 0.029 levels.
+- **The light arrives as a multiply overlay, not as a fill colour**, because a
+  floor wearing a dropped-in material is painted with a canvas pattern and a
+  pattern ignores `fillStyle`. `faceBase`/`groundBase` therefore take RAW colour
+  in and `lightOver` lays the light on top: exactly one multiply per surface, and
+  the second one is the bug that made the first version read as a dimmer scene
+  rather than a lit one.
+- `Render.snapOver: true` rounds the overlay's OWN vertices and nothing else —
+  every other call site passes three arguments and takes the old path
+  bit-exactly. A settled camera was already whole-pixel; a **mid-swing** one had
+  588 fractional overlay vertices and now paints none.
+- `light.smooth` 0 drops every ramp: 26 overlay calls instead of 144, for no cost.
+
+### The light runs ACROSS a wall face, so two blocks of a wall meet (v0.51.0)
+
+Reported as **"the light isn't smooth BETWEEN wall blocks though. I see the
+vertical edges of each wall unit because the light stops and starts."** The floor
+had a ramp and the wall face had none: `faceBase` sampled only the face's own
+square, so every wall unit was one flat colour and every metre of wall was a
+hard vertical edge. `acrossFace()` gives each painted wall face a second ramp
+**across its own one-metre run**, on top of the one already up it.
+
+- **Both ends come from the SQUARES either side of the edge, so two faces at a
+  seam work out the same number.** `faceSquare(s, cell)` is one square's light,
+  smooth where the world has one (the same quantity `floorGrad` samples);
+  `acrossEdge(s, cell, nbr)` is `(faceSquare(cell) + faceSquare(nbr)) / 2`, and
+  `acrossFace` reads it through `world.at(cell ± runDir)` — `quad[0] → quad[1]`
+  IS the run, and `runDir = CORNERS[cB] − CORNERS[cA]`. Face X's u=0 end is
+  therefore `(X + Y)/2` and face Y's u=1 end is `(Y + X)/2`: **the same number to
+  the last bit**, which is the whole reason the seam closes. Measured at the worst
+  seam found (seed 3, `(46,42)L` against `(47,42)L`): both ends
+  `0.2832525712696736`.
+- **The first version averaged two DIFFERENT KINDS of number** — the flat arm read
+  its neighbour through the stepped `faceLevel` and used its own stepped `ref`,
+  the ramped arm read it through `lightValueAt(nbr, 1 m)` and used a smooth `ref`
+  — and the two faces at one seam disagreed by 0.0458, **27% of a light step**.
+  That was the v0.50.0 residual and it is gone (`faceLevel` deleted).
+- **`shadeRatio(ref, e)` can only DARKEN**, so the ramp raises the whole face
+  first and darkens the middle back: `level` = the brighter end rounded up to the
+  next `1/light.steps`, the fill is painted at `level`, and the three gradient
+  stops are `shadeRatio(level, e0)`, `shadeRatio(level, ref)`,
+  `shadeRatio(level, e1)`. A down-only `min` was tried and leaves **half** the
+  original step. `add = level − ref` is returned so `draw()` can raise the fill.
+  Cost of the raise: `level` keys the pattern cache, so a handful of extra 32×32
+  tiles.
+- **The gate is a spread test** — fire unless `|mine − e0|` and `|mine − e1|` are
+  both at or under `light.across_min`. **`light.across_min` is 0** (row 101): every
+  difference is painted. The dial stays live and the exact-equality skip stays, so
+  0 is the measured-best arm rather than a number tuned to move a result.
+- `Render.acrossLight` (default true) is the A/B control, reachable as
+  `__test.acrossLight(on)`. **Flag off is byte-identical to v0.50.0** — the same
+  32-bit hash of the buffer on 5 seeds, and `consumed.acrossed` 0 — so this is
+  entirely behind one switch. `consumed.acrossed` counts corrected faces, and
+  `it.across` stamps the item, which is **per item, not per face**.
+- **What it is worth**, 4 seeds × 4 turns, seed-settled (2,700 ticks), the same
+  20,328 side-by-side pixel pairs and 426 seams both ways, 1,042,560 wall pixels,
+  539 faces corrected:
+
+  | threshold | seams over it, off → on | worst seam, off → on |
+  |---|---|---|
+  | 8 levels | 322 → **279** | 65.9 → **31.1** |
+  | 16 levels | 108 → **32** | 65.9 → **31.1** |
+  | 32 levels | 4 → **0** | 65.9 → **31.1** |
+
+- **What it does not fix, and why.** The residual is in the PICTURE path (plain
+  colours measure `hard 0`, worst 6–8 levels, either way). A picture is baked
+  *over* the tint — `bake = αT + (1−α)C(level)` — so the correction's ratio leaves
+  the `αT` term at `αT·C(e)/C(level)` instead of `αT·C(e)`, error `αT(r − 1)`,
+  because the two faces of a seam have different `level`s (each is floored at its
+  own `ref`). The exact fix is to bake wall pictures as an unlit albedo and put
+  the whole light in a `multiply` gradient — **a visible look change to every
+  wall, so it is the owner's decision, and it is parked in `ROADMAP.md`.**
+- `__test.edges(threshold)` is the ruler: `count` is individual adjacent pixel
+  rows, `hard` is whole seams whose **mean** is over the threshold, `jump` is the
+  worst seam's mean, and `hardBoth + hardOne + hardNone === count` (not `hard`).
+  `__test.edgesScan(opts)` runs it over seeds × turns in one build, both arms.
+  **It fires only on the four `acrossFor` call sites that paint a wall face**
+  (`shapeOf`'s `wallsPainted` must not get the correction).
+
+### The shade, which is only ever a picture
+
+- A shadow is **geometry, not a map**: `castOne()` pushes a polygon out along the
+  light direction and it goes into the batch like a floor, with a depth of its
+  own. `structureHeight()` and a per-actor caster census decide who is tall enough
+  and how tall — **crawlers included**, so a crawler crossing a fire drags a shade
+  with them.
+- `light.shade_strength` 0.5 is how dark it goes; `shade_give` 0.3 softens the
+  near end so the shade starts a little way out from the feet ("crisp edge with a
+  little give"); `shade_reach` 2.2 is how far it stretches; `shade_girth` 0.25 is
+  how much it widens. `clipHalf`/`clipSquare` hold it to the ground it is allowed
+  to lie on.
+- **A shade answers no pointer.** `pickAt` and `drawPick` both skip
+  `kind === 'shadow'` before the box test, so a shadow can never steal a hover
+  from the floor under it.
+- **`Render.shadeMultiply: true` lays the shade as LIGHT** — the shade's own
+  colour is black, so `multiply` gives `(1 - a) × destination` and painting black
+  over the top gives the same `(1 - a) × destination`. The arithmetic is not why
+  the flag exists: **the census is.** `fillKinds()` counts what each fill was MADE
+  of, and a shade painted over the top is a gradient object, indistinguishable
+  there from a wall's fade band — so lesson 15's test ("the ground is the only
+  thing wearing a texture") was quietly counting shadows as surfaces. Laid as
+  light it is counted as neither, and the census goes on meaning what it says.
+  Measured, three frames at 229,632 pixels: **30,796 moved (4.47%), worst 2/255,
+  none by more than 8**. **Do not measure the pixels and the census on the same
+  frame** — the census skips anything outside `source-over`, so a picture taken
+  through it has the shade MISSING in one arm and painted in the other (measured:
+  40,368 pixels at 87/255, where the truth is 2/255).
+- **A shade is CONSUMED like anything else, and two rulers had to be told so.**
+  The shadow arm does `shadows++; drawn++`, because a shape that reached the
+  canvas is a shape that was painted and the frame's own books have to say so. Two
+  consequences, both of them a red test before they were written down: `consumed`
+  now holds **one shade per patch of floor it lies on**, so `fillKinds()` takes
+  the shades back off before calling the answer "squares" (`cells`) — read
+  straight off `count`, 120 patches of shade became 120 squares of world and
+  `ground === cells − body − capsOff` read 151 against 271. And a ruler that
+  watches for **`multiply`** is now watching the shade as well: the whole-pixel
+  test counted **246 of 1,104 "points of light between pixels"** on a camera that
+  had stopped moving, every one of them the shade's own silhouette. **Point that
+  ruler at `Render.lightOver` itself**, not at the composite — the shade has no
+  whole-pixel requirement, because no light spills off it.
+- **`Render.altGrid: true` reads the light up a face at the world's own whole
+  metres** (stopping at the foot, every metre strictly inside, and the crown)
+  rather than at equal fractions of the face as painted. The two agree **exactly**
+  when a face's foot and its height are whole metres, which is every camera in the
+  clip test — so two probes measured 0 pixels there and called the flag dead. It
+  is worth **26×** on the cameras `snapping a foot` actually measures (raised
+  angle, feet off the grid): 539 pixels against 14,131 over four views, and the
+  flat view byte-identical either way. Lesson 22 in a new coat: the flag was never
+  dead, the cameras had no part-metre feet to sample.
+- `__test.shades()` reports `{made, painted, byActors, casters}`. At the camp:
+  **120 made, 120 painted, 24 of them by 4 crawlers, 3,309 over 30 frames** — and
+  every one of those numbers 0 with `lightShadows(false)`. Anything computed needs
+  a test that something consumed it, and the shadow pass is no exception.
+
+### What it costs
+
+**+1.5 ms on a drawn frame — 8.28 → 9.81 ms**, seed 1, camp in view, best of three
+passes of thirty redraws in each of four arms inside ONE build, so the difference
+between two arms is the thing switched off. The two halves, which are worth
+knowing separately: the light's soft ramps are **+1.25 ms** (8.28 → 9.53) and the
+cast shades **+0.28 ms** on the lit picture (9.53 → 9.81, 120 patches of floor).
+Drawing the picture is the whole bill; the shadow census and the light map are not
+a measurable share of it. **No low-end phone profile has been measured.** If it is
+too much there, the answer is the sheet's own dials — `light.smooth` 0,
+`shade_strength` 0, a coarser `light.steps` — and not a rewrite.
 
 **Do not confuse the two ambients.** `render.light_ambient` is how lit the
 darkest FACE of a thing is -- that is shape. `light.ambient` is how dark the room
@@ -1316,6 +1525,28 @@ Four things, and one rule underneath them:
   as tall standing behind it.
 - **A wall buried in the rock next door is not painted** -- the v0.18.0
   `clipFaces()`. *"do not render sides of wall blocks that can never be seen"*.
+- **The band takes the light that reaches it** (v0.49.1, `bandLight`). The top
+  metre is where the light has fallen off most -- a fire is at knee height, so the
+  crown of a wall beside it is the darkest part of that wall -- and from v0.49.0
+  until v0.49.1 it was the one surface in the game painted with **no light at
+  all**. `wallBand(color, mat, lit, ..., skin)` returns `skin || matPattern(...)`,
+  so **a caller that passes a skin has thrown its `lit` argument away**; rock walls
+  wear a dropped-in picture, so the band was handed the assembled picture of the
+  band -- `picBandL`, unlit, with the fade already baked into its alpha -- and the
+  light never reached the paint. Only the faces whose light **varies** across the
+  fade were wrong (a flat value multiplies into the fade, not into the skin):
+  measured at the camp, seed 1, `over:0` on 31 faces and `over:1` on 26, and on
+  those 26 the band's foot came out **brighter than the lit foot below it** (56.5
+  against 31.2).
+  The fix asks `faceBase` **twice** per banded face, and the two questions are
+  not the same one -- with the fade at zero (`rampL`/`rampR`) to decide *whether*
+  the light ramps, with the real fade (`overL`/`overR`) to build the multiply that
+  wears it -- and `paintSide`'s tail paints the band first and the **one**
+  multiply last. **No fills and no `lightOver` calls were added**, so the cost did
+  not move. The band picture's baked alpha and the multiply gradient's alpha are
+  the same `(y - yTop)/d`, so the two ramps coincide; the one row the band shares
+  with the `low` rectangle moved, and that single row is the seam lesson 17
+  applies to.
 
 ### The rule under all of it: the clip must ask what the coverer PAINTS
 
@@ -2148,6 +2379,25 @@ checkout still builds. The build reconciles the two and inlines the result.
     match. And when a function can answer "nothing" for two different reasons, make
     it say which (lesson 27): that diagnostic is what turned a one-line mystery
     into a one-line fix.
+
+34. **A dial that looks disconnected may only be out of shot.** v0.49.0, the last
+    of the ten light tests. Eight new light dials were flipped one at a time and
+    the pixels that moved counted: seven moved, and `light.lamp_height` moved
+    **0** -- on the same build where a wall had just been measured going dark with
+    height at the lamp's own distance. The dial was connected the whole time. The
+    match holds three lights and the opening view draws **`{2: 167}` of 230 lit
+    squares -- every one of them the campfire's**, with the nearest lantern
+    eighteen metres off the side of a 624x368 buffer. The same flip on a view
+    centred on the lantern-carrier moves **71,331 pixels**, worst channel shift 34.
+    So the fix was in the TEST and not the game: the framing a dial is judged in
+    has to be **checked** to contain the kind of light that dial is about
+    (`campView.fire > 0`, `lampView.lamp > 0`) before any pixel count taken in it
+    means anything. Generalised: "the feature does nothing" and "the camera was
+    pointed somewhere else" produce the same number, so an instrument has to say
+    what it was **looking at** and not only what it measured -- and the honest
+    reading was free, because two lines of census would have said there was no
+    lamp on screen. Lesson 27's family, with its own sting: an instrument that
+    cannot tell you it did nothing will tell you nothing, loudly.
 
 ---
 

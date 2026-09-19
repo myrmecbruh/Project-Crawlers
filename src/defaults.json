@@ -346,6 +346,56 @@
       "unit": "x",
       "note": "How sharply light dies with distance. Above 1 keeps the bright part close to the source."
     },
+    "light.lamp_height": {
+      "value": 0.9,
+      "unit": "m",
+      "note": "How high above the floor the light a crawler carries hangs -- about the height of a hand. It is why a wall is bright near the lamp and dimmer further up it."
+    },
+    "light.fire_height": {
+      "value": 0.35,
+      "unit": "m",
+      "note": "How high above the ground the light of a burning structure sits -- knee height for a campfire. The floor round a fire is therefore brighter than a wall three metres up."
+    },
+    "light.height_falloff": {
+      "value": 1,
+      "unit": "x",
+      "note": "How much height counts as distance for light. 0 lights every height the same, which is the flat look; 1 is true; raise it to exaggerate the darkening with height."
+    },
+    "light.smooth": {
+      "value": 1,
+      "unit": "0 or 1",
+      "note": "Whether brightness is painted as a smooth ramp (1) or in the few flat levels of light.steps (0). Smooth is the look; 0 is the cheaper fallback, and is what light.steps is for."
+    },
+    "light.across_min": {
+      "value": 0,
+      "unit": "0-1",
+      "note": "The smallest unevenness of light along a wall worth painting a ramp across. ZERO: every difference, however small, because a wall's light is not supposed to be quantised at all and a bigger threshold loses seams it should keep. Raised, it spares a fill on faces whose ends agree closely with their own square."
+    },
+    "render.wrap_blend": {
+      "value": 0,
+      "unit": "px",
+      "note": "Parked at 0. A tiling surface should wrap and this one does not, so the repeat can be closed -- but it was built to fix the vertical join between two wall blocks and it does NOT: measured, closing every picture to 0.00 moved the join 15.6 -> 15.3, i.e. nowhere. The join is the wall's own material map, not the tile. 0 is a plain copy, which leaves the picture identical to v0.51.0; the knob is kept because the defect is real and that job will want it."
+    },
+    "light.shade_strength": {
+      "value": 0.5,
+      "unit": "0 to 1",
+      "note": "How much of the light a cast shadow takes away. 0.5 halves it, which is what a fire behind a crawler looks like; 1 would leave a black hole where the shadow is."
+    },
+    "light.shade_give": {
+      "value": 0.3,
+      "unit": "metres",
+      "note": "How far a shadow's edge takes to fade out. 0 is a hard stencil edge; 0.3 gives the edge about a third of a metre of give, which is the firm-but-not-cut-out look. Purely how it looks: light level and shadows never touch the simulation."
+    },
+    "light.shade_reach": {
+      "value": 2.2,
+      "unit": "metres",
+      "note": "How far from the thing casting it a shadow may stretch before it is cut off. A point light at knee height would throw a shadow as long as the thing is far from it, which smears across a room; this keeps them short."
+    },
+    "light.shade_girth": {
+      "value": 0.25,
+      "unit": "metres",
+      "note": "How wide a thing has to be before it casts a shadow wider than a knife edge. About a hand. Small props and a crawler are roughly this thick, so their shadows have a body to them instead of being a line."
+    },
     "anim.step_ticks": {
       "value": 22,
       "unit": "ticks",
@@ -489,6 +539,9 @@
     },
     "ui.label_footing": {
       "text": "footing"
+    },
+    "ui.label_light": {
+      "text": "light"
     },
     "ui.footing_walk": {
       "text": "can be walked on"
@@ -968,7 +1021,7 @@
   },
   "skills": {
     "clambering": {
-      "name": "Clambering",
+      "name": "Focusing",
       "derives": "might:1,agility:1",
       "needs_tag": "",
       "without": 0,
@@ -982,7 +1035,7 @@
       "note": "Hauling, digging, clearing ground, and still doing it an hour later. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Bare hands cost 4."
     },
     "wrangling": {
-      "name": "Wrangling",
+      "name": "Grappling",
       "derives": "might:1,presence:1",
       "needs_tag": "",
       "without": 0,
@@ -996,39 +1049,39 @@
       "note": "Raising structures that stay up. Knowing where the weight goes, and being able to put it there. (Every skill is one pair of the six attributes; all fifteen pairs exist.) Needs a tool in hand: without one the job is 6 points harder, which on a scale of about a dozen is close to impossible."
     },
     "fighting": {
-      "name": "Fighting",
+      "name": "Brawling",
       "derives": "might:1,willpower:1",
       "needs_tag": "",
       "without": 0,
       "note": "The one fifth of the game that is violence. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "ranging": {
-      "name": "Ranging",
+      "name": "Maneuvering",
       "derives": "agility:1,endurance:1",
       "needs_tag": "",
       "without": 0,
-      "note": "Covering ground: travelling far, moving quietly, getting back again. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+      "note": "Covering ground: travelling far, keeping pace, and getting back over rough going. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "performing": {
-      "name": "Performing",
+      "name": "Entertaining",
       "derives": "agility:1,presence:1",
       "needs_tag": "",
       "without": 0,
       "note": "Singing, playing, dancing, and holding a room while you do it. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "crafting": {
-      "name": "Crafting",
+      "name": "Sneaking",
       "derives": "agility:1,intellect:1",
-      "needs_tag": "tool",
-      "without": -5,
-      "note": "Making and mending: tools, clothes, meals, anything that takes hands and a recipe. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+      "needs_tag": "",
+      "without": 0,
+      "note": "Moving quietly, hiding, and going unseen in the dark. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "tinkering": {
       "name": "Tinkering",
       "derives": "agility:1,willpower:1",
       "needs_tag": "tool",
       "without": -5,
-      "note": "Locks, traps, and anything fiddly that punishes a shaking hand. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
+      "note": "Making and mending: tools, clothes, meals, and anything else fiddly that punishes a shaking hand — locks, traps. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "tending": {
       "name": "Tending",
@@ -1045,7 +1098,7 @@
       "note": "Hunting, fishing, gathering, and knowing which of it is safe to eat. (Every skill is one pair of the six attributes; all fifteen pairs exist.)"
     },
     "enduring": {
-      "name": "Enduring",
+      "name": "Persisting",
       "derives": "endurance:1,willpower:1",
       "needs_tag": "",
       "without": 0,

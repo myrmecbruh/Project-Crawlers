@@ -248,7 +248,7 @@ function surfaceHeight(cell) {
 
 const MOVE_SKILL = 'clambering';
 
-/* Try to move one metre. Every step onto difficult ground is a Clambering roll
+/* Try to move one metre. Every step onto difficult ground is a Focusing roll
    against how hard that floor is to cross -- water and rubble are genuinely
    worth failing at. */
 function tryStep(state, actor, to, dx, dy) {

@@ -40,6 +40,18 @@ const Render = {
      the list outlives the frame it was made in. See Render.wallSkin. */
   skinDropped: 0, skinKept: 0,
   recordItems: false,
+  /* EVERY SOLID THING THROWS A SHADOW AWAY FROM THE LIGHT.
+   *
+   * Aesthetic only, and deliberately so: the game's own light is a level per
+   * square, and a shadow is not part of it. Nothing reads a shadow, nothing is
+   * hidden by one, and a crawler standing in one is as lit as the square they
+   * are standing on says they are. What a shadow buys is that a fire on the
+   * floor looks like a fire on the floor -- a crawler walking past one drags a
+   * shape along the ground with them.
+   *
+   * Flipped off, the picture is exactly what it was before there were shadows,
+   * which is the arm every shadow test is measured against. */
+  lightShadows: true,
   /* Paint only the part of a side wall that stands above the block standing in
      front of it. Flipped off only by the test that paints one frame both ways
      and compares the two pictures pixel for pixel. */
@@ -343,6 +355,189 @@ const Render = {
 
      Named for what is ON, like mappedGround. */
   ownPlane: true,
+  /* Put the light laid OVER a surface onto whole pixels. `lightOver()` is the
+     only fill in the game that multiplies what is already there, and `multiply`
+     is exact only while the polygon covers a pixel WHOLE: canvas blends a pixel
+     a shape only partly covers, and the blend of a multiply is applied part of
+     the way, so two neighbouring squares that share their edge leave a brighter
+     hairline between them -- at the worst split, a quarter of the square's own
+     brightness coming back, which on a floor lit to 0.3 is a dozen levels.
+     Rounding each corner up or down to a whole pixel cannot open a gap or an
+     overlap, because both neighbours' shared corners are THE SAME POINT and so
+     round the same way. Off, the polygon is painted at the fraction it was
+     projected at, which is how it was before and is the yardstick the test that
+     paints one frame both ways measures against. See lightOver().
+
+     Named for what is ON, like mappedGround. */
+  snapOver: true,
+  /* Let the light laid over a wall reach the metre of it that is dissolving,
+     instead of stopping at the solid part below.
+
+     A wall wearing a dropped-in picture takes its light as a multiply over the
+     picture, and the top metre of it is painted as a SECOND picture -- the same
+     material with its own dissolve baked into its alpha. Where the multiply
+     lands decides whether that metre is lit at all: over the solid part only, it
+     stands at the raw brightness of its picture while the metre below it ramps
+     with the light, so the brightest stripe of every wall beside a fire is the
+     part being dissolved. It costs no fill either way -- the multiply is painted
+     once, and this only says where. See paintSide(). Flipped off only by the test
+     that paints one frame each way and reports WHERE the two differ, which is how
+     "the difference is the band and nothing else" is proved rather than argued.
+
+     Named for what is ON, like mappedGround: on means the ramp reaches the band. */
+  bandLight: true,
+  /* Sample the ground's light ramp along the direction a line ACROSS THE
+     PICTURE actually means in the world, instead of along the world direction
+     to the fire.
+
+     A canvas gradient measures along the line it is handed IN THE PICTURE, and
+     the projection is not a similarity: one metre of world offset at 45 degrees
+     to the grid arrives at a few tenths of a pixel of picture where a metre
+     straight along an axis arrives at a whole one. So a ramp built from the two
+     points either side of a square along the world direction to the fire asks
+     the light along a line that is up to 4.5x the wrong length in one
+     direction -- and the mistake is per square and turns with the direction to
+     the fire, so two squares sharing an edge sample the light at that edge
+     slightly differently. Measured on a lit row of floor at seed 1, six level
+     out of a hundred: a hair's breadth of a seam where the light should meet.
+
+     On, the two ends are taken along the direction conjugate to the world
+     perpendicular under the projection (`groundBase` works it out from the same
+     two numbers the projection is built from), which makes the ramp's equal-
+     light lines the world's equal-light lines. Off is how it was before, and is
+     the yardstick the test that paints one row both ways measures against.
+
+     Named for what is ON, like mappedGround. */
+  gradExact: true,
+  /* Take the ground's light ramp from the FIELD of square levels -- one number
+     a square, neighbouring squares setting the slope between them -- instead of
+     from the source's own falloff sampled at two points inside the one square.
+
+     The light the world keeps is a WALK: how far it had to come to a square is
+     a whole number of steps, and that number changes at every square's edge, so
+     the source's falloff sampled inside one square does not join up with the
+     same falloff sampled inside the square next door. Measured at seed 1 across
+     all 321 edges between two flat lit neighbours, the raw light disagrees by a
+     median of 14.5 levels and by up to 60 -- and a ramp built from it inherits
+     every one of those cliffs, which is what made the floor read as a mosaic.
+     The field cannot: a shared edge is set by the same two squares from both
+     sides, so the two sides agree to within the field's own curve over a metre.
+
+     Off is how it was before -- per square, from the source, cliffs and all --
+     and is the yardstick the test that reads one row both ways measures against.
+
+     Named for what is ON, like mappedGround. */
+  rampField: true,
+  /* Lay a cast shadow with `multiply` instead of painting black over the top.
+
+     A SHADE IS A LIGHT LAYER, NOT A SURFACE: it takes brightness away from what
+     is underneath rather than covering it, which is the same thing the light a
+     picture puts on a surface does -- see lightOver(). The arithmetic does not
+     change the picture at all, because the shade's own colour is black: multiply
+     gives Cr = (1 - a) * Cd + a * 0 * Cd and source-over gives the same
+     Cr = (1 - a) * Cd. What changes is that the shade is then laid in the same
+     composite as the light, and a census of the frame can tell a light layer from
+     a surface instead of counting the shade as a surface of its own — which is
+     what a pixel census of the frame has to be able to do (see fillMap()).
+
+     Off is the yardstick the test that paints one frame both ways measures
+     against. Named for what is ON, like mappedGround. */
+  shadeMultiply: true,
+  /* Take a face's light stops from the WHOLE METRES of the world instead of
+     from equal fractions of how tall the face happens to be.
+
+     The stops used to be at zFoot + (i/n)*dz, which is a different altitude for
+     the same face the moment its foot or its top moves -- and a foot moves
+     whenever a crawler shifts the ground under themselves or the camera turns
+     under them. The light was therefore sampled somewhere new on every frame,
+     and the picture changed by a shade or two wherever it did: 15,573 pixels of
+     one frame, 1,605 of them by more than 6 levels, on the clip test's own
+     moment; 5,177 pixels on the foot-snap test where the foot moves a whole
+     metre. Two of the suite's older tests count exactly those pixels, and both
+     were right to.
+
+     On, the stops are the whole metres the face spans, and the light at each of
+     them is read off a ONE-METRE LINE of the world: the value at any altitude is
+     the straight line between the light at the whole metre below it and the
+     whole metre above. So the same altitude is the same quantity however the
+     face is cut, a face that grows by a metre gains a stop and changes nothing
+     about the stops it had, and the topmost part-metre above a foot that has
+     moved samples the same line the whole way up rather than a fresh segment.
+
+     Off is how it was -- equal fractions, the true falloff at each -- and is the
+     yardstick the tests that paint one frame both ways measure against. Named
+     for what is ON, like mappedGround. */
+  altGrid: true,
+  /* Smooth the light ACROSS a wall face's own one-metre run, so the join
+     between two blocks in a row stops showing.
+
+     Every face is painted at the light of ITS OWN square, and the block beside
+     it at the light of its own, and on a lit wall those two need not agree --
+     "the light isn't smooth BETWEEN wall blocks ... I see the vertical edges of
+     each wall unit because the light stops and starts". Measured a fifth of a
+     metre above the rock's own top: forty to seventy pairs of neighbours per
+     seed disagree, by a median of 0.07 to 0.10 of a light level and by up to
+     0.25, where one light STEP is a sixth of the range. So every block came out
+     a stripe with a hard edge down each side of it.
+
+     On, both ends of a face are taken from the SHARED edges -- half this square
+     and half the one across it -- so the two faces at a join ask the same two
+     squares and land on the same number, and the difference between the ends is
+     MULTIPLIED over the face as a horizontal gradient (see shadeRatio() and
+     acrossFace()). The fill is SCALED up to the brighter end of the run first,
+     because a multiply can only ever darken -- and scaled rather than raised, so
+     the level divides back out and the two faces of a join agree whatever levels
+     their own squares rounded onto (see faceBase()).
+
+     Off is how it was, and is the yardstick the tests that paint one frame both
+     ways measure against. Named for what is ON, like mappedGround. */
+  acrossLight: true,
+  /* Build a wall face's light ramp on the face's OWN axis -- the one that holds
+     a height still, perpendicular in the picture to the face's horizontal edge
+     -- instead of straight up the screen.
+
+     On means the two faces at a join read the same altitude at the same place,
+     because both are read off the same is-altitude lines. Off is how it was, and
+     it is not a shade: a screen row is a height PLUS however far along the wall
+     the pixel is, so a one-metre face's far column read up to a whole metre out
+     at the foot, and each face read its own leading side -- which is a vertical
+     edge at every block, exactly the seam `acrossLight` is asked to hide.
+
+     Off is the yardstick the tests that paint one frame both ways measure
+     against. Named for what is ON, like mappedGround. */
+  faceAxis: true,
+  /* THE CONTROL THAT SPLITS THE SEAM IN TWO, and it is a door and not a
+     feature: with it on, every wall face reads the SAME light (0.5) whatever is
+     burning and wherever on the face you look, so the light cannot make a seam
+     at all and whatever the probe still finds is the stonework's own doing.
+     Off is the game.
+
+     Named for what is ON, like mappedGround: on means flat light, which is the
+     opposite of what the game wants and exactly what a measurement needs. */
+  flatLight: false,
+  /* ASK A SQUARE'S OWN NUMBER WHETHER IT IS LIT, never the stepped one.
+
+     `lightAt` rounds onto the six-step ladder, so a square at the rim of a pool
+     -- light 0.06, a real number the light map really holds -- has a stepped
+     value of exactly 0. Every guard in the light path used that 0 as its test
+     for "no light here", which made the ladder a statement about whether a
+     square is lit rather than a scale for the panel to read; and because the
+     level a face is painted at was then lifted a whole RUNGS up (see
+     acrossFace), the picture a wall at the rim got was not a dim wall but a
+     wall 2.87x its neighbour at the seam. It is the cliff every wall in the
+     camp's own pools was standing on.
+
+     Off is how it was, and it is the yardstick the probe measures against.
+     Named for what is ON, like mappedGround.
+
+     SHIPPED OFF. On, it did what it says for the rim squares it was written
+     for, but its wall path lifted the painted level off the ladder as well and
+     that is a step at every block: measured on the seam ruler (seed 1, camp
+     centred, `files/probe-seam3.mjs`) ON gives 471 seams with 87 of them
+     corrected on one side only, OFF gives 427 with 25 -- so the picture with
+     it off is the better one and it is the one in the game. The door stays
+     for the probe. */
+  lightFix: false,
   _xformSeq: 0,                /* bumped by anything that sets a transform  */
   planes: {},                  /* floor height -> its ground plane, this frame */
   cellAt: null,                /* world square -> its place in the batch (Map) */
@@ -373,6 +568,7 @@ const Render = {
     if (!this.patCache) this.patCache = {};
     if (!this.mats) this.mats = {};
     if (!this.pics) this.pics = {};
+    if (!this.skinCache) this.skinCache = {};
   },
 
   /* Throw away every material baked so far: the generated tiles, the tiles
@@ -384,6 +580,7 @@ const Render = {
     this.mats = {};
     this.pics = {};
     this.patCache = {};
+    this.skinCache = {};
   },
 
   /* Will this material be a picture rather than a generated tile? Asked once per
@@ -696,11 +893,57 @@ const Render = {
         /* Whatever size the picture was drawn at, it fills its square metre, so
            the pictures land on the grid rather than floating over it. */
         c.getContext('2d').drawImage(img, 0, 0, px, px);
-        return c;
+        return this.wrapTile(c);
       });
     }
     this.pics[name] = list;
     return list;
+  },
+
+  /* A TILE SHOULD WRAP, and this one does not out of the box.
+
+     Every one of these is laid down one metre at a time, because a tile is a
+     metre square and so is the face of a block -- so wherever two of them meet,
+     the material's own left edge is laid against its own right edge. A picture
+     somebody drew is not obliged to match itself there, and rock's does not: its
+     two edge columns differ by about sixteen levels, which is as much as two
+     unrelated columns differ by.
+
+     THIS WAS BUILT TO FIX THE WALL SEAM AND IT DOES NOT. It was the leading
+     hypothesis and it was measured and disproved: with every picture closed to
+     0.00 the seam went 15.6 -> 15.3, i.e. nowhere. It is parked, not shipped --
+     `render.wrap_blend` defaults to 0, which makes this a plain copy and leaves
+     the picture identical to v0.51.0. Kept because the defect is real and the
+     next job (the wall material's own map) will want it.
+
+     When switched on, the two edge columns are averaged into each other and the
+     two edge rows with them, so the sequence is exactly continuous where it
+     wraps. `render.wrap_blend` sets how many pixels in from each edge are
+     treated, and 0 turns the whole thing off. */
+  wrapTile(src) {
+    const k = Math.max(0, Math.round(CFG.wrapBlend || 0));
+    const w = src.width, h = src.height;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(src, 0, 0);
+    const n = Math.min(k, Math.floor(w / 2), Math.floor(h / 2));
+    if (!(n > 0)) return c;
+    const img = g.getImageData(0, 0, w, h);
+    const d = img.data;
+    const at = (x, y) => (y * w + x) * 4;
+    const mean = (o, p) => {
+      for (let ch = 0; ch < 4; ch++) {
+        const m = (d[o + ch] + d[p + ch]) * 0.5;
+        d[o + ch] = m; d[p + ch] = m;
+      }
+    };
+    for (let i = 0; i < n; i++) {
+      for (let y = 0; y < h; y++) mean(at(i, y), at(w - 1 - i, y));
+      for (let x = 0; x < w; x++) mean(at(x, i), at(x, h - 1 - i));
+    }
+    g.putImageData(img, 0, 0);
+    return c;
   },
 
   /* Which of a material's pictures one square metre wears, folded down from the
@@ -829,6 +1072,102 @@ const Render = {
     return pat;
   },
 
+  /* THE MATERIAL ALONE, ON NOTHING -- the same generated tile matPattern()
+     bakes, on an empty canvas instead of on the tile's own colour.
+
+     Laid over a flat colour it gives exactly what the baked pattern gives, and
+     the compositing is not approximately the same but the same: bake is
+     `strength x material + (1 - strength) x colour` and this is
+     `strength x material + (1 - strength) x whatever is underneath`, so put the
+     same colour underneath and the two agree to the byte.
+
+     Laid over a GRADIENT it gives the material on a surface whose colour
+     changes as it goes, which is the one thing a baked pattern cannot do -- and
+     the whole of what smooth light needs. See faceBase() and groundBase().
+
+     A dropped-in picture never comes here: a picture IS its own colour, so
+     there is nothing to lay over anything. See skinFor().
+
+     Keyed by the same `tag` and `rampM` matPattern() keys by, and for the same
+     reason -- a canvas pattern carries its own placement with it, so one shared
+     between the floor at one height and the floor at the next would hand the
+     second the first's transform, a metre out on screen. */
+  matSkin(name, tag, rampM) {
+    const tiles = rampM > 0 ? Math.max(1, Math.round(rampM)) : 0;
+    const key = 'k|' + name + (tag === undefined ? '' : '|' + tag)
+              + (tiles ? '|r' + tiles : '');
+    let pat = this.skinCache[key];
+    if (pat) return pat;
+    const tile = this.matTile(name);
+    const px = tile.width;
+    const rampH = tiles ? tiles * px : px;
+    const c = document.createElement('canvas');
+    c.width = px; c.height = rampH;
+    const g = c.getContext('2d');
+    g.globalAlpha = Math.max(0, Math.min(1, CFG.texStrength));
+    for (let i = 0; i < (tiles || 1); i++) g.drawImage(tile, 0, i * px);
+    g.globalAlpha = 1;
+    if (tiles) {
+      const ramp = g.createLinearGradient(0, 0, 0, rampH);
+      ramp.addColorStop(0, 'rgba(0,0,0,0)');
+      ramp.addColorStop(1, 'rgba(0,0,0,1)');
+      g.globalCompositeOperation = 'destination-in';
+      g.fillStyle = ramp;
+      g.fillRect(0, 0, px, rampH);
+      g.globalCompositeOperation = 'source-over';
+    }
+    pat = this.bctx.createPattern(c, 'repeat');
+    pat._pinned = '';
+    /* Never a pick: this is a see-through overlay, and nothing behind it may be
+       named by it. See pickFor(). */
+    pat._pick = -1;
+    this.skinCache[key] = pat;
+    return pat;
+  },
+
+  /* IS THIS SURFACE PAINTED FROM A COLOUR, OR IS THE BAKED PATTERN THE SAME
+     THING? One place asks it, because three have to agree -- the ground, a wall
+     face and a wall's fade band -- and a surface painted one way by two of them
+     and the other way by the third is a seam down the middle of it.
+
+     Null, and the caller does exactly what it always did, whenever there is
+     nothing to be had: smooth light turned off, no material, no material
+     switched on, or a material that is a picture. */
+  skinFor(mat, tag, rampM) {
+    if (!(CFG.lightSmooth > 0) || !mat || CFG.texStrength <= 0) return null;
+    if (this.drawn(mat)) return null;
+    return this.matSkin(mat, tag, rampM);
+  },
+
+  /* A DROPPED-IN PICTURE WITH NO LIGHT ON IT AT ALL -- the picture as it was
+     drawn, one cache entry per picture per material however many squares wear
+     it, so the light can be multiplied over it instead of baked into it. See
+     lightOver().
+
+     A picture IS its own colour, so the two halves of smooth light arrive at it
+     from opposite sides. A generated material is a see-through overlay, so its
+     light goes UNDERNEATH it and shows through the holes -- that is matSkin().
+     A picture is opaque, so nothing underneath it can be seen and the light has
+     to be laid OVER it, taking the picture's brightness down without touching
+     its colour, which is what multiplying does.
+
+     The sum is the same one the bake does -- picture x light -- so a square
+     whose light does not change across it is painted the old way, out of the
+     baked pattern, for the price of one fill. This is only asked for where the
+     light really does change, which is where the bake cannot follow: a pool of
+     light is a ramp across the ground and a ladder down a wall, and a pattern
+     carrying a whole step of the ladder faded into its neighbour six times along
+     a metre of floor is exactly the stairs the smooth light exists to take out.
+
+     Null whenever there is nothing to be had, so the caller does what it always
+     did: no picture, no smoothing, or the materials switched off. */
+  picSkin(mat, x, y, salt, rampM) {
+    if (!(CFG.lightSmooth > 0) || CFG.texStrength <= 0) return null;
+    if (!this.drawn(mat)) return null;
+    return this.matPattern(null, mat, undefined, undefined,
+                           this.pickFor(mat, x, y, salt), rampM);
+  },
+
   /* Map a repeating pattern onto ONE FACE, in that face's own space, rather
      than pasting it flat across the screen.
      
@@ -881,9 +1220,13 @@ const Render = {
      `x`/`y` are the square the block stands in and `salt` tells this face from
      the other side of the same block, which are the two things a drawn material
      picks its picture from. See pickFor(). */
-  wall(colour, mat, q, hM, lit, x, y, salt) {
+  wall(colour, mat, q, hM, lit, x, y, salt, skin) {
+    /* `skin` is the material with no colour baked into it, when the face is
+       being painted from a colour of its own -- see matSkin(). Plain null and
+       this is exactly what it always was. */
     return this.faceFill(
-      this.matPattern(colour, mat, undefined, lit, this.pickFor(mat, x, y, salt)),
+      skin || this.matPattern(colour, mat, undefined, lit,
+                              this.pickFor(mat, x, y, salt)),
       q[0], q[1], q[3], 1, hM);
   },
 
@@ -902,9 +1245,9 @@ const Render = {
      height the band turned out to be. Walls are whole metres tall, so the ordinary
      case is one tile over one metre -- the material below and the material fading
      above it at the same size, and no seam. */
-  wallBand(colour, mat, lit, x, y, salt, rampM) {
-    return this.matPattern(colour, mat, undefined, lit,
-                           this.pickFor(mat, x, y, salt), rampM);
+  wallBand(colour, mat, lit, x, y, salt, rampM, skin) {
+    return skin || this.matPattern(colour, mat, undefined, lit,
+                                   this.pickFor(mat, x, y, salt), rampM);
   },
 
   /* Pin a material to the world so it does not swim as the view moves: flat
@@ -944,12 +1287,12 @@ const Render = {
 
      `lit` is the light with no colour of its own, and only a dropped-in picture
      has any use for it. See matPictures(). */
-  ground(colour, mat, it, s, worldStamp, lit) {
+  ground(colour, mat, it, s, worldStamp, lit, skin) {
     if (!mat || CFG.texStrength <= 0) return colour;
     /* WHICH of the material's pictures this square metre wears, from the
        square's own coordinates -- so the pick is the same however the ground is
        reached, and two floors at two heights wear the same scatter. */
-    const pat = this.matPattern(colour, mat, it.cell.h, lit,
+    const pat = skin || this.matPattern(colour, mat, it.cell.h, lit,
       this.pickFor(mat, it.cell.x, it.cell.y, PICK_GROUND));
     if (!this.mappedGround) return this.pin(pat, -s.cam.ox, -s.cam.oy, worldStamp);
     /* A ramp is the one square tilted in its own plane -- its corners sit at two
@@ -1572,6 +1915,11 @@ const Render = {
       }
     }
 
+    /* The shade solid things throw, worked out from the fires rather than from
+       the picture, and put into the same list everything else is in -- see
+       castShadows() for why it has to be here, before the sort. */
+    this.castShadows(s, b);
+
     b.sort(function (p, q) { return p.depth - q.depth; });
 
     /* Where each square ended up. A wall may only be cut down when the block it
@@ -1821,11 +2169,34 @@ const Render = {
                         top[anchor], top[other], low);
   },
 
-  /* One path, one fill. */
-  poly(ctx, pts, fill) {
-    this.path(ctx, pts);
+  /* One path, one fill. `snap` puts every corner on a whole pixel -- see
+     snapOver. It is not tidiness: a corner half a pixel out is a pixel only
+     half covered, and a `multiply` only half applied. */
+  poly(ctx, pts, fill, snap) {
+    this.path(ctx, pts, snap);
     ctx.fillStyle = fill;
     ctx.fill();
+  },
+
+  /* PUT THE LIGHT ON SOMETHING THAT IS ALREADY PAINTED -- `multiply` keeps the
+     picture's colour and takes only its brightness down: red x amber is dark
+     red, red x grey is dark red, which is what a light does to a surface. The
+     alternative, laying a see-through light over the top, can only ever wash a
+     surface out towards its own colour, so a fire would bleach the flagstones
+     instead of glowing on them.
+
+     It costs the polygon a second time, so it is asked for only where the light
+     really changes across the face -- see picSkin(). Multiply leaves whatever is
+     under the polygon alone, which is why this can be painted over ground that
+     has already been drawn without erasing it.
+
+     WHAT REACHES THE CANVAS IS PUT ON WHOLE PIXELS -- see snapOver. This is the
+     one fill in the game whose result depends on how much of a pixel it covers,
+     so it is the one fill that may not be given a fraction. */
+  lightOver(ctx, pts, shade) {
+    ctx.globalCompositeOperation = 'multiply';
+    this.poly(ctx, pts, shade, this.snapOver);
+    ctx.globalCompositeOperation = 'source-over';
   },
 
   /* IS THIS SQUARE'S TOP FACE PAINTED? A floor's always is -- that is the ground
@@ -1958,34 +2329,78 @@ const Render = {
      they rise rather than stopping. Without one -- a flat-coloured wall -- the
      band falls back to `fadeBand()`, which fades the face's own colour.
 
+     `over` is the light to MULTIPLY over the face, for a face that is a picture
+     rather than a colour -- the picture was painted with no light on it at all.
+     It goes over the WHOLE face, band and all: the ramp it carries is a ramp in
+     the light, and the top metre of a wall is the same surface as the metre below
+     it, standing in less light.
+
+     That sounds like it darkens the room beyond the wall, and it does not, for a
+     reason worth writing down. The band is a canvas whose alpha is ITS OWN
+     dissolve: nothing at the top, everything at the bottom, and the multiply's
+     gradient carries the same ramp -- both are linear in screen height across the
+     same two corners, so one is the other pointwise, whatever the band is worth.
+     Where the band is transparent the multiply is transparent too, so the sky or
+     the room beyond comes through untouched; where the band is opaque the
+     multiply is at full strength; and in between the two fade together, which is
+     the answer that was wanted. Painting it over the solid part only is what the
+     shipped build did, and it left the top metre of every lit wall at the raw
+     brightness of its own picture.
+
      Returns 0 when the face was painted whole, 1 for a flat band and 2 for a band
      carrying the material, so `consumed` can count them and a test can prove the
      material reached the fade rather than arguing that it did. */
-  paintSide(ctx, quad, metres, colour, fill, band) {
+  paintSide(ctx, quad, metres, colour, fill, band, base, over) {
     /* A face NO TALLER THAN THE FADE BAND is painted whole, material and all.
        There is no "top metre" of a one-metre face to fade -- the band would be
        the whole face, and a gradient across all of it dissolves a stump of rock
        into nothing, which is a hole in the wall rather than a fading one. The
        band is the top of a wall, not a height. */
-    if (!this.wallFade || !(metres > CFG.wallFadeM)) { this.poly(ctx, quad, fill); return 0; }
-    const m = Math.min(CFG.wallFadeM, metres);
-    if (!(m > 0)) { this.poly(ctx, quad, fill); return 0; }
-    const d = m * CFG.rise;
-    this.poly(ctx, this.belowBand(quad, d - 1), fill);
+    const fd = this.fadeDepth(metres);
+    if (!(fd > 0)) {
+      if (base) this.poly(ctx, quad, base);
+      this.poly(ctx, quad, fill);
+      if (over) this.lightOver(ctx, quad, over);
+      return 0;
+    }
+    const d = fd * CFG.rise;
+    /* THE SURFACE THE MATERIAL IS LAID ON IS PAINTED THE WHOLE HEIGHT OF THE
+       FACE, band and all -- because the band below is a PATTERN, and a pattern
+       cannot dissolve. What dissolves is the canvas it was cut from, and what is
+       behind it shows through the holes that leaves. So the colour the face's
+       light was worked out against has to be under all of it, or the top metre
+       of every wall would fade into the backdrop instead of into its own shade.
+       See matSkin().
+
+       A face with a base is always a face with a band when it fades at all --
+       skinFor() only says yes to a generated material, and every generated
+       material's fading face asks for one -- so the fadeBand() arm at the bottom
+       is never reached with a base already painted. */
+    if (base) this.poly(ctx, quad, base);
+    const low = this.belowBand(quad, d - 1);
+    this.poly(ctx, low, fill);
     if (band) {
       const q = this.bandQuad(quad, d);
       /* THE BAND'S OWN HEIGHT, not the face's. One metre of wall is one tile of
-         material, and the pattern's own v axis is laid over `m` -- so the stones
+         material, and the pattern's own v axis is laid over `fd` -- so the stones
          in the band are the size of the stones in the face it sits on and the
          courses run straight through the join. Mapped over a face two metres
          tall while only one metre of it is band, the stones in the band would
          come out twice the height of the stones below them. */
-      this.faceFill(band, q[0], q[1], q[3], 1, m);
+      this.faceFill(band, q[0], q[1], q[3], 1, fd);
       this.poly(ctx, q, band);
-      return 2;
+    } else {
+      this.fadeBand(ctx, quad, metres, colour);
     }
-    this.fadeBand(ctx, quad, metres, colour);
-    return 1;
+    /* THE LIGHT GOES ON LAST, and over everything the face covers. A band is
+       painted before the light rather than after it, because the light has to be
+       able to reach it -- see the note on `over` above, and see how far the top
+       metre of a wall was out when it could not. `bandLight` false paints it over
+       the solid part only, which is what the build shipped with, so the one
+       picture can be had both ways inside one build and a test can show that the
+       difference is the band and nothing else. */
+    if (over) this.lightOver(ctx, this.bandLight && band ? quad : low, over);
+    return band ? 2 : 1;
   },
 
   /* `rgb(r,g,b)` -- which is what every shade in this file hands back -- as the
@@ -2003,10 +2418,548 @@ const Render = {
     return s.indexOf('rgb(') === 0 ? 'rgba(' + s.slice(4, -1) + ',' + a + ')' : s;
   },
 
-  path(ctx, pts) {
+  /* HOW DEEP THE FADE AT THE TOP OF A FACE IS, in metres, or 0 for a face that
+     does not fade at all. One place asks it, because the fade is painted by two
+     -- the band of material and the surface underneath it -- and they have to
+     agree on how far down it reaches or the band has nothing to fade into. */
+  fadeDepth(metres) {
+    if (!this.wallFade || !(CFG.wallFadeM > 0)) return 0;
+    if (!(metres > CFG.wallFadeM)) return 0;
+    return Math.min(CFG.wallFadeM, metres);
+  },
+
+  /* HOW BRIGHT A PIECE OF GROUND REALLY IS, as opposed to how bright its SQUARE
+     is. The square's level is a whole number of steps -- that is the game's own
+     answer and what the panel reads -- and it is what a plain fill is painted
+     with. A surface that carries a material is painted from a colour of its own
+     and can carry the light itself instead: at the floor, lightValueAt hands
+     back the same number with the stepping taken off, so the edge of a pool of
+     light is soft rather than a stair two thirds of a metre wide.
+
+     `stepped` is true when this square is a dropped-in PICTURE, because a
+     picture's pattern IS its colour -- the shade is baked into the cache entry
+     -- so a key that varied with a continuous light would be a cache entry per
+     pixel. Pictures keep the steps, which is the other reason the steps exist. */
+  floorLight(s, it, stepped) {
+    if (stepped || !(CFG.lightSmooth > 0)) return it.light;
+    /* Whether there is light here at all is asked of the SQUARE'S OWN number.
+       The stepped value is 0 for the whole outer rim of every pool, and using it
+       as the test collapsed those faces to one flat fill at the darkest light
+       there is. See lightFix. */
+    const lit = this.lightFix ? (it.cell.light > 0) : (it.light > 0);
+    if (!lit || !s.sources) return it.light;
+    return lightValueAt(s, it.cell, surfaceHeight(it.cell));
+  },
+
+  /* A FACE PAINTED FROM ITS FOOT UP, by the light that is really falling on it.
+
+     A square has one light level; a wall is three metres of stone standing in a
+     fire's glow, bright at the bottom and dark at the top, and painting all
+     three metres at the level of the floor below it is what made a fire read as
+     a puddle of colour. So the face is sampled up its own height and the colour
+     is laid on as a straight gradient.
+
+     AND IT RUNS ACROSS THE FACE, NOT UP THE PICTURE. `project` takes `rise`
+     pixels off a point's y for every metre it stands up -- at ONE grid corner.
+     A metre ALONG the wall moves the picture half a rise down instead, so the
+     line where a face's height is constant is not a screen row: it is the face's
+     own slanted top edge, and a row crosses from one altitude to another as it
+     goes. A ramp read off screen rows therefore gives the two ends of a single
+     face different heights -- a whole metre out at the foot of a one-metre face
+     and nothing at all at the crown -- and the two faces of one wall, each
+     reading its own leading side, disagree along the join by that much. That is
+     a vertical edge at every block, worst at the foot. The axis that holds a
+     height still is the one PERPENDICULAR to the face's horizontal edge, and
+     that is what the gradient is built along here, at any camera turn and both
+     camera angles. `fadeBand()` has always built its fade this way; the light
+     was the odd one out.
+
+     `quad` is the face as it will be PAINTED -- which a cut may have shortened,
+     so the foot is taken from `zFoot`, the height that foot really stands at,
+     rather than from the floor of the world. `fade` is how many metres of the
+     top dissolve away (see fadeDepth), and the gradient fades with them, so the
+     surface under the band of material dissolves at the same rate as the band.
+
+     A face whose light comes out the same all the way up, on a face with no
+     fade, is ONE flat fill -- which is most of the rock in the labyrinth, and
+     must stay one fill.
+
+     `colour` IS THE SURFACE'S OWN COLOUR, before any light is put on it -- the
+     tile's own `side`, and not a colour that has already been through
+     `litShade`. It was handed an already-shaded colour for one version, along
+     with the very facing factor that had shaded it, so the ramp was
+     `litShade(litShade(c, f, L0), f, L)` -- the facing TWICE in the brightness,
+     and the level twice over, which squared both. It showed as a face whose foot
+     did not match the fill above it and whose mid-height did not match the
+     ground beside it; the darker the corner and the dimmer the square, the worse
+     it read. One colour in, light and all, light and all out.
+
+     WHERE THE STOPS GO is a claim about the world and not about the face -- see
+     altGrid. A stop is an altitude in metres, the light is asked at that
+     altitude, and the fractions along the picture come from where those
+     altitudes land between the foot and the top. */
+  faceBase(s, cell, colour, f, quad, fade, zFoot, mul) {
+    const yTop = quad[0].y, yBot = quad[3].y;
+    const dz = (yBot - yTop) / CFG.rise;
+    /* `mul` SCALES the whole profile, and it is how a face is painted bright
+       enough for the across-the-run gradient to darken it back down (see
+       acrossFace()): a multiply can take light away and never give it.
+
+       IT SCALES RATHER THAN RAISES, and the difference is the whole of a seam.
+       A raise is a constant added to every stop, so the topmost metre of a
+       raised face keeps that constant as a FLOOR while the face beside it -- one
+       that happened to need no rise -- goes on down to black. That floor is not
+       a shade, it is a wall of light standing on the top of one block and not
+       on its neighbour, and it is what the owner saw as "the light stops and
+       starts" at every vertical join.
+
+       And it does not only hide a seam: it is the wrong number in the middle of
+       the face too. A face painted at `ref + (level - ref)` and multiplied by
+       light(e)/light(level) lands on e at its ends and on `ref` at its own
+       reference altitude, but anywhere else it lands on
+       `(L(z) + level - ref) * ref / level`, which is L(z) only when level is
+       ref. A scale lands on `L(z) * level/ref * e/level` -- the LEVEL CANCELS
+       -- so the face is the shape it always was, stretched to reach the brighter
+       end of the run, and two faces sharing an edge land on the same number
+       whether their levels agree or not. */
+    const up = mul === undefined ? 1 : mul;
+    if (!(dz > 0)) return litShade(colour, f, this.faceLight(s, cell, zFoot) * up);
+    const zTop = zFoot + dz;
+    let zs, ls;
+    if (this.altGrid) {
+      zs = [zFoot];
+      for (let k = Math.floor(zFoot) + 1; k < zTop - 1e-6; k++) zs.push(k);
+      zs.push(zTop);
+      /* THE ONE-METRE LINE of the world's light: asked of the source at the
+         whole metres and a straight line across the metre in between. Reading
+         every stop off it -- including the two that are not on a whole metre --
+         is what makes the same altitude the same number however the face has
+         been cut, which is the whole point of the grid. A face a metre taller
+         gains a stop at the metre it gained and every other stop is untouched. */
+      const at = new Map();
+      const metre = (k) => {
+        if (!at.has(k)) at.set(k, this.faceLight(s, cell, k));
+        return at.get(k);
+      };
+      ls = zs.map((z) => {
+        const a = Math.floor(z), t = z - a;
+        const lo = metre(a);
+        return t > 0 ? lo + (metre(a + 1) - lo) * t : lo;
+      });
+    } else {
+      /* Equal fractions of whatever this face happens to be: the yardstick. */
+      const m = Math.max(1, Math.min(6, Math.round(dz)));
+      zs = new Array(m + 1); ls = new Array(m + 1);
+      for (let i = 0; i <= m; i++) {
+        zs[i] = zFoot + (i / m) * dz;
+        ls[i] = this.faceLight(s, cell, zs[i]);
+      }
+    }
+    const n = zs.length - 1;
+    const stops = new Array(n + 1);
+    let same = true;
+    for (let i = 0; i <= n; i++) {
+      const lv = up === 1 ? ls[i] : ls[i] * up;
+      stops[i] = litShade(colour, f, lv > 1 ? 1 : lv < 0 ? 0 : lv);
+      if (i && stops[i] !== stops[0]) same = false;
+    }
+    const tf = fade > 0 ? Math.min(1, fade / dz) : 0;
+    if (same && !(tf > 0)) return stops[0];
+    /* THE AXIS IS THE FACE'S OWN, PERPENDICULAR TO ITS TOP EDGE: 0 on that edge
+       and `span` pixels down onto the foot, so equal altitude is equal fraction
+       everywhere on the face. `faceAxis` set false puts back the screen-vertical
+       ramp this replaced -- the axis that sheared every face's light by up to a
+       metre of height -- so one build can paint the same moment both ways and a
+       test can count the seam that appears. A degenerate top edge (no run at
+       all) keeps the vertical axis, which for a face with no run is exactly
+       right. */
+    let nx = 0, ny = 1, span = yBot - yTop;
+    if (this.faceAxis !== false) {
+      const ex = quad[1].x - quad[0].x, ey = quad[1].y - quad[0].y;
+      const elen = Math.sqrt(ex * ex + ey * ey);
+      if (elen > 0.5) {
+        nx = ey / elen; ny = -ex / elen;
+        if (ny < 0) { nx = -nx; ny = -ny; }  /* downhill in the picture, always */
+        const sp = nx * (quad[3].x - quad[0].x) + ny * (quad[3].y - quad[0].y);
+        if (sp > 0.5) span = sp;
+        else { nx = 0; ny = 1; span = yBot - yTop; }
+      }
+    }
+    const g = this.bctx.createLinearGradient(quad[0].x, quad[0].y,
+      quad[0].x + nx * span, quad[0].y + ny * span);
+    for (let i = 0; i <= n; i++) {
+      const t = Math.max(0, Math.min(1, (zs[i] - zFoot) / dz));
+      const a = tf > 0 ? Math.max(0, Math.min(1, (1 - t) / tf)) : 1;
+      g.addColorStop(t, a >= 1 ? stops[i] : this.withAlpha(stops[i], a));
+    }
+    return g;
+  },
+
+  /* IS THIS FACE'S OWN FILL A RAMP -- does its light change with height, or is
+     the whole face one flat colour? It decides which altitude the face's own
+     light is read at (see acrossFor()). `rampProbe` is the probe faceBase() call
+     the caller already makes for a picture: a gradient back means it ramps, a
+     colour back means it does not. `under` is the material arm's base, and any
+     material base that spans real height ramps, because faceBase() reads the
+     world's light down it. */
+  faceRamped(pic, rampProbe, under) {
+    if (pic) return rampProbe !== null && typeof rampProbe !== 'string';
+    return !!under;
+  },
+
+  /* ONE SQUARE'S LIGHT, read the same way by every face that asks.
+
+     A seam is two faces that must put the SAME number on the edge they share,
+     and a face's OWN light is not that number: it is read at the altitude its
+     fill is built at, so two faces of different heights read their own light
+     differently and would never agree. The number they can agree on is the one
+     that belongs to the SQUARE -- light at the floor it stands on -- because
+     that is the same number whichever face asks for it.
+
+     Read smooth wherever the world has a smoothed light to give, for the same
+     reason: a face whose light is stepped reads floor level, its neighbour whose
+     light ramps reads a metre up, and the two blocks of one join then disagree
+     by a quarter of a light step. Only a picture's own bake still wants the
+     stepped reading, and that is floorLight()'s business, not this one's. */
+  faceSquare(s, cell) {
+    const lv = lightAt(s, cell);
+    if (this.flatLight) return 0.5;
+    if (!(CFG.lightSmooth > 0) || !s.sources) return lv;
+    /* A square is lit when ITS OWN light is above zero. `lv` is that number
+       rounded onto the six-step ladder, so it is exactly 0 for every square in
+       the outer rim of a pool -- and asking it made a whole band of wall read as
+       unlit. See lightFix. */
+    if (this.lightFix ? !(cell && cell.light > 0) : !(lv > 0)) return lv;
+    return lightValueAt(s, cell, surfaceHeight(cell));
+  },
+
+  /* THE LIGHT A WALL FACE PAINTS WITH, at one altitude, through ONE door.
+
+     `flatLight` answers a constant instead of the world: every face at the same
+     level, whatever is burning nearby and however high up the face you look.
+     Light that does not vary cannot make a seam, so it is the control that says
+     what the material is doing on its own -- run the probe with the flag on and
+     whatever seams are left belong to the stonework and to none of the light.
+     Without it every arm of the probe measures the light and the material
+     TOGETHER and no reading can tell which one moved. */
+  faceLight(s, cell, z) {
+    return this.flatLight ? 0.5 : lightValueAt(s, cell, z);
+  },
+
+  /* ONE END OF A FACE'S RUN: half of this square's own light and half of the
+     square's on the far side of that edge -- so the block next along, asking
+     about its own opposite end, works out the same number. That is what closes a
+     join, and it is why both halves come from faceSquare() and neither from the
+     asker's own fill.
+
+     A neighbour with no rock standing on it has no face and casts no light, so
+     it is not a level to average with; the caller then reads this square's own
+     light, which is what "the run stops here" means. */
+  acrossEdge(s, cell, nbr) {
+    if (!nbr || !(this.drawnM(nbr) > 0)) return null;
+    return (this.faceSquare(s, cell) + this.faceSquare(s, nbr)) / 2;
+  },
+
+  /* THE LIGHT ACROSS ONE WALL FACE'S OWN RUN, as a gradient to multiply over it.
+
+     quad[0] and quad[1] are the two ends of the run -- true of both near faces
+     and of both strips: quad[0] stands on corner `cA` of this square and quad[1]
+     on `cB`, so the run carries on past the u=0 end into the square at
+     `cell - runDir` and past the u=1 end into `cell + runDir`, where runDir is
+     CORNERS[cB] minus CORNERS[cA]. The square past each end is the one whose own
+     face on this same line ends exactly there, so both faces ask the same two
+     squares and the join has ONE number on both sides of it. That is the whole
+     trick, and it needs no talking between neighbours: each derives it.
+
+     Three samples, not two. The ends are half this square's light and half its
+     neighbour's; the middle is this face's OWN level, which is where its own
+     fill already is. A run that is bright ahead and dim behind therefore bows
+     the right way instead of running straight between two averages neither face
+     has.
+
+     Returns null when there is nothing to do -- the flag off, a face turning
+     edge-on mid-swing with no width to draw across, or a run whose ends agree
+     with this square to within `light.across_min` -- and the caller then paints
+     exactly what it painted before. */
+  acrossFace(ctx, s, it, cA, cB, quad, ref) {
+    if (!this.acrossLight) return null;
+    const x0 = quad[0].x, x1 = quad[1].x;
+    if (!(Math.abs(x1 - x0) >= 0.5)) return null;
+    const ux = CORNERS[cB][0] - CORNERS[cA][0];
+    const uy = CORNERS[cB][1] - CORNERS[cA][1];
+    const w = s.world;
+    /* w.at() and never w.ensure(): a run that reaches past the ground the match
+       holds is drawn short of its neighbour, not given one. */
+    const nA = w.at(it.cell.x - ux, it.cell.y - uy);
+    const nB = w.at(it.cell.x + ux, it.cell.y + uy);
+    const a0 = this.acrossEdge(s, it.cell, nA);
+    const a1 = this.acrossEdge(s, it.cell, nB);
+    const mine = this.faceSquare(s, it.cell);
+    /* An end with no wall past it keeps THIS square's own light, so an exposed
+       end of a run is flat and never takes a step down to something that is not
+       there. `ref` would do the opposite: it is the fill's own altitude, and a
+       picture's stepped fill sits half a light step from its square's smooth
+       one, which is a seam invented out of nothing at the end of every wall. */
+    const e0 = a0 === null ? mine : a0;
+    const e1 = a1 === null ? mine : a1;
+    const log = this.acrossLog ? { x: it.cell.x, y: it.cell.y, kd: it.kind,
+        h: it.cell.h, n0h: nA ? nA.h : -99, n1h: nB ? nB.h : -99,
+        n0x: nA ? nA.x : -1, n0y: nA ? nA.y : -1, n0d: nA ? this.drawnM(nA) : -1,
+        n1x: nB ? nB.x : -1, n1y: nB ? nB.y : -1, n1d: nB ? this.drawnM(nB) : -1,
+        e0: e0, e1: e1, mine: mine, ref: ref, p0: cA, p1: cB,
+        wallM: it.wallM, step: it.light, fired: false } : null;
+    if (log) this.acrossLog.push(log);
+    /* Is the light ACROSS this run actually uneven? That is the only question
+       worth asking, and it is asked of the squares -- `mine` against the ends --
+       and never of this face's own fill. Comparing the ends against `ref` instead
+       would be wrong twice over: a uniform run of wall would fire, because a
+       picture's stepped level sits half a step away from its square's smooth one,
+       and every wall in the game would be re-lit to smooth for no reason.
+
+       How big a difference is worth painting is `light.across_min`, and it is
+       ZERO: any difference at all, however small. A threshold was tried and it
+       lost seams it should have kept -- a seam whose two faces happen to agree
+       with their own squares to within the threshold is still a seam between
+       two different levels, and 682 rows across sixteen views were let through
+       that way, eight of them a visible step. A rule that cannot lose a seam is
+       worth one extra fill on the thirteen per cent of faces it newly fires on. */
+    if (!(Math.abs(mine - e0) > CFG.acrossMin
+        || Math.abs(mine - e1) > CFG.acrossMin)) return null;
+    /* A face with no light of its own has nothing to scale FROM. `lvl(0)` is the
+       ambient floor -- the darkest the light scale goes -- and the ratio the
+       gradient carries would have to be brighter than white for this face to
+       reach the number it shares with its neighbour, which a multiply cannot
+       paint. Painting it anyway paints it DARKER than the ambient it is already
+       at, which is a seam invented by the correction. Leave it flat: the lit
+       face beside it ramps down to the same number the two of them agree on, and
+       the most the flat one can be out by is the light it never had. */
+    if (this.lightFix && !(ref > 1e-6)) return null;
+    /* Scaled to the brighter end, so that every stop of the gradient is 1 or
+       less and a multiply is only ever taking light away. */
+    const win = Math.max(e0, e1);
+    /* THE LEVEL IS THE BRIGHTER END ITSELF, not that number rounded UP onto a
+       light step.
+
+       The rounding was the seam. A face whose ends stood a thousandth of a step
+       above the rung below was lifted a whole rung -- 2.87x, on the join measured
+       at the camp -- and its neighbour, a thousandth below it, was lifted not at
+       all, so two blocks of one wall painted brightnesses that had nothing to do
+       with the fire between them. The scale is for one thing only: a multiply
+       cannot brighten, so the base is parked at or above the brightest end and
+       the gradient takes the difference off. `max(ref, win)` does exactly that
+       and nothing else, and it makes the two faces land on the same number
+       EXACTLY wherever they meet -- the base is painted at `mul * ref`, the
+       gradient takes `lvl(e)/lvl(level)` off it, and `mul * ref` IS `level`, so
+       the product at the edge is `lvl(e)` on both sides whatever either face's
+       own light happens to be. */
+    const level = this.lightFix
+      ? Math.min(1, Math.max(ref, win))
+      : (win > ref + CFG.acrossMin
+          ? Math.min(1, Math.max(ref,
+              Math.ceil(win * CFG.lightSteps - 1e-6) / CFG.lightSteps))
+          : ref);
+    /* THE SCALE, NEVER THE DIFFERENCE, and this is the line the whole seam turns
+       on. `level` is rounded onto a light step and `ref` is not, so two faces
+       that share an edge can land on different levels even though they agree
+       exactly on the number AT that edge -- one crossed the step by a thousandth
+       and one did not. A raised face keeps `level - ref` as a floor under the
+       gradient and the other does not, so the two paint different numbers on the
+       edge they share. A scaled face has no floor to keep: the level divides out
+       of the product on both sides, and the two faces land on `ref`-normalised
+       shapes of their own light, which is all the difference there ever was. */
+    const mul = level !== ref && ref > 1e-6 ? level / ref : 1;
+    if (log) { log.fired = true; log.win = win; log.level = level;
+               log.mul = mul; }
+    const g = ctx.createLinearGradient(x0, quad[0].y, x1, quad[0].y);
+    g.addColorStop(0, shadeRatio(level, e0));
+    g.addColorStop(0.5, shadeRatio(level, ref));
+    g.addColorStop(1, shadeRatio(level, e1));
+    return { grad: g, mul: mul, level: level };
+  },
+
+  /* WHERE A FACE'S OWN LIGHT IS READ, in one place, so the two faces of a block
+     and the two strips of it cannot disagree about it.
+
+     A face whose fill ramps is read at a whole metre inside its span, because
+     that is an altitude the fill is known to paint at exactly (see faceBase()'s
+     altGrid: every whole metre is a stop). A face whose fill is one flat colour
+     is read at that colour's own level -- and it must be the FLAT level, not the
+     smooth one, or a baked surface would be raised to a level the ratio cannot
+     undo.
+
+     This is the altitude the FILL is normalised at, and nothing else. The two
+     ends of the run are worked out from the squares and never from here, which is
+     what lets two faces of different heights share one edge. */
+  acrossFor(ctx, s, it, cA, cB, quad, zFoot, d, ramped, flat) {
+    if (!(d > 0)) return null;
+    const zRef = ramped ? zFoot + Math.round(d / 2) : null;
+    const n = this.acrossLog ? this.acrossLog.length : -1;
+    const out = this.acrossFace(ctx, s, it, cA, cB, quad,
+      zRef === null ? flat : lightValueAt(s, it.cell, zRef));
+    if (this.acrossLog && this.acrossLog.length > n) {
+      Object.assign(this.acrossLog[this.acrossLog.length - 1],
+        { d: d, zFoot: zFoot, ramped: ramped, flat: flat, zRef: zRef });
+    }
+    return out;
+  },
+
+  /* HOW THE LIGHT ON THE FLOOR CHANGES, in light per metre, along each of the
+     world's two axes: a central difference of the light at the four squares
+     around this one.
+
+     It is worked out from the SQUARES and not from the fire, and that is the
+     whole point of it. The light the world keeps is a WALK -- how far the light
+     had to come to a square is a whole number of steps, and that number changes
+     at every square's edge -- so the source's own falloff, asked at two points
+     of one square, gives a brightness that JUMPS at the boundary between that
+     square and the next. A field built out of whole squares does not jump: it is
+     one number a square, changing gently from one to the next.
+
+     A neighbour counts only if it is floor at the SAME height, so rock and a
+     floor a metre up make a one-sided slope rather than a cliff into something
+     that is not there; asked of a square with no floor beside it either way, the
+     slope is nothing at all. */
+  floorGrad(s, cell, h) {
+    const at = (dx, dy) => {
+      const c = s.world.at(cell.x + dx, cell.y + dy);
+      if (!c || c.slope !== SLOPE_FLAT || c.h !== cell.h) return null;
+      return lightValueAt(s, c, h);
+    };
+    const c0 = lightValueAt(s, cell, h);
+    let gx = 0, gy = 0;
+    for (let axis = 0; axis < 2; axis++) {
+      const dx = axis ? 0 : 1, dy = axis ? 1 : 0;
+      const lo = at(-dx, -dy), hi = at(dx, dy);
+      /* Both neighbours, or whichever one there is, or neither. */
+      const g = (lo === null && hi === null) ? 0
+        : (lo === null) ? hi - c0
+        : (hi === null) ? c0 - lo
+        : (hi - lo) / 2;
+      if (axis) gy = g; else gx = g;
+    }
+    const mag = Math.hypot(gx, gy);
+    if (!(mag > 1e-4)) return null;
+    return { gx, gy, mag };
+  },
+
+  /* A SQUARE OF FLOOR PAINTED THE SAME WAY, which is harder than a wall: a floor
+     is not a surface standing in the light, it is the ground the light is lying
+     ON, so the brightness changes ACROSS it -- towards the fire at one edge and
+     away from it at the other.
+
+     Sampling the four corners and interpolating would agree at every edge, and
+     cost four numbers a square. What is done instead is one straight line across
+     the square, which is a single gradient fill, and the direction of that line
+     is the direction the light itself is changing in -- the two ends come from
+     `floorGrad`, which is where the promise that two squares agree at their
+     shared edge comes from.
+
+     The two ends are placed along a direction, and WHICH direction is a
+     question about the picture as well as about the world -- see the gradExact
+     flag. The world direction is turned into the direction a line across the
+     picture means, because that is the line a canvas gradient actually measures
+     along.
+
+     Rotated ground (a ramp) keeps the flat answer: it is one square of tilted
+     stone and the ramp already has a transform of its own.
+
+     `rampEnds` works the two ends out and is separate from the paint so that the
+     ramp can be MEASURED rather than only looked at: the light this square
+     claims at any point of it is a straight line between two published numbers,
+     which is a thing a test can assert on without a picture in the way. */
+  rampEnds(s, cell, h) {
+    if (cell.slope !== SLOPE_FLAT || !s.sources) return null;
+    const c0 = lightValueAt(s, cell, h);
+    const g = this.rampField ? this.floorGrad(s, cell, h) : null;
+    /* The way the square's light changes. With the field, it is the way the
+       floor around it changes; without it, the way to the fire, which is the way
+       one source's own falloff runs. */
+    let ux, uy;
+    if (g) {
+      ux = g.gx / g.mag;
+      uy = g.gy / g.mag;
+    } else {
+      const src = s.sources[cell.lightSrc];
+      if (!src) return null;
+      const sx = (src.x + 0.5) - (cell.x + 0.5);
+      const sy = (src.y + 0.5) - (cell.y + 0.5);
+      const d = Math.hypot(sx, sy);
+      if (!(d > 0.001)) return null;
+      ux = sx / d;
+      uy = sy / d;
+    }
+    if (this.gradExact) {
+      /* The projection sends a world offset (wx, wy) to the picture as
+           x = ((wx cos - wy sin) - (wx sin + wy cos)) * tileW/2
+           y = ((wx cos - wy sin) + (wx sin + wy cos)) * tileH/2
+         so in the turned frame the map is (p, q) -> ((p - q)a, (p + q)b) with
+         a = tileW/2 and b = tileH/2, and the two ends of a ramp must lie along
+         the direction that frame's own perpendicular takes. That direction is
+         (p, q) -> (A p - B q, A q - B p) with A = a*a + b*b and B = b*b - a*a,
+         which is the inverse of the map's own square, and any multiple of it
+         will do because only the direction is wanted. */
+      const cos = s.cam.cos, sin = s.cam.sin;
+      const a2 = (CFG.tileW * CFG.tileW + s.cam.tileH * s.cam.tileH) / 4;
+      const b2 = (s.cam.tileH * s.cam.tileH - CFG.tileW * CFG.tileW) / 4;
+      const p = ux * cos - uy * sin, q = ux * sin + uy * cos;
+      const P = a2 * p - b2 * q, Q = a2 * q - b2 * p;
+      const n = Math.hypot(P, Q);
+      if (n > 1e-9) { ux = (P * cos + Q * sin) / n; uy = (Q * cos - P * sin) / n; }
+    }
+    /* Half a metre towards the fire from the middle of the square lands on the
+       edge if the fire is along an axis and on the corner if it is diagonal, so
+       the two samples are exactly the two extremes of what this square holds. */
+    /* Half a metre towards the light's own way from the middle of the square
+       lands on an edge if that way is along a wall and on a corner if it is
+       diagonal, so the two ends are the two extremes of what this square holds. */
+    const half = (Math.abs(ux) + Math.abs(uy)) / 2;
+    const near = this.project(s, cell.x + 0.5 - ux * half,
+                                 cell.y + 0.5 - uy * half, h);
+    const far = this.project(s, cell.x + 0.5 + ux * half,
+                                cell.y + 0.5 + uy * half, h);
+    let p1, p2;
+    if (g) {
+      /* The light at each end comes from the field: this square's own level,
+         changed by how fast the light is changing over the half metre the end
+         sits at. Held inside the range a light can be, because the straight
+         line through the middle is only a fit and at the rim of a pool it may
+         want to run past nothing at all -- and a light below zero is painted as
+         black, which is a smear rather than a shadow. */
+      const reach = (g.gx * ux + g.gy * uy) * half;
+      const d = Math.max(-c0, Math.min(1 - c0, reach));
+      p1 = c0 - d;
+      p2 = c0 + d;
+    } else {
+      p1 = lightPoint(s, cell, h, -ux * half, -uy * half);
+      p2 = lightPoint(s, cell, h, ux * half, uy * half);
+    }
+    return { p1, p2, near, far };
+  },
+
+  groundBase(s, it, colour, f) {
+    const cell = it.cell, h = surfaceHeight(cell);
+    const e = this.rampEnds(s, cell, h);
+    if (!e) return litShade(colour, f, lightValueAt(s, cell, h));
+    const a = litShade(colour, f, e.p1), b = litShade(colour, f, e.p2);
+    if (a === b) return a;
+    if (Math.hypot(e.far.x - e.near.x, e.far.y - e.near.y) < 1) return a;
+    const g = this.bctx.createLinearGradient(e.near.x, e.near.y, e.far.x, e.far.y);
+    g.addColorStop(0, a);
+    g.addColorStop(1, b);
+    return g;
+  },
+
+  path(ctx, pts, snap) {
     ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+    if (snap) {
+      ctx.moveTo(Math.round(pts[0].x), Math.round(pts[0].y));
+      for (let k = 1; k < pts.length; k++) {
+        ctx.lineTo(Math.round(pts[k].x), Math.round(pts[k].y));
+      }
+    } else {
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+    }
     ctx.closePath();
   },
 
@@ -2297,6 +3250,268 @@ const Render = {
     return it.kind === 'cell' && it.cutaway === true && CFG.cutSolid <= 0;
   },
 
+  /* ======================================================================
+     SHADE CAST BY SOMETHING SOLID
+     ======================================================================
+
+     A shadow is AESTHETIC ONLY. Nothing in the game reads one: a square's light
+     is what it always was, worked out square by square from the fires, and a
+     crawler behind a fire stands in full light whether there is a shape on the
+     floor saying otherwise. What a shadow adds is the one thing a light level
+     per square cannot carry -- which WAY the solid things are lying from the
+     fire. A level is a number; a shadow is a direction.
+
+     WHERE THE SHAPE GOES. A caster stands `height` metres tall and the fire
+     hangs `sz` metres above the ground under it. The ray from the flame over the
+     top of the caster meets the floor at
+
+         k = sz / (sz - hh)     times further from the flame than the caster is
+
+     so `k` is 1 when the flame is at the caster's own height (no shadow at all)
+     and 2 when the flame is twice as high as they are tall. A campfire is knee
+     high and a crawler is nearly two metres, which puts `sz - height` BELOW
+     zero: the ray would climb and never reach the floor, and the shadow would
+     run to the horizon. So the caster's height is capped at half the flame's
+     first (`hh`), which is what makes the length come out as the caster's own
+     distance from the fire rather than as infinity, and `light.shade_reach` cuts
+     even that off -- a fire behind you smears across the whole room otherwise.
+
+     THE SHAPE IS A STADIUM: a disc at the caster's feet joined to a bigger disc
+     at the far end, with the two sides straight between them. That is what a
+     solid post of a thing standing in a point of light actually throws. Nine
+     points, no repeats, one way round, and convex -- which is what lets the
+     clipping below be four straight half-planes instead of a general clipper.
+
+     HOW IT FADES. Crisp ACROSS (no fade), soft ALONG (fade at both ends). A
+     shadow with a hard edge all the way round reads as a stencil cut out of the
+     picture, and one with a soft edge all the way round has no shape at all --
+     `light.shade_give` is metres of fade at each end of the shape and nothing at
+     its sides, which is the firm-but-not-cut-out look.
+
+     HOW IT LANDS. One shadow is MANY items, one per square of floor it covers,
+     each clipped to that square and sorted as that square is sorted, a hair in
+     front of it. That is why this runs BEFORE the sort rather than after: a
+     shadow is a mark on the floor, so it belongs to the floor's own place in
+     painter's order, and the things standing on that floor -- the caster
+     included -- have to paint after it. A square in front still covers it, and
+     so does a wall standing between the fire and the floor.
+
+     NOTHING IS DRAWN ON A SQUARE THE PICTURE DOES NOT PAINT. A shadow is a
+     shade ON the ground, so a square whose floor is not in the picture -- rock
+     standing in front of it, a wall's lid that the wall look leaves off, a ramp
+     drawn from its own corners -- has nowhere to put one, and painting it anyway
+     lays grey over the backdrop or over the top of a wall.
+
+     WHAT IS ACCEPTED AS WRONG: a shadow that reaches the foot of a wall standing
+     behind it paints onto that wall's floor and not up it, and one that crosses
+     onto higher or lower ground is drawn flat on the caster's own plane. Both
+     are one square out at most, and both are cheaper than a per-square height
+     test. */
+
+  /* How tall a half-built structure stands, in metres above its own floor. The
+     parts are the same ones that are drawn, asked the same way: a part that only
+     grows is present at the fraction of its height the work has reached, and a
+     part that does not grow -- a flame, a lid -- is not there at all until the
+     job is done. See structure3d(). */
+  structureHeight(site) {
+    const parts = STRUCT_PARTS(site.structure);
+    const frac = site.built ? 1 : Math.max(0.08, site.progress / 100);
+    let top = TILE_METRES * 0.5;
+    for (let i = 0; i < parts.length; i++) {
+      const f = parts[i].part;
+      if (!f.grows && !site.built) continue;
+      const h = (f.z + f.to_m) * (f.grows && !site.built ? frac : 1);
+      if (h > top) top = h;
+    }
+    return top;
+  },
+
+  /* One straight cut off a polygon, and close the shape where it crossed.
+     `axis` 0 is x, 1 is y. `keep` -1 keeps the side of `lim` with the LARGER
+     coordinate (x >= lim), `keep` 1 the smaller (x <= lim) -- getting that
+     backwards keeps the hole instead of the shape and throws every shadow away.
+     Returns null when nothing is left, which is how a piece that missed this
+     square is dropped instead of being pushed as an empty shape. */
+  clipHalf(poly, axis, lim, keep) {
+    const out = [];
+    const n = poly.length;
+    for (let i = 0; i < n; i++) {
+      const a = poly[i], c = poly[(i + 1) % n];
+      const da = keep * (a[axis] - lim), dc = keep * (c[axis] - lim);
+      if (da <= 0) out.push(a);
+      if ((da <= 0) !== (dc <= 0)) {
+        const t = da / (da - dc);
+        const p = [a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t];
+        p[axis] = lim;
+        out.push(p);
+      }
+    }
+    return out.length >= 3 ? out : null;
+  },
+
+  /* A shadow cut down to one square of floor. */
+  clipSquare(poly, cx, cy) {
+    let q = this.clipHalf(poly, 0, cx, -1);
+    if (!q) return null;
+    q = this.clipHalf(q, 1, cy, -1);
+    if (!q) return null;
+    q = this.clipHalf(q, 0, cx + 1, 1);
+    if (!q) return null;
+    return this.clipHalf(q, 1, cy + 1, 1);
+  },
+
+  /* Every shadow this frame. Called from build() with the list still unsorted,
+     because the shadows go INTO that list.
+
+     The casters are read off the batch rather than out of the world, so only
+     things that are actually in the picture throw anything, and a caster off the
+     side of the screen costs nothing. A fire off the side still lights and still
+     casts: what a caster needs is the light ON ITS OWN SQUARE, which is the
+     match's to answer, not the camera's. */
+  castShadows(s, b) {
+    this.shadowPieces = 0;
+    this.shadowActorPieces = 0;
+    this.shadowActorCasters = 0;
+    if (!this.lightShadows || !(CFG.shadeStrength > 0)) return;
+    if (!(CFG.shadeGirth > 0) || !s.sources || !s.sources.length) return;
+    if (!this.bctx) this.ensure();
+
+    /* Square -> its item, which `draw()` works out only after the sort. A
+       shadow has to know whether the floor it is about to be laid on is painted
+       at all, and the answer is on the item. */
+    let seen = this.shadowCells;
+    if (!seen) seen = this.shadowCells = new Map();
+    seen.clear();
+    for (let k = 0; k < b.length; k++) {
+      const it = b[k];
+      if (it.kind === 'cell') seen.set(it.cell, it);
+    }
+
+    for (let k = 0; k < b.length; k++) {
+      const it = b[k];
+      if (it.kind === 'actor') {
+        /* Who threw the shade is asked here rather than guessed at later: the
+           person asked for "a crawler walking past a fire drags a shadow with
+           them", and `shadeMade` alone cannot tell a crawler's shade from a
+           tent's. */
+        const was = this.shadowPieces;
+        this.castOne(s, b, seen, it.actor, it.gx, it.gy,
+                     CFG.actorHeight, CFG.shadeGirth);
+        if (this.shadowPieces > was) {
+          this.shadowActorPieces += this.shadowPieces - was;
+          this.shadowActorCasters++;
+        }
+      } else if (it.kind === 'site') {
+        if (!(it.site.built || it.site.progress > 0)) continue;
+        this.castOne(s, b, seen, it.site, it.site.x + 0.5, it.site.y + 0.5,
+                     this.structureHeight(it.site), CFG.shadeGirth * 2);
+      }
+    }
+  },
+
+  castOne(s, b, seen, own, gx, gy, height, girth) {
+    const cell = s.world.at(Math.floor(gx), Math.floor(gy));
+    if (!cell || !(cell.light > 0)) return;
+    const src = s.sources[cell.lightSrc];
+    /* The thing carrying the light does not cast a shadow of itself: a walking
+       lantern does not darken the floor it is walking on, and a fire does not
+       darken the ground it burns on. */
+    if (!src || src.actor === own || src.site === own) return;
+
+    const sz = src.z - surfaceHeight(cell);
+    if (!(sz > 0.05)) return;
+    const dx = gx - (src.x + 0.5), dy = gy - (src.y + 0.5);
+    const dist = Math.hypot(dx, dy);
+    if (!(dist > 0.05)) return;
+
+    /* The ray from the flame over the top of the caster, and where it lands. */
+    const hh = Math.min(height, sz * 0.5);
+    let k = sz / (sz - hh);
+    if (dist * (k - 1) > CFG.shadeReach) k = 1 + CFG.shadeReach / dist;
+    if (!(k > 1.02)) return;
+    /* How dark the shade is: a share of the light the caster's own square is
+       standing in, so a shadow at the far edge of a fire is as faint as the
+       firelight out there -- which is what stops one being painted as a black
+       hole in a dark room. */
+    const strength = Math.min(1, CFG.shadeStrength * cell.light);
+    if (!(strength > 0.02)) return;
+
+    const phi = Math.atan2(dy, dx);
+    const ux = Math.cos(phi), uy = Math.sin(phi);
+    const fx = gx + dx * k, fy = gy + dy * k;
+    /* Four points a cap is enough: this is two or three pixels across on the
+       screen, and two would make it a quadrilateral that reads as a box. */
+    const seg = 4;
+    const pts = [];
+    for (let i = 0; i <= seg; i++) {
+      const t = phi - Math.PI / 2 + (i * Math.PI) / seg;
+      pts.push([fx + Math.cos(t) * girth * k, fy + Math.sin(t) * girth * k]);
+    }
+    for (let i = 0; i < seg; i++) {
+      const t = phi + Math.PI / 2 + (i * Math.PI) / seg;
+      pts.push([gx + Math.cos(t) * girth, gy + Math.sin(t) * girth]);
+    }
+
+    /* One gradient for the whole shadow, reused by every piece of it, so a
+       shadow crossing four squares is one shape and not four. It runs from the
+       shape's own back point to its own front point, so the `give` at each end
+       is a fixed number of METRES no matter how long the shadow is -- a short
+       one and a long one fade out at the same rate. */
+    const gz = surfaceHeight(cell);
+    const near = this.project(s, gx - ux * girth, gy - uy * girth, gz);
+    const far = this.project(s, fx + ux * girth * k, fy + uy * girth * k, gz);
+    if (!(Math.hypot(far.x - near.x, far.y - near.y) > 1)) return;
+    const run = Math.max(0.1, dist * (k - 1) + girth * (1 + k));
+    const give = Math.min(0.34, CFG.shadeGive / run);
+    const ink = 'rgba(0,0,0,' + strength.toFixed(3) + ')';
+    const grad = this.bctx.createLinearGradient(near.x, near.y, far.x, far.y);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(give, ink);
+    grad.addColorStop(1 - give, ink);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      if (p[0] < minX) minX = p[0];
+      if (p[0] > maxX) maxX = p[0];
+      if (p[1] < minY) minY = p[1];
+      if (p[1] > maxY) maxY = p[1];
+    }
+
+    for (let cx = Math.floor(minX); cx <= Math.floor(maxX); cx++) {
+      for (let cy = Math.floor(minY); cy <= Math.floor(maxY); cy++) {
+        const c = s.world.at(cx, cy);
+        const item = c ? seen.get(c) : null;
+        if (!item || item.block || this.cutOut(item)) continue;
+        if (!this.capShown(item) || item.cell.slope !== SLOPE_FLAT) continue;
+        const poly = this.clipSquare(pts, cx, cy);
+        if (!poly) continue;
+        const screen = [];
+        let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+        for (let i = 0; i < poly.length; i++) {
+          const p = this.project(s, poly[i][0], poly[i][1], gz);
+          screen.push(p);
+          if (p.x < bx0) bx0 = p.x;
+          if (p.x > bx1) bx1 = p.x;
+          if (p.y < by0) by0 = p.y;
+          if (p.y > by1) by1 = p.y;
+        }
+        if (bx1 < 0 || bx0 > this.w || by1 < 0 || by0 > this.h) continue;
+        /* The square's own depth, a hair behind the caster's: the shade goes
+           down on the floor, and whatever is standing on that floor paints after
+           it. A square nearer the camera still paints over the whole of it. */
+        b.push({
+          kind: 'shadow', i: -1, poly: screen, grad: grad,
+          solid: false, depth: this.depth(s, cx + 0.5, cy + 0.5) + 0.005,
+          minX: bx0, minY: by0, maxX: bx1, maxY: by1,
+          cx: (bx0 + bx1) / 2, cy: (by0 + by1) / 2
+        });
+        this.shadowPieces++;
+      }
+    }
+  },
+
   draw(s) {
     this.ensure();
     const ctx = this.bctx, b = this.batch;
@@ -2305,6 +3520,10 @@ const Render = {
     let walls = 0, wallPx = 0, buried = 0, kept = 0, lost = 0, faded = 0;
     let backs = 0, backPx = 0;
     let banded = 0;
+    /* How many faces took the across-the-run correction. ZERO WHEN
+       `Render.acrossLight` IS OFF, which is the whole of what the flag-off
+       picture being byte-identical rests on. See acrossFace(). */
+    let acrossed = 0;
     /* SIDES WITH ROCK IN FRONT OF THEM -- what `Render.rockSides` is about.
        Counted here, in the one place the painted quads exist, and not in
        `wallsPainted()`, which the pointer's own answer calls too: a count that
@@ -2335,6 +3554,15 @@ const Render = {
        blocks is the look v0.37.0 shipped, and it leaves a gap at the foot of each
        hidden column: a test reads this count rather than arguing the gap is shut. */
     let stumps = 0;
+    /* HOW MANY PATCHES OF SHADE THE PICTURE LAID DOWN. A shadow is a purely
+       aesthetic thing -- nothing in the game reads one, nothing collides with
+       one, and the light a square carries is worked out without them -- so the
+       only evidence that the feature is real is that they REACHED THE CANVAS.
+       This counts the ones that did, out of the ones the caster pass made
+       (`Render.shadowPieces`). A test reads the pair: made but not painted is a
+       builder with no consumer, which is the failure this project has been
+       bitten by before. */
+    let shadows = 0;
     /* The middle of the last block's own near face: a pixel that block REALLY
        painted. The middle of its square will not do any more, because the middle
        of a square's screen footprint is its TOP, and the tops are exactly what
@@ -2392,6 +3620,30 @@ const Render = {
         outlined = true;
       }
       ctx.globalAlpha = alpha;
+
+      /* SHADE CAST BY SOMETHING SOLID. One patch per square of floor it lies
+         over, each sorted to the square it lies on, so it covers the ground and
+         is covered by anything nearer the camera -- including the thing that
+         cast it. See castShadows(). */
+      if (it.kind === 'shadow') {
+        /* ONE PATCH OF SHADE, laid rather than painted: a shade takes brightness
+           away from what is under it, exactly as the light a surface carries is
+           put on it, so it goes down in the same composite. See shadeMultiply.
+           It COUNTS as painted like anything else -- it reached the canvas, and
+           the self-check that reads `drawn + cut` against the batch would
+           otherwise report every shadow in the picture as a shape that fell
+           through the floor of the renderer. */
+        if (this.shadeMultiply) {
+          ctx.globalCompositeOperation = 'multiply';
+          this.poly(ctx, it.poly, it.grad);
+          ctx.globalCompositeOperation = 'source-over';
+        } else {
+          this.poly(ctx, it.poly, it.grad);
+        }
+        shadows++;
+        drawn++;
+        continue;
+      }
 
       if (it.kind === 'actor') {
         for (let r = 0; r < it.parts.length; r++) {
@@ -2493,8 +3745,14 @@ const Render = {
            walls you walk between, and the material is mapped ONTO each face
            rather than pasted over it, so the courses run along the wall and
            turn with it. */
-        const lf = litShade(def.side, CFG.shadeLeft * lift, it.light);
-        const rf = litShade(def.side, CFG.shadeRight * lift, it.light);
+        /* HOW BRIGHT THE STONE IS, at the foot of the face: the level the paint
+           starts from. A generated material on screen carries the light itself
+           (see floorLight); a dropped-in picture of one cannot, because the
+           shade is baked into the pattern it wears. */
+        const drawnMat = !!(mat && CFG.texStrength > 0 && this.drawn(mat));
+        const sl = this.floorLight(s, it, drawnMat);
+        const lf = litShade(def.side, CFG.shadeLeft * lift, sl);
+        const rf = litShade(def.side, CFG.shadeRight * lift, sl);
         /* A wall cut down where the block in front hides it -- but only while
            that block really does paint solid. Fade it and the whole wall has to
            come back, or the fade would open a hole, so the choice is made here
@@ -2523,8 +3781,19 @@ const Render = {
            material that has pictures, since these lines run for every block in
            the frame. */
         const pic = sided && this.drawn(mat);
-        const lfPic = pic ? lightShade(CFG.shadeLeft * lift, it.light) : undefined;
-        const rfPic = pic ? lightShade(CFG.shadeRight * lift, it.light) : undefined;
+        const lfPic = pic ? lightShade(CFG.shadeLeft * lift, sl) : undefined;
+        const rfPic = pic ? lightShade(CFG.shadeRight * lift, sl) : undefined;
+        /* THE MATERIAL WITH NO COLOUR BAKED INTO IT, so the face's own light can
+           be painted underneath and show through the holes in the material.
+           Null for every material this build does not generate, and null
+           whenever `light.smooth` is off -- in which case every line below is
+           exactly what it always was. `bandSkin` is the same material with the
+           fade cut into it already (the band's own height, like wallBand's
+           `rampM`), because a canvas pattern cannot be dissolved after the fact;
+           there is only ever one of those per material, since a band only exists
+           where the fade is at its full depth. */
+        const skin = sided ? this.skinFor(mat, undefined) : null;
+        const bandSkin = skin ? this.skinFor(mat, undefined, CFG.wallFadeM) : null;
         /* THE STRIP OF ROCK THIS BLOCK SHOWS ALONG ITS FAR EDGES, where the block
            behind it is too low to cover it -- see backBand(), which is the whole
            story. Painted FIRST of this block's faces, because a strip reaches
@@ -2546,18 +3815,87 @@ const Render = {
            block is: the far edge running with the left face's edge takes the
            left shade. */
         const bkL = faced.bl, bkR = faced.br;
+        /* THE FAR CORNER: the one of the block's four that is neither the near
+           one nor either of the two the near faces stand on. Both strips hang
+           from it -- see backBand() -- so it is the u=0 end of each of them, and
+           the corner acrossFace() needs to know the run runs from. */
+        const anchor = 6 - it.near - it.cornerL - it.cornerR;
         if (bkR) {
           const brD = Math.max(0, (bkR[3].y - bkR[0].y) / CFG.rise);
-          const fill = sided && brD > 0 ? this.wall(lf, mat, bkR, brD, lfPic,
-            it.cell.x, it.cell.y, PICK_LEFT) : lf;
+          /* No fade on a strip: the fade is the top of a WALL, and a strip is
+             the back edge of a block seen over the top of it. Its foot stands
+             `brD` metres under the block's own top, and a strip only ever grows
+             on a block -- a floor and a ramp have no strip at all (see `lid` in
+             build()) and a block's four corners are all at `cell.h` -- so the
+             ground beneath it is `cell.h - brD` up. */
+          const zBkR = it.cell.h - brD;
+          /* A strip is painted beside the strip of the block next along, so it
+             wears the same light ACROSS it that the faces below it wear: without
+             that, the back edge of a wall keeps the hard steps the faces have
+             just lost. See acrossFace(). The probe comes first because whether
+             the strip ramps decides where its own light is read (acrossFor). */
+          const rampBkR = pic && brD > 0
+            ? this.faceBase(s, it.cell, '#ffffff', CFG.shadeLeft * lift, bkR, 0,
+                            zBkR) : null;
+          const rampedBkR = this.faceRamped(pic, rampBkR, skin !== null && brD > 0);
+          const acrBkR = this.acrossFor(ctx, s, it, anchor, it.cornerR, bkR,
+                                        zBkR, brD, rampedBkR, sl);
+          const base = skin && brD > 0
+            ? this.faceBase(s, it.cell, def.side, CFG.shadeLeft * lift, bkR, 0,
+                            zBkR, acrBkR ? acrBkR.mul : 1) : null;
+          /* A strip that is a picture takes its light MULTIPLIED over it, exactly
+             as the faces under it do -- a strip left flat while the stonework
+             below ramps is a hard line across the back of every lit wall. The
+             probe is only rebuilt once the across correction knows which level
+             the face is painted at; with no correction the two are one call. */
+          const overBkR = rampBkR !== null && typeof rampBkR !== 'string'
+            ? (acrBkR
+                ? this.faceBase(s, it.cell, '#ffffff', CFG.shadeLeft * lift, bkR,
+                                0, zBkR, acrBkR.mul)
+                : rampBkR)
+            : null;
+          const fill = sided && brD > 0 ? this.wall(lf, mat, bkR, brD,
+            overBkR !== null ? undefined
+              : (acrBkR ? lightShade(CFG.shadeLeft * lift, acrBkR.level) : lfPic),
+            it.cell.x, it.cell.y, PICK_LEFT,
+            overBkR !== null
+              ? this.picSkin(mat, it.cell.x, it.cell.y, PICK_LEFT) : skin)
+            : (acrBkR ? litShade(def.side, CFG.shadeLeft * lift, acrBkR.level) : lf);
+          if (base) this.poly(ctx, bkR, base);
           this.poly(ctx, bkR, fill);
+          if (overBkR !== null) this.lightOver(ctx, bkR, overBkR);
+          if (acrBkR) { this.lightOver(ctx, bkR, acrBkR.grad); acrossed++; it.across = (it.across || 0) + 1; }
           backs++; backPx += this.area(bkR);
         }
         if (bkL) {
           const blD = Math.max(0, (bkL[3].y - bkL[0].y) / CFG.rise);
-          const fill = sided && blD > 0 ? this.wall(rf, mat, bkL, blD, rfPic,
-            it.cell.x, it.cell.y, PICK_RIGHT) : rf;
+          const zBkL = it.cell.h - blD;
+          const rampBkL = pic && blD > 0
+            ? this.faceBase(s, it.cell, '#ffffff', CFG.shadeRight * lift, bkL, 0,
+                            zBkL) : null;
+          const rampedBkL = this.faceRamped(pic, rampBkL, skin !== null && blD > 0);
+          const acrBkL = this.acrossFor(ctx, s, it, anchor, it.cornerL, bkL,
+                                        zBkL, blD, rampedBkL, sl);
+          const base = skin && blD > 0
+            ? this.faceBase(s, it.cell, def.side, CFG.shadeRight * lift, bkL, 0,
+                            zBkL, acrBkL ? acrBkL.mul : 1) : null;
+          const overBkL = rampBkL !== null && typeof rampBkL !== 'string'
+            ? (acrBkL
+                ? this.faceBase(s, it.cell, '#ffffff', CFG.shadeRight * lift, bkL,
+                                0, zBkL, acrBkL.mul)
+                : rampBkL)
+            : null;
+          const fill = sided && blD > 0 ? this.wall(rf, mat, bkL, blD,
+            overBkL !== null ? undefined
+              : (acrBkL ? lightShade(CFG.shadeRight * lift, acrBkL.level) : rfPic),
+            it.cell.x, it.cell.y, PICK_RIGHT,
+            overBkL !== null
+              ? this.picSkin(mat, it.cell.x, it.cell.y, PICK_RIGHT) : skin)
+            : (acrBkL ? litShade(def.side, CFG.shadeRight * lift, acrBkL.level) : rf);
+          if (base) this.poly(ctx, bkL, base);
           this.poly(ctx, bkL, fill);
+          if (overBkL !== null) this.lightOver(ctx, bkL, overBkL);
+          if (acrBkL) { this.lightOver(ctx, bkL, acrBkL.grad); acrossed++; it.across = (it.across || 0) + 1; }
           backs++; backPx += this.area(bkL);
         }
         if (qL) {
@@ -2569,21 +3907,115 @@ const Render = {
              of and so can be a metre out. A face with no drop here is the thin
              end of a triangle, and a map is not defined on one. */
           const dL = Math.max(0, (qL[3].y - qL[0].y) / CFG.rise);
-          const fill = sided && dL > 0 ? this.wall(lf, mat, qL, dL, lfPic,
-            it.cell.x, it.cell.y, PICK_LEFT) : lf;
+          /* Where the FOOT of this face stands, in metres up from the ground:
+             zero when the face runs all the way down, and the height of the cut
+             when a block in front hides the bottom of it. `it.left[3]` is the
+             ground under the very corner the face hangs off -- the same x as
+             `qL[3]`, whatever the cut did -- so the difference between the two
+             is exactly how far up the foot has been raised. */
+          const fdL = this.fadeDepth(mL);
+          const zFootL = (it.left[3].y - qL[3].y) / CFG.rise;
+          /* A FACE THAT IS A PICTURE carries its own colour, so there is nothing
+             to lay a light UNDER and the light has to be MULTIPLIED over the
+             picture instead -- see picSkin() and lightOver(). This is the whole
+             of what a wall looked like before: the light was baked into the
+             pattern, a pattern can only wear ONE level, so three metres of stone
+             took the level of the ground at its foot and stood there at one
+             brightness while the floor beside it ramped. */
+          const rampL = pic && dL > 0
+            ? this.faceBase(s, it.cell, '#ffffff', CFG.shadeLeft * lift, qL, 0,
+                            zFootL) : null;
+          /* THE LIGHT ACROSS THIS FACE'S OWN RUN, which is what stops the block
+             beside it reading as a separate stripe: both faces ask the same two
+             squares at the same height and land on the same number at the join.
+             See acrossFace() and acrossFor(), and note the probe above decides
+             where this face's own light is read, so it has to come first. */
+          const rampedL = this.faceRamped(pic, rampL, skin !== null && dL > 0);
+          const acrL = this.acrossFor(ctx, s, it, it.near, it.cornerL, qL,
+                                      zFootL, dL, rampedL, sl);
+          const baseL = skin && dL > 0
+            ? this.faceBase(s, it.cell, def.side, CFG.shadeLeft * lift, qL, fdL,
+                            zFootL, acrL ? acrL.mul : 1) : null;
+          /* TWO QUESTIONS ABOUT ONE FACE, and they are not the same question.
+             Above: does the light RAMP up this face at all -- asked with no fade
+             laid on, so a face in flat light still answers with one flat colour
+             and stays the single fill it always was. Here: the same stops with
+             the alpha that belongs to the material's own dissolve over them, so
+             the multiply ramps away exactly as the band does.
+
+             They were one call once, and the answer it gave was that a band is
+             painted BEFORE the light -- so a face wearing a dropped-in picture,
+             which is every rock wall at the camp, took its top metre straight
+             off the picture and stood there at one brightness whatever light
+             reached it. The brightest stripe of a wall was the part being
+             dissolved. Fold the two questions back together and every flat-light
+             face in the world starts answering with a gradient: a fill, a second
+             picture and a new pixel or two on every face in the game, for
+             nothing. Only the ramp is judged by the ramp; flat stays flat.
+
+             The ACROSS correction is the third thing laid on the same face, and
+             it is why this one is rebuilt rather than reused as the probe: the
+             whole profile has to be SCALED to the brighter end of the run before
+             the across gradient can darken it back down. With no correction the
+             two calls are one object, exactly as they were. */
+          const overL = rampL !== null && typeof rampL !== 'string'
+            ? (acrL
+                ? this.faceBase(s, it.cell, '#ffffff', CFG.shadeLeft * lift, qL,
+                                fdL, zFootL, acrL.mul)
+                : this.faceBase(s, it.cell, '#ffffff', CFG.shadeLeft * lift, qL,
+                                fdL, zFootL))
+            : null;
+          const picL = overL !== null
+            ? this.picSkin(mat, it.cell.x, it.cell.y, PICK_LEFT) : null;
+          /* `lf` taken to the brighter end of the run, so a flat fill is bright
+             enough for the across gradient to take light away from it. */
+          const fill = sided && dL > 0 ? this.wall(
+            acrL ? litShade(def.side, CFG.shadeLeft * lift, acrL.level) : lf,
+            mat, qL, dL,
+            overL !== null ? undefined
+              : (acrL ? lightShade(CFG.shadeLeft * lift, acrL.level) : lfPic),
+            it.cell.x, it.cell.y, PICK_LEFT, picL || skin) : (
+            acrL ? litShade(def.side, CFG.shadeLeft * lift, acrL.level) : lf);
           /* The band above the face wears the SAME picture of the material, from
              the same square and the same salt, and dissolves it -- which is the
              whole of what a person sees when they say the texture stops where the
              fade starts. It is asked for only where there is opaque rock BENEATH
              it (`mL` more than the band is worth): a band whose whole face is
              band is a face painted at nothing at all, which is how a one-metre
-             stump used to disappear into a hole. */
+             stump used to disappear into a hole.
+             With a ramp to wear it, this picture stays UNLIT and the ramp is
+             multiplied over it -- see paintSide() -- so bandLitL below only has
+             to answer for the arm with no ramp in it. */
+          const bandM = Math.min(CFG.wallFadeM, mL);
+          const picBandL = overL !== null
+            ? this.picSkin(mat, it.cell.x, it.cell.y, PICK_LEFT, CFG.wallFadeM)
+            : null;
+          /* ONE brightness, for one flat fill. A pattern cannot ramp -- that is
+             why the band is a picture of the material at all -- so where the band
+             is painted as a single colour it takes the brightness the ramp has
+             where the band begins, which is the one place the two are painted on
+             top of each other. Take the floor's level instead and every wall
+             wears a bright cap over a ramp it does not match. With a ramp over
+             it this value is not read: a picture is the RAMP's arm, and the
+             light reaches it as the multiply. */
+          const bandLitL = overL !== null
+            ? lightShade(CFG.shadeLeft * lift,
+                         lightValueAt(s, it.cell, zFootL + dL - bandM))
+            : (acrL ? lightShade(CFG.shadeLeft * lift, acrL.level) : lfPic);
           const band = sided && mL > CFG.wallFadeM
-            ? this.wallBand(lf, mat, lfPic, it.cell.x, it.cell.y, PICK_LEFT,
-                            Math.min(CFG.wallFadeM, mL)) : null;
-          const bit = this.paintSide(ctx, qL, mL, lf, fill, band);
+            ? this.wallBand(lf, mat, bandLitL, it.cell.x, it.cell.y, PICK_LEFT,
+                            bandM, picBandL || bandSkin) : null;
+          const bit = this.paintSide(ctx, qL, mL, lf, fill, band, baseL, overL);
           if (bit) faded++;
           if (bit === 2) banded++;
+          /* THE LAST THING LAID ON THIS FACE, and the only one that reaches
+             ACROSS it: everything above painted it at some one brightness (a
+             flat fill, or a ramp that changes with height), and this takes the
+             ends of the run down to the light of the squares on either side of
+             them. Painted over the whole quad -- the base, the fill and the
+             dissolving band alike -- because a run's ends are ends however the
+             face is painted. See acrossFace(). */
+          if (acrL) { this.lightOver(ctx, qL, acrL.grad); acrossed++; it.across = (it.across || 0) + 1; }
           walls++; wallPx += this.area(qL);
           /* A point this block certainly painted AND that nothing in front of it
              painted over -- because a face is now only ever cut PART of the way
@@ -2606,14 +4038,57 @@ const Render = {
         }
         if (qR) {
           const dR = Math.max(0, (qR[3].y - qR[0].y) / CFG.rise);
-          const fill = sided && dR > 0 ? this.wall(rf, mat, qR, dR, rfPic,
-            it.cell.x, it.cell.y, PICK_RIGHT) : rf;
+          const fdR = this.fadeDepth(mR);
+          const zFootR = (it.right[3].y - qR[3].y) / CFG.rise;
+          /* The same lines as the left face, and for the same reasons: the
+             light on a picture is MULTIPLIED over it, a face whose light does
+             not change keeps the one flat fill, and both ends of the run are
+             taken from the squares either side so the block next along agrees
+             with this one about the light at the join. See above, picSkin(),
+             faceRamped() and acrossFace(). */
+          const rampR = pic && dR > 0
+            ? this.faceBase(s, it.cell, '#ffffff', CFG.shadeRight * lift, qR, 0,
+                            zFootR) : null;
+          const rampedR = this.faceRamped(pic, rampR, skin !== null && dR > 0);
+          const acrR = this.acrossFor(ctx, s, it, it.near, it.cornerR, qR,
+                                      zFootR, dR, rampedR, sl);
+          const baseR = skin && dR > 0
+            ? this.faceBase(s, it.cell, def.side, CFG.shadeRight * lift, qR, fdR,
+                            zFootR, acrR ? acrR.mul : 1) : null;
+          /* The same two questions as the left face, and for the same reasons: one
+             call to ask whether the light ramps at all, a second to lay the
+             fade's own alpha over the ramp the band will wear. See above. */
+          const overR = rampR !== null && typeof rampR !== 'string'
+            ? (acrR
+                ? this.faceBase(s, it.cell, '#ffffff', CFG.shadeRight * lift, qR,
+                                fdR, zFootR, acrR.mul)
+                : this.faceBase(s, it.cell, '#ffffff', CFG.shadeRight * lift, qR,
+                                fdR, zFootR))
+            : null;
+          const picR = overR !== null
+            ? this.picSkin(mat, it.cell.x, it.cell.y, PICK_RIGHT) : null;
+          const fill = sided && dR > 0 ? this.wall(
+            acrR ? litShade(def.side, CFG.shadeRight * lift, acrR.level) : rf,
+            mat, qR, dR,
+            overR !== null ? undefined
+              : (acrR ? lightShade(CFG.shadeRight * lift, acrR.level) : rfPic),
+            it.cell.x, it.cell.y, PICK_RIGHT, picR || skin) : (
+            acrR ? litShade(def.side, CFG.shadeRight * lift, acrR.level) : rf);
+          const bandM = Math.min(CFG.wallFadeM, mR);
+          const picBandR = overR !== null
+            ? this.picSkin(mat, it.cell.x, it.cell.y, PICK_RIGHT, CFG.wallFadeM)
+            : null;
+          const bandLitR = overR !== null
+            ? lightShade(CFG.shadeRight * lift,
+                         lightValueAt(s, it.cell, zFootR + dR - bandM))
+            : (acrR ? lightShade(CFG.shadeRight * lift, acrR.level) : rfPic);
           const band = sided && mR > CFG.wallFadeM
-            ? this.wallBand(rf, mat, rfPic, it.cell.x, it.cell.y, PICK_RIGHT,
-                            Math.min(CFG.wallFadeM, mR)) : null;
-          const bit = this.paintSide(ctx, qR, mR, rf, fill, band);
+            ? this.wallBand(rf, mat, bandLitR, it.cell.x, it.cell.y, PICK_RIGHT,
+                            bandM, picBandR || bandSkin) : null;
+          const bit = this.paintSide(ctx, qR, mR, rf, fill, band, baseR, overR);
           if (bit) faded++;
           if (bit === 2) banded++;
+          if (acrR) { this.lightOver(ctx, qR, acrR.grad); acrossed++; it.across = (it.across || 0) + 1; }
           walls++; wallPx += this.area(qR);
         } else {
           buried++;
@@ -2661,14 +4136,63 @@ const Render = {
           this.poly(ctx, it.top, litShade(def.side, CFG.shadeLeft * lift, it.light));
           body++;
         } else {
-          const tf = litShade(def.top, lift, it.light);
+          /* A GENERATED MATERIAL CAN CARRY THE LIGHT ITSELF. Its pattern is the
+             material's colour with nothing of the tile baked into it, so the
+             square's own brightness goes underneath and shows through -- and a
+             floor is not one colour, it is a ramp from the edge nearest the fire
+             to the edge furthest from it. See groundBase().
+
+             A DROPPED-IN PICTURE CANNOT: a picture is its own colour, so the
+             shade is baked into the pattern it wears, and it keeps the stepped
+             level (see floorLight) -- a key that varied with a continuous light
+             would be a cache entry per pixel. Nothing below runs at all when
+             `light.smooth` is off, which is the picture this replaced. */
+          const drawnMat = !!(mat && CFG.texStrength > 0 && this.drawn(mat));
+          const sl = this.floorLight(s, it, drawnMat);
+          const tf = litShade(def.top, lift, sl);
+          /* LIT IS ASKED OF THE SQUARE'S OWN NUMBER, all three times below -- see
+             lightFix. `it.light` is that number rounded onto the six-step ladder,
+             so the whole outer rim of a pool of light -- every square whose light
+             is under one twelfth -- read as UNLIT, and the ground there wore the
+             baked, flat, stepped picture while the ground a step further in wore
+             the smooth one. That is a wall of colour across the floor, and it is
+             the same cliff the walls were standing on. `ramp` decides whether the
+             material is laid under a live gradient, `skin` whether there is a
+             material at all, and `bare` whether the gradient IS the surface. */
+          const lit = this.lightFix ? (it.cell.light > 0) : (it.light > 0);
+          /* A PICTURE IS ITS OWN COLOUR, so the light cannot be laid under it and
+             cannot be baked into it either: a pattern carries ONE level, one
+             level per square is a flight of stairs across a pool of light, and
+             that is the division between tiles this is here to take out. So ask
+             for the same ramp with no colour in it -- white put through the same
+             sum -- and MULTIPLY it over the picture instead. Picture x light is
+             exactly what the bake does, so a square whose light comes out even
+             across it is still painted the old way, out of the baked pattern,
+             for the price of one fill; that is most of the labyrinth. */
+          const ramp = drawnMat && lit && CFG.lightSmooth > 0
+            ? this.groundBase(s, it, '#ffffff', lift) : null;
+          const pic = ramp !== null && typeof ramp !== 'string';
+          const skin = lit ? this.skinFor(mat, it.cell.h) : null;
           const gpat = this.ground(tf, mat, it, s, worldStamp,
-            this.drawn(mat) ? lightShade(lift, it.light) : undefined);
+            drawnMat && !pic ? lightShade(lift, sl) : undefined, skin);
+          /* A GRADIENT IS WHAT A MATERIAL IS PAINTED ON, so with no material
+             there is nothing to lay anything over and the gradient is not under
+             the surface -- it IS the surface. That is a tile with no material at
+             all, and every tile with `texture.strength` at 0. Skipping this left
+             the ground painted at the square's own stepped level whenever the
+             materials were off, which is the stairs in a pool of light coming
+             back through a knob that has nothing to do with light. */
+          const bare = !skin && !pic && typeof gpat === 'string'
+                       && CFG.lightSmooth > 0 && lit;
+          if (skin || bare) {
+            this.poly(ctx, it.top, this.groundBase(s, it, def.top, lift));
+          }
           /* How many DIFFERENT pictures this frame's ground actually wore, so a
              test can say the scatter reached the screen rather than that the list
              it was picked from had more than one entry in it. */
           if (gpat && gpat._pick >= 0) picks.add(mat + '|' + gpat._pick);
-          this.poly(ctx, it.top, gpat);
+          if (!bare) this.poly(ctx, it.top, gpat);
+          if (pic) this.lightOver(ctx, it.top, ramp);
           caps++;
         }
       } else capsOff++;
@@ -2719,7 +4243,7 @@ const Render = {
          colour. Zero bands with walls > 0 and the fade switched on is a fade that
          reached nothing; bands > 0 with banded 0 is a wall whose stonework still
          stops at the bottom of the band. */
-      faded: faded, banded: banded,
+      faded: faded, banded: banded, acrossed: acrossed,
       /* How many faces came back in full because the block that would have
          hidden them is cut away, and how many stayed out anyway -- which must
          be none. */
@@ -2743,6 +4267,18 @@ const Render = {
       stoneSides: stoneSides, stoneShown: stoneShown,
       stoneM: stoneM, stonePx: stonePx,
       lights: s.lit ? lightSourcesIn(s).length : 0,
+      /* The shade solid things threw this frame: how many pieces of it reached
+         the canvas, and how many were worked out at all. Both are read, because
+         either alone passes on the wrong picture -- `shadows` 0 with `shadowMade`
+         > 0 is a shade that never reached the floor, and `shadowMade` 0 with
+         `lightShadows` on and a fire in the picture is a pass that fired at
+         nothing. See castShadows(); `Render.lightShadows` is the switch and
+         `light.shade_strength` 0 turns it off from the sheet. */
+      shadows: shadows, shadowMade: this.shadowPieces,
+      /* And the same two numbers for the CRAWLERS alone. The person asked for
+         "a crawler walking past a fire drags a shadow with them", and the two
+         above cannot answer that: a shade thrown by a tent counts in both. */
+      shadowActor: this.shadowActorPieces, shadowCasters: this.shadowActorCasters,
       focus: focusIdx, zoom: s.cam.zoom,
       bufW: this.w, bufH: this.h
     };
@@ -2776,6 +4312,10 @@ const Render = {
       /* A square the picture does not paint is not painted here either, so the
          yardstick stays the same question the game asks in both dial settings. */
       if (this.cutOut(it)) continue;
+      /* Not painted here either: drawPick() is the YARDSTICK the worked-out
+         picker is held against, so it has to paint exactly what the picture
+         paints. See `Render.lightShadows` and pickAt(). */
+      if (it.kind === 'shadow') continue;
       if (it.kind === 'actor') {
         for (let r = 0; r < it.parts.length; r++) {
           const fs = it.parts[r].faces;
@@ -2881,6 +4421,12 @@ const Render = {
     const alphaOf = this.alphas(s, b).list;
     for (let k = b.length - 1; k >= 0; k--) {
       const it = b[k];
+      /* A shadow is a mark on the floor, not a thing. Rule 8 says everything
+         VISIBLE can be hovered, and what you are pointing at when you point at
+         a shadow is the floor under it -- which is the answer the square gives,
+         and a better one than "shade". Skipped before the box test so the two
+         walks (with the boxes and without) stay the same question. */
+      if (it.kind === 'shadow') continue;
       if (px < it.minX - 1 || px > it.maxX + 1 ||
           py < it.minY - 1 || py > it.maxY + 1) continue;
       if (it.kind === 'cell') {
