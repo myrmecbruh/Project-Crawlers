@@ -6,7 +6,7 @@
 
 ## 1. The ten laws
 
-1. **Crawlers improve by failing forward. Success teaches them nothing.** Failure is the only teacher, and a failure that just missed teaches most. Someone who has mastered a thing stops improving until the labyrinth offers them something harder — the slowdown is never a curve, it is what happens when a person stops failing.
+1. **Crawlers improve by failing forward. Success teaches them nothing.** Failure is the only teacher, and **every failure teaches exactly the same amount** — paying more for a near miss is expressly wrong. Someone who has mastered a thing stops improving until the labyrinth offers them something harder — the slowdown is never a curve, it is what happens when a person stops failing.
 2. **Every roll comes from a skill, and every skill is one pair of the six attributes. All fifteen pairs exist.** The same framework covers crawlers and creatures. Nothing enters the game as a one-off: a new tag, skill or stat is asked for, never invented at the table.
 3. **Combat is about a fifth of the game.** The other four fifths are exploring, camping, entertaining, cooking, farming, building, crafting, repairing, studying, hunting, fishing, singing, lockpicking, mapmaking, trap disarming and everything like them — with the same depth of skills, tools, failure states and visible payoff as a sword swing.
 4. **If it exists on a character, it is visible on the character.** Equipment, injury, filth, burden and mood read off the figure without opening a panel.
@@ -15,7 +15,7 @@
 7. **One tile is one square metre.** The world is metric and grounded at that scale. Nothing here is measured in abstract units.
 8. **Anything visible can be hovered.** Outline highlight and an info tooltip, on mouseover or on tap, desktop and phone. A tooltip carries the thing's tags.
 9. **Numbers and names live in the master sheet.** Everything that could be adjusted later sits in the spreadsheet rather than being baked in.
-10. **Boardgame aesthetics: low numbers, and tactility.** Attributes run **1 to 6**, skills **0 to 6**, and an attempt is **`attribute + skill + 2d6` against a difficulty of about a dozen**. Every number should be one a person can hold in their head and a hand could move. **Kit may push an attribute to 7 or 8; nothing ever falls below 1.** And the second half: chits, pips, sliders, things you can drag.
+10. **Boardgame aesthetics: low numbers, and tactility.** Attributes run **1 to 6**; a skill begins at the sum of its pair and **never tops out**; and a task's difficulty is **the number of successes it needs**. Every number should be one a person can hold in their head and a hand could move. **Kit may push an attribute to 7 or 8; nothing ever falls below 1.** And the second half: chits, pips, sliders, things you can drag.
 
 ---
 
@@ -34,39 +34,80 @@ Attributes run **1 to 6**. **3 and 4 are ordinary; 1 and 6 are remarkable.**
 | Intellect | INT | What can be learned and worked out. Recipes, repairs, maps, lore. |
 | Willpower | WIL | What can be made to happen anyway. Fear, pain, boredom, a hated task. |
 
+**Attributes are never ground up.** No amount of practice raises one; a permanent change comes only at an **authored moment** — a near-death, a long hard season, a rite. What practice earns goes into skills, and rust can take it back. **Gear and wounds move the attributes they touch, live**, so every skill built on those attributes moves with them.
+
 ### 2.2 The fifteen skills
 
 **Every skill is exactly one pair of attributes, and every pair exists exactly once.** A skill is a **family of work**, not one action.
 
-| Skill | Pair | Covers | Tool |
-|---|---|---|---|
-| Focusing | MGT + AGI | Climbing, scrambling, keeping your feet | — |
-| Labouring | MGT + END | Hauling, digging, clearing ground | tool (bare hands −4) |
-| Grappling | MGT + PRE | Handling animals; hauling a person out of trouble | — |
-| Building | MGT + INT | Raising structures that stay up | tool (−6 without) |
-| Brawling | MGT + WIL | The one fifth of the game that is violence | — |
-| Maneuvering | AGI + END | Covering ground: travelling far, keeping pace, getting back over rough going | — |
-| Entertaining | AGI + PRE | Singing, playing, dancing, holding a room | — |
-| Sneaking | AGI + INT | Moving quietly, hiding, going unseen in the dark | — |
-| Tinkering | AGI + WIL | Making and mending — tools, clothes, meals — and anything fiddly that punishes a shaking hand: locks, traps | tool (−5) |
-| Tending | END + PRE | Nursing, feeding, keeping people upright | — |
-| Foraging | END + INT | Hunting, fishing, gathering, knowing what is safe | — |
-| Persisting | END + WIL | Cold, hunger, pain, boredom and the dark | — |
-| Bargaining | PRE + INT | Trading, persuading, working out what somebody wants | — |
-| Leading | PRE + WIL | Rallying, calming a panic, holding a group together | — |
-| Studying | INT + WIL | Lore, mapmaking, deciphering, listening for what is out there | — |
+| Skill | Pair | Covers |
+|---|---|---|
+| Focusing | MGT + AGI | Climbing, scrambling, keeping your feet |
+| Labouring | MGT + END | Hauling, digging, clearing ground |
+| Grappling | MGT + PRE | Handling animals; hauling a person out of trouble |
+| Building | MGT + INT | Raising structures that stay up |
+| Brawling | MGT + WIL | The one fifth of the game that is violence |
+| Maneuvering | AGI + END | Covering ground: travelling far, keeping pace, getting back over rough going |
+| Entertaining | AGI + PRE | Singing, playing, dancing, holding a room |
+| Sneaking | AGI + INT | Moving quietly, hiding, going unseen in the dark |
+| Tinkering | AGI + WIL | Making and mending — tools, clothes, meals — and anything fiddly that punishes a shaking hand: locks, traps |
+| Tending | END + PRE | Nursing, feeding, keeping people upright |
+| Foraging | END + INT | Hunting, fishing, gathering, knowing what is safe |
+| Persisting | END + WIL | Cold, hunger, pain, boredom and the dark |
+| Bargaining | PRE + INT | Trading, persuading, working out what somebody wants |
+| Leading | PRE + WIL | Rallying, calming a panic, holding a group together |
+| Studying | INT + WIL | Lore, mapmaking, deciphering, listening for what is out there |
 
-### 2.3 The roll
+### 2.3 The throw
 
-An attempt is **`attribute + skill + 2d6` against a difficulty of about a dozen** — reading a room is 13, raising a campfire is 15. Practice is `ability = the average of the skill's two attributes + practice`, in **whole pips only**; the two attributes weigh the same.
+**A skill's rating is its pair of attributes added together — as those attributes stand right now — plus whatever pips practice has bought.** Might 3 with Agility 4 is a Focusing rating of 7 before a single pip is earned; boots that shift Agility up by one make it 8 the moment they are on; an arrow in the shoulder puts it back to 6. **The attributes are the soil the skill grows in, not a bonus stacked on the top:** a throw reads the skill alone, and there is no second helping.
 
-**Learning, and there is no curve:** a failure teaches **+0.10**; a failure that only just missed teaches **+0.16**; **success teaches nothing**. Skills run to 6, so mastery is roughly sixty failures. How often they succeed has no effect on progress — only failing does.
+**Roll that many d6. Every 5 or 6 is one success.** A starting crawler throws **two to twelve dice** — a pair of 1s is two dice, a pair of 6s is twelve. Skills never top out, so a well-worn crawler throws more. **The player never throws the dice:** the game throws them, and the ledger shows what was thrown.
 
-### 2.4 Gear: the twelve slots
+### 2.4 The wall
+
+**A unit of work needing N successes needs at least N dice.** With N−1 dice the chance is not small, it is **exactly zero** — nobody gets three successes out of two dice. Everything about difficulty follows from that one fact:
+
+| Regime | Dice against the difficulty | What it means |
+|---|---|---|
+| **Below the wall** | fewer dice than successes needed | Impossible. No throw, no progress **and no Lessons** — a task above the wall is dead in every sense. |
+| **The band** | N to about 3N | The only band where a throw means anything, and therefore the only place anyone learns. |
+| **Past the band** | beyond 3–4N | Near-certain. Masters stop failing here, which is exactly why they stop growing. |
+
+The landmarks: **50% odds land near 3N dice, 90% near 4N**, so **one point of difficulty is worth about three dice**. **Difficulty is the author's ladder** — 1 is easy and 6 is extraordinarily difficult, and it climbs with depth: 7, 8, 10, 12 and on.
+
+**A job containing a unit above the wall is refused up front, with the reason shown.** The game does not let a crawler walk into a dead task and burn the day.
+
+### 2.5 Jobs are chains
+
+**Every job is a chain of units of work, and each unit is settled by its own throw.** A chain may be a single unit long — a leap, a climb, a held door — and a big job is simply a long chain of small ones. **Units are kept small, usually one to four successes**, because that keeps difficulty inside the range where dice exist: a twelve-success job is never authored, it is a job of four three-success units.
+
+- **Two numbers, and the task owns both.** Every task is authored with its difficulty **with the right tool** and its difficulty **by hand**. There is no global multiplier, no halving, and no scaling by how good the tool is.
+- **A tool is access; skill is speed.** A tool never makes the throw better — it lowers what the work demands, which is how it pulls a unit out from under the wall and into the band. **An animal is the inverse:** a beast needs *more* successes on every Intellect task, which is what pushes its clever work under the wall.
+- **Surplus successes are spent, not discarded.** What the throw bought beyond the unit's difficulty pays out in rewards the task itself names: less time, more information, better craft, narrative flair.
+- **One fixed amount of time per unit, whatever the work is.** A job is slow because it has many units, never because one kind of work is slow. There is no per-skill and no per-job duration.
+
+### 2.6 Contests
+
+**When two parties want the same thing, that is a contest, not a task.** A contest is **one exchange** — each side throws once and the moment is settled — it has **no difficulty number**, and more successes wins. **A tie goes to the defender:** the side already holding the ground, the door, the rope. Defending is positional, so whoever holds the thing keeps the thing. **The loser takes one Lesson** in the skill tested; the winner takes nothing, because succeeding teaches nothing.
+
+### 2.7 Lessons: how a crawler improves
+
+**A failed unit pays exactly one Lesson**, and there is no grading — a close failure and a hopeless one pay the same. **Twelve Lessons buy one pip** in that skill. **A blank attempt** — no successes at all — pays nothing *only* when the task was impossible; on a task that was possible, even a blank attempt pays its Lesson. **A job caps its own Lessons**, so a long easy job cannot be farmed for training, and **losing a contest pays one Lesson** in the skill that was tested.
+
+How often a crawler succeeds has no effect on progress — only failing does.
+
+**The training bargain, accepted.** A unit sitting at exactly your own dice count is possible and nearly hopeless: the best Lessons per hour in the game, and no output at all. That is judged self-balancing.
+
+### 2.8 Rust
+
+**Rust eats earned pips.** It works slowly, it **attaches per skill** — a skill you stop using rots even while you are busy training others — and it **only ever takes earned pips back, down to zero**. **The six attributes never rust.** So pips are not permanent: a crawler who stops working loses what he learned and decays back toward his bare body.
+
+### 2.9 Gear: the twelve slots
 
 A crawler **is twelve parts**, and those parts are their gear, visually and mechanically: **Head · Neck · Back · Torso · Gloves** (elbow down) · **Mainhand · Offhand · Belt · Legs** (hips to knees) · **Feet** (knees down) · **Trinket 1 · Trinket 2.**
 
-**Gear does three things at once:** it **shifts an attribute**, it **bonuses a skill**, and some work **requires** it — Building without a tool is six points harder, which on a scale of about a dozen is close to hopeless.
+**Gear does three things at once:** it **shifts an attribute**, it **bonuses a skill**, and some work **requires** it — because a task carries two difficulty numbers, and the gap between them is the whole difference between working with the right tool and working by hand. **Building without one is close to hopeless.**
 
 | Item | Slot | Effect | Light | Note |
 |---|---|---|---|---|
@@ -85,17 +126,19 @@ A crawler **is twelve parts**, and those parts are their gear, visually and mech
 | Rope Coil | trinket 1 | Focusing +1 | — | Twenty metres, if you believe the seller. |
 | Bone Charm | trinket 2 | WIL +1, PRE −1 | — | Somebody's knuckle, on a thong. |
 
+**A shift is broad and a bonus is narrow:** a +1 to an attribute lifts **all five** skills of that column by a die, while a named skill is lifted on its own. **(tool)** marks the piece of kit that is the right tool for a job.
+
 A crawler uses the **brightest light they carry**. Loot, wear and injury are drawn on the figure, per law 4.
 
 **Kit is not permanent, and it is never simply thrown away.** Wear runs down a short ladder — **clean → worn → chipped → cracked** — and **every mend knocks it down one rung**, so a thing lasts a few mends before it is scrap. Worn kit is kept and stored at camp to be repaired in downtime, each repair buying less than the last until a crawler must choose between mending it again and **salvaging it for the real materials it was made of** — leather, iron, cloth — which decides what can be built next. Kit **changes hands on its own unless it is pinned** to a particular crawler so it does not wander off. The work of all this is **Tinkering, Foraging and Labouring**, which is what makes gear something a company maintains rather than something it has.
 
-### 2.5 Carrying
+### 2.10 Carrying
 
 **A crawler carries up to Might things without noticing it.** Past that, the load is **Encumbrance**, and it costs all three levers at once: clumsier (an Agility shift), slower (more ticks between steps) and tiring faster. Pace reads **Agility** on a diminishing curve, so a 6 is the quickest thing in the labyrinth without being absurd.
 
 **Encumbrance is resisted by Labouring** — which **shaves a share of the drag and never cancels it**. So the first pressure in the game is answered by technique rather than by the body, and it is the only resistance that can grow. **Worn gear does not count against the allowance, and a purse counts as one thing however many coins are in it.** Nothing ever reaches below 1 — that floor is a clamp, not a rule: no combination of kit, load or injury is ever refused or made invalid.
 
-### 2.6 Starting a match
+### 2.11 Starting a match
 
 **Six crawlers turn up, and that is the population.** Each is rolled 1–6 on all six attributes, given a name from the pool, and arrives wearing each piece of gear **55% of the time**. Roughly one start in a hundred and twenty has nobody carrying a light at all.
 
@@ -130,11 +173,11 @@ Generation cuts **9 rooms** out of solid rock per piece (5–13 m a side) and di
 
 A word carries both halves on one row: what it **means** (tags) and what it **does** to the ground. **Seven shape moves exist** — pit, platform, terrace, ring, pillars, rubble, water.
 
-**A place is discovered, not given.** Rooms start unnamed. A crawler stops and **reads it** — Studying, difficulty 13 — with **three tries**, then they let it lie. Failing teaches. Until it has been read, a square is just floor.
+**A place is discovered, not given.** Rooms start unnamed. A crawler stops and **reads it** — a **Studying** job, a short chain of units of observation, each settled by its own throw — and they get **three tries**, then they let it lie. Failing teaches. Until it has been read, a square is just floor.
 
 ### 3.4 Ground and walls
 
-One tile is one square metre. Every tile has a **footing**: walk, ramp or block. A footing of **block** — a full cubic metre of rock, or dressed masonry laid by somebody's hands — stops movement and blocks sight. Surfaces are generated, not painted: flagstone, packed earth, moss, water, rubble, bone litter, rock, masonry. **Clearing ground is a Labouring roll against the floor's own clear difficulty (11–18)**, and a wet, loose or cluttered square is harder to walk across (a cross difficulty of 7–14).
+One tile is one square metre. Every tile has a **footing**: walk, ramp or block. A footing of **block** — a full cubic metre of rock, or dressed masonry laid by somebody's hands — stops movement and blocks sight. Surfaces are generated, not painted: flagstone, packed earth, moss, water, rubble, bone litter, rock, masonry. **Clearing ground is a Labouring job, and the floor owns the two numbers it carries** — what it takes with the right tool and what it takes by hand. **A wet, loose or cluttered square costs more to cross as well:** more successes, never a worse throw.
 
 ---
 
@@ -169,17 +212,17 @@ The opening, as it happens on its own:
 
 1. Six crawlers arrive in a piece of labyrinth, in the dark.
 2. They pick **the largest room they can all reach**, and walk to it.
-3. They **clear the ground** — Labouring against the floor's clear difficulty.
+3. They **clear the ground** — a Labouring job against the floor's own two numbers.
 4. They **raise the camp**, structure by structure.
 
-| Structure | Building difficulty | Light | Note |
+| Structure | Building job | Light | Note |
 |---|---|---|---|
-| Campfire | 15 | 9 m | The heart of the camp, and **the only thing that lights a room**. Everything else is laid out around it. |
-| Bedroll | 11 | — | Somewhere to sleep. The easiest thing in a camp to put up. |
-| Store | 13 | — | Keeps supplies off the wet floor. |
-| Windbreak | 17 | — | The hardest thing to raise, and the difference between a night and an ordeal. |
+| Campfire | a short chain of middling units | 9 m | The heart of the camp, and **the only thing that lights a room**. Everything else is laid out around it. |
+| Bedroll | one easy unit | — | Somewhere to sleep. The easiest thing in a camp to put up. |
+| Store | a couple of easy units | — | Keeps supplies off the wet floor. |
+| Windbreak | the longest chain in the camp, and the hardest units | — | The hardest thing to raise, and the difference between a night and an ordeal. |
 
-**A structure grows to its real height as it is built**, so how far the camp has got is something you see rather than read. **The campfire comes first, and its fire is what reveals the camp that was already planned** — the world appears in a nine-square circle, and the camp is what is in it. Building is a 15-difficulty roll that suffers badly without a tool, so a badly built first fire teaches law 1 before anything else has been learned.
+**A structure grows to its real height as it is built**, so how far the camp has got is something you see rather than read. **The campfire comes first, and its fire is what reveals the camp that was already planned** — the world appears in a nine-square circle, and the camp is what is in it. Building is a job that suffers badly by hand, so a badly built first fire teaches law 1 before anything else has been learned.
 
 **Nobody arrives or leaves.** Six crawlers walk in, and that is the population. From then on the camp has to be kept: see the needs, below.
 
@@ -202,7 +245,7 @@ The opening, as it happens on its own:
 
 - **What moves a need is what the crawler is doing** — working makes you hungry — **not a clock.** The cost is paid **as the work happens**, tick by tick, not in a lump when the job finishes.
 - **Rung 3 is the rung that matters:** a crawler at 3 drops what they are doing and heads for the larder, the bedroll or the fire on their own. The player is being warned, not managing meters.
-- **Rung 0 is where someone can die, and there it is one real roll: `attribute + 2d6` against about a dozen** — the game's own roll with the skill left out. This is **the single exception to law 2**, because a need is a property of the body rather than something practised; attributes carry no practice, so that roll cannot teach, cannot be farmed and cannot spread.
+- **Rung 0 is where someone can die, and there it is one real throw: the attribute's own dice, one per point, against the ladder's easiest unit** — the game's own throw with the skill left out, and a single success is enough to hold on. This is **the single exception to law 2**, because a need is a property of the body rather than something practised; attributes carry no practice, so that throw cannot teach, cannot be farmed and cannot spread. **Open, and still up for discussion: the throw a need at rung 0 makes is written here as a working version — the attribute's own dice against one success — and is not settled.**
 - **A need costs speed, capacity and time — never a die, and never a skill.** Being in need must never make anyone better: a starving crawler who rolled worse would fail more, and therefore learn faster. "Slower" always means more ticks or longer between attempts, never a minus.
 - **At 0 they go down where they stand**, and someone has to carry them home — **Grappling**. If nobody comes, **they die.** Brought back alive, they are laid up and need **Tending**.
 - **Death is the floor and a scar is the ceiling.** A lasting hurt stays visible on the figure and comes with a dent in an attribute — the only thing in the game that reaches the dice, and nobody can choose it or farm it.
@@ -228,7 +271,11 @@ The opening, as it happens on its own:
 
 **Creatures are built from tags by a generator rather than written by hand.** They are the danger of the dark, they make carrying a light a real decision, and they are what gives **Brawling** and **Grappling** their work — but this is the combat fifth of law 3, and it stays that size.
 
-**In the dark, a creature is heard, not seen.** Noticing a noise is a **Studying** roll, and **what a crawler is doing changes what they can hear**: the crawler reading a room is the one who can hear, and the crawler hammering at a wall is the one who cannot. Hearing is easier than reading a room (13), because a noise announces itself and a room's history does not. **Once met, the map keeps where the creature was last known to be**, drawn so it reads as *old* rather than as a live tracker.
+**In the dark, a creature is heard, not seen.** Noticing a noise is a **Studying** job like any other — a chain of listens, each settled by its own throw — and **what a crawler is doing changes what they can hear**: the crawler reading a room is the one who can hear, and the crawler hammering at a wall is the one who cannot. Hearing is easier than reading a room, because a noise announces itself and a room's history does not. **Once met, the map keeps where the creature was last known to be**, drawn so it reads as *old* rather than as a live tracker.
+
+**Studying a kind of creature is a job like any other** — a chain of observations, each unit settled by a Studying throw — and **each finished chain buys one more tier of understanding.** **The first chain logs the kind in the bestiary**, and from then on its throws are shown on the ledger instead of being concealed; later chains add behaviour, tells, timing and weakness without gating that reveal. **Every chain is twice the length of the one before it** — three sightings, then six, then twelve, then twenty-four — so a naturalist learns the outline of a species at once and spends a lifetime on the rest. Those chains are the deepest training Studying has, and the most exposed to rust.
+
+**Tags are the whole difference between one creature and another.** A tag adds or removes dice on named skills, and it applies in contests of that skill too, because a contest is a skill throw. **The ANIMAL tag raises the difficulty — more successes — on every Intellect skill the beast attempts:** one tag, the same for every animal, no per-species numbers. Because that penalty sits on the difficulty side, a beast's clever work is under the wall: impossible and unteachable, the exact inverse of a tool. **Depth never makes a creature stronger by giving it attributes above 6** — what depth buys is tags, and tags add dice.
 
 **The labyrinth is ruins with occupants, not a frontier.** *History is what you read; occupants are what you meet.* A living trader standing in a named room arrived long after the name was earned, so a name is a record of what a place *was* and never a description of who is in it — and *Abandoned Goblin Counting House*, with a goblin trading in it, is correct rather than contradictory. **Occupancy never renames a room**, and a room's tags describe the place while an occupant carries its own.
 
@@ -240,7 +287,18 @@ The opening, as it happens on its own:
 
 ---
 
-## 10. The inspector, and the hands
+## 10. The ledger
+
+**Every throw and every event of significance scrolls on a ledger**, in two layouts — one for a phone and one for a desktop. **The player never throws dice:** the ledger is the game's record, and it shows what was thrown.
+
+- **Your own people's throws are shown plainly.**
+- **An enemy's throw is only noted at all if a crawler can sense them** — in view, lit, and not behind a wall. It is then written on the ledger as an event, **with the number concealed** while the kind of creature is still unknown.
+- **Noise out of sight still registers**, as a commotion: an icon marks **where it came from**, and nothing is written down, because nobody saw it happen.
+- **The bestiary is what takes the concealment off** (§9), one studied kind at a time.
+
+---
+
+## 11. The inspector, and the hands
 
 You learn about the world by pointing at it.
 
@@ -254,6 +312,12 @@ You learn about the world by pointing at it.
 
 ---
 
-## 11. Mood and story
+## 12. The numbers the sheet owns
+
+Law 9 keeps every number that anyone might want to change in the master sheet rather than in the code, and these are the ones the rules above hand to it: **twelve Lessons buy a pip**; **a job caps how many Lessons it can pay**, so no long easy job can be farmed; **rust comes off earned pips at the sheet's own slow rate**, and **what counts as disuse is the sheet's definition**; **a beast adds the sheet's own number of successes to every Intellect task**; **a study chain is three sightings long, and each chain after it is twice the last**; **one unit of work costs one fixed time, whatever the work is**; and **difficulty climbs the sheet's depth ladder — 7, 8, 10, 12 and on down.**
+
+---
+
+## 13. Mood and story
 
 A small company of crawlers goes down into a labyrinth that does not end. They are not heroes and they are not adventurers; they are people who came in, and who may yet leave — six of them, with names like Bran and Thessa and Wren, each carrying whatever they owned when they arrived and one lamp between them if they are lucky. Above them the world they came from is not shown, and below them the labyrinth simply goes on: piece after piece, room after room, all of it **ruined rather than empty**, every wall built by somebody's hands, every chamber still wearing what happened to it — haunted, gilded, drowned, desecrated, abandoned so long the moss took it back. The names carved on it are a record of what a place *was*, and what is living in it now is something you meet rather than something the name promised you. This is grimdark low fantasy played at the scale of a campfire: the game opens in the dark, the whole known world is the nine squares a fire throws, and everything outside it is either remembered dimly or not yet seen. The mood is not terror, it is **upkeep** — hauling, clearing, cooking, mending, keeping one another upright, deciding who stands watch because the least tired of them is the only answer to the question. Hardship arrives as an event rather than a slide: the fire goes out, somebody goes down far from camp, a scar stays on the figure and in an attribute for the rest of the match. Violence is a fifth of the game, and the other four fifths are work, light, and the slow business of survivors looking after each other while the labyrinth keeps going on in every direction.
