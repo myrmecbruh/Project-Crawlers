@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Sounds v2.156.3</title>
+<title>Crawlers Sounds v2.156.4</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -477,7 +477,7 @@ body.menu #bar button.more[data-ico]::after { left: 3px; transform: translateY(-
 @media (max-width: 600px) {
   #bar { flex-wrap: nowrap; gap: 0; padding-left: 4px; padding-right: 4px; --ic: min(32px, calc((100vw - 58px) / 11)); }
   #bar button, #bar button[data-ico], #bar button.mapico { width: var(--ic) !important; height: calc(var(--ic) + 2px) !important; flex: none; }
-  #bar button[data-ico]::after, #bar button.mapico::after { width: var(--ic) !important; height: var(--ic) !important; background-size: var(--ic) var(--ic) !important; image-rendering: auto !important; }
+  #bar button[data-ico]::after, #bar button.mapico::after { width: var(--ic) !important; height: var(--ic) !important; background-size: var(--ic) var(--ic) !important; image-rendering: pixelated !important; }   /* nearest neighbour (v2.156.4, the user) */
   body.menu #bar { flex-wrap: wrap; }
   body.menu #bar button.more[data-ico] { width: auto !important; }
   body.menu #bar button.more[data-ico]::after { width: 24px !important; height: 24px !important; background-size: 24px 24px !important; }
@@ -507,7 +507,7 @@ button { cursor: pointer; }
 </style>
 </head>
 <body class="sounds">
-<h1>Sounds <small>v2.156.3</small></h1>
+<h1>Sounds <small>v2.156.4</small></h1>
 <div class="lead">Fifty slots, the most needed first. Drop sound files onto a slot (several files make variations; the game picks one at random each time). They are kept in this browser and the game, opened from the same address, plays them straight away. A slot with nothing in it is silent. Tap anywhere on the game once so the browser lets it make sound.</div>
 <div class="bar"><span class="count" id="count"></span><button id="stop">Stop all</button><a href="index.html" style="color:#e8a020">back to the game</a></div>
 <div id="list"></div>
