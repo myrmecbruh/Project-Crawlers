@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Sounds v2.156.1</title>
+<title>Crawlers Sounds v2.156.2</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -466,6 +466,10 @@ body.menu #bar button.more[data-ico]::after { left: 3px; transform: translateY(-
 #ledger .ltabs button.seal { width: 24px; height: 24px; padding: 0; border-radius: 50%; background: radial-gradient(circle at 40% 38%, #c84a34 0 30%, #9a2818 31% 62%, #6a1810 63%); border: 2px solid #4a1008; margin-left: 6px; vertical-align: middle; }
 #ledger .ltabs button.seal.on { box-shadow: 0 0 0 2px var(--ink); }
 #ledger .ev.chron i { opacity: .7; margin-right: 4px; }
+
+/* v2.156.2: the floor number between Down and Up keeps one width, wide enough for -22, so nothing beside it moves as it
+   changes (the user, under the rule on interface moving) */
+#bar .story { width: 2.4em !important; min-width: 2.4em !important; flex: none !important; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; justify-content: center; }
 </style>
 <style>
 html, body { margin: 0; background: #120d08; color: #e8dcc0; overflow: auto; height: auto; }
@@ -491,7 +495,7 @@ button { cursor: pointer; }
 </style>
 </head>
 <body class="sounds">
-<h1>Sounds <small>v2.156.1</small></h1>
+<h1>Sounds <small>v2.156.2</small></h1>
 <div class="lead">Fifty slots, the most needed first. Drop sound files onto a slot (several files make variations; the game picks one at random each time). They are kept in this browser and the game, opened from the same address, plays them straight away. A slot with nothing in it is silent. Tap anywhere on the game once so the browser lets it make sound.</div>
 <div class="bar"><span class="count" id="count"></span><button id="stop">Stop all</button><a href="index.html" style="color:#e8a020">back to the game</a></div>
 <div id="list"></div>
