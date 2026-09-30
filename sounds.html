@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Sounds v2.153.0</title>
+<title>Crawlers Sounds v2.153.1</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -378,6 +378,47 @@ button:active, button.on { background: var(--ink-soft); color: var(--parch); box
 #bar button.mapico::after { content: ''; position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; transform: translate(-50%, -50%);
   background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAwklEQVR4nGNgYGBg0JIS+K8lJfCfgUiArJ5FS0rgv5GaCEzu/7VnHxgJaUZWz8TAwMDg42HD0NTVQKwDUNSzYLOBaJPQDThxZhfDtkXTsCr0isvCKofhAphiZADTCBNHNogJl9O2LZqGohCdj9MAZNthbK+4LAxXwQCGF9BthRmAK2yICgMY4Jizi4EBTQ7DAGwBBfcCFoNRDLAwccNqc9OkDSj8urwA3C4gJikj8xmR0/a5W2+IMgBZPVyQ3NxIMQAAVfZVOVzAp8IAAAAASUVORK5CYII=) no-repeat center / 16px 16px; image-rendering: pixelated; }
 @media (max-width: 600px), (max-height: 500px) { #bar button.mapico { min-width: 0; } }
+
+/* v2.153.1: the big screen gets the phone's compact bar and ledger too (the user: "compact the ledger and top menu on PC,
+   similar to mobile"): one strip of square marks with a menu button for the rest, hugging its own width; the ledger three
+   lines with a grip, opening upward as a drawer. The faces and the picked thing's panel stay as they were. */
+@media (min-width: 601px) and (min-height: 501px) {
+  #bar { right: auto; max-width: calc(100vw - 16px); gap: 2px; padding: 4px 6px; }
+  #bar .menu { display: inline-block; }
+  #bar .more { display: none !important; }
+  body.menu #bar .more { display: inline-block !important; order: 10; }
+  body.menu #bar::after { content: ''; order: 9; flex-basis: 100%; height: 0; }
+  body.menu #bar { bottom: auto; max-height: 70vh; overflow-y: auto; z-index: 25; right: 8px; }
+  #bar .story { font-size: 14px !important; min-width: 0; padding: 0 2px; width: auto; }
+  #bar .story .sw { display: none; }
+  #bar button { width: 30px; height: 28px; padding: 0 !important; display: inline-flex !important; align-items: center; justify-content: center; font-size: 14px !important; }
+  #bar button.dn, #bar button.up { font-size: 0 !important; width: 26px; height: 24px; position: relative; }
+  #bar button.dn::after, #bar button.up::after { content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border-left: 6px solid transparent; border-right: 6px solid transparent; }
+  #bar button.dn::after { border-top: 8px solid currentColor; }
+  #bar button.up::after { border-bottom: 8px solid currentColor; }
+  #bar button.more { display: none !important; }
+  body.menu #bar button.more { display: inline-flex !important; width: auto; padding: 2px 6px !important; }
+  body.menu #bar button.more .tx { display: inline; }
+  body.menu #bar button.more .mk { display: none; }
+  #bar button .tx { display: none; }
+  #bar button .mk { display: inline-flex; gap: 1px; align-items: center; }
+  #bar button#newer { width: auto; padding: 2px 6px !important; }
+  #bar .mk .tri { display: inline-block; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 6px solid currentColor; }
+  #bar .mk .ang { display: inline-block; width: 11px; height: 11px; border: 2px solid currentColor; transform: scaleY(0.55) rotate(45deg); }
+  #bar .mk .rot { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-radius: 50%; position: relative; }
+  #bar .mk .rot.l { border-left-color: transparent; }
+  #bar .mk .rot.r { border-right-color: transparent; }
+  #bar .mk .rot::after { content: ''; position: absolute; top: -4px; width: 0; height: 0; border-top: 3px solid transparent; border-bottom: 3px solid transparent; }
+  #bar .mk .rot.l::after { left: -1px; border-right: 5px solid currentColor; }
+  #bar .mk .rot.r::after { right: -1px; border-left: 5px solid currentColor; }
+  #bar button.mapico { min-width: 0; }
+  #ledger { padding: 4px 10px 8px; }
+  #ledger .lgrip { display: flex; justify-content: center; padding: 2px 0 3px; cursor: pointer; }
+  #ledger .lgrip span { display: block; width: 44px; height: 4px; border-radius: 2px; background: var(--edge); opacity: .7; }
+  #ledger:not(.open) .ltabs, #ledger:not(.open) .lhint { display: none; }
+  #ledger:not(.open) .lbody { height: calc(3em + 9px); max-height: none !important; overflow: hidden; }
+  #ledger.open .lbody { height: 45vh; }
+}
 </style>
 <style>
 html, body { margin: 0; background: #120d08; color: #e8dcc0; overflow: auto; height: auto; }
@@ -403,7 +444,7 @@ button { cursor: pointer; }
 </style>
 </head>
 <body class="sounds">
-<h1>Sounds <small>v2.153.0</small></h1>
+<h1>Sounds <small>v2.153.1</small></h1>
 <div class="lead">Fifty slots, the most needed first. Drop sound files onto a slot (several files make variations; the game picks one at random each time). They are kept in this browser and the game, opened from the same address, plays them straight away. A slot with nothing in it is silent. Tap anywhere on the game once so the browser lets it make sound.</div>
 <div class="bar"><span class="count" id="count"></span><button id="stop">Stop all</button><a href="index.html" style="color:#e8a020">back to the game</a></div>
 <div id="list"></div>
