@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Sounds v2.156.0</title>
+<title>Crawlers Sounds v2.156.1</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -374,9 +374,9 @@ button:active, button.on { background: var(--ink-soft); color: var(--parch); box
 
 /* v2.152.3: the Map button is a picture -- a scroll with a faded maze and a red dot, 16 x 16. v2.152.4: drawn at its own
    size, so it fits the height of the other buttons (at 2x it stood out of the bar and broke its rows) */
-#bar button.mapico { font-size: 0 !important; min-width: 34px; position: relative; align-self: stretch; }
-#bar button.mapico::after { content: ''; position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; transform: translate(-50%, -50%);
-  background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAwklEQVR4nGNgYGBg0JIS+K8lJfCfgUiArJ5FS0rgv5GaCEzu/7VnHxgJaUZWz8TAwMDg42HD0NTVQKwDUNSzYLOBaJPQDThxZhfDtkXTsCr0isvCKofhAphiZADTCBNHNogJl9O2LZqGohCdj9MAZNthbK+4LAxXwQCGF9BthRmAK2yICgMY4Jizi4EBTQ7DAGwBBfcCFoNRDLAwccNqc9OkDSj8urwA3C4gJikj8xmR0/a5W2+IMgBZPVyQ3NxIMQAAVfZVOVzAp8IAAAAASUVORK5CYII=) no-repeat center / 16px 16px; image-rendering: pixelated; }
+#bar button.mapico { font-size: 0 !important; width: 36px; height: 36px; min-width: 0; position: relative; }
+#bar button.mapico::after { content: ''; position: absolute; left: 50%; top: 50%; width: 32px; height: 32px; transform: translate(-50%, -50%);
+  background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAwklEQVR4nGNgYGBg0JIS+K8lJfCfgUiArJ5FS0rgv5GaCEzu/7VnHxgJaUZWz8TAwMDg42HD0NTVQKwDUNSzYLOBaJPQDThxZhfDtkXTsCr0isvCKofhAphiZADTCBNHNogJl9O2LZqGohCdj9MAZNthbK+4LAxXwQCGF9BthRmAK2yICgMY4Jizi4EBTQ7DAGwBBfcCFoNRDLAwccNqc9OkDSj8urwA3C4gJikj8xmR0/a5W2+IMgBZPVyQ3NxIMQAAVfZVOVzAp8IAAAAASUVORK5CYII=) no-repeat center / 32px 32px; image-rendering: pixelated; }
 @media (max-width: 600px), (max-height: 500px) { #bar button.mapico { min-width: 0; } }
 
 /* v2.153.1: the big screen gets the phone's compact bar and ledger too (the user: "compact the ledger and top menu on PC,
@@ -436,10 +436,14 @@ button:active, button.on { background: var(--ink-soft); color: var(--parch); box
 body.menu #bar button.more[data-ico] { font-size: 14px !important; width: auto; height: 36px; padding: 0 8px 0 38px !important; }
 body.menu #bar button.more[data-ico] .tx { display: inline !important; }
 body.menu #bar button.more[data-ico]::after { left: 3px; transform: translateY(-50%); }
+/* v2.156.1: 32 px on a phone too (the user: "i believe we had a plan to do them at 32px and lose the button look"); the
+   strip wraps to a second row rather than shrink them */
 @media (max-width: 600px), (max-height: 500px) {
-  #bar button[data-ico] { width: 24px; height: 26px; }
-  #bar button[data-ico]::after { width: 16px; height: 16px; background-size: 16px 16px; }
-  body.menu #bar button.more[data-ico] { padding-left: 24px !important; height: 26px; }
+  #bar { flex-wrap: wrap; row-gap: 0; }
+  #bar button[data-ico] { width: 32px; height: 34px; }
+  #bar button { width: 30px; }
+  #bar button[data-ico]::after { width: 32px; height: 32px; background-size: 32px 32px; }
+  #bar button.mapico::after { width: 32px; height: 32px; background-size: 32px 32px; }
 }
 #bar button[data-ico="pause"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA1ElEQVR4nGNkgAItKYH/DCSAa88+MDIwMDCwwDQbqYmQop+BgYHh/7VnHxiZYDwZCQEGGQkBgrrQ1bGgK5i2bBleA9qKslD4TOgKLEzccGrGJofhApjCeW0KcL6W2yycBmO4gIEBEsJJVQ9QDISFOlEuQDLkP4yNSx1WFzAwQKL2xJldDCfO7MKbRrAaANMMA/gMwekCYgHWMDhxZhfDtV1pGGLYYgLDBdg0MzAwMFzblcaA7C2cLsiKisLt3gVRGMkdbsCTFx9wa0QC6Org8UtudgYAoDJNA89GAyMAAAAASUVORK5CYII=); }
 #bar button[data-ico="turn_l"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAArklEQVR4nGNgoDXQkhL4j0+ehZAmtRAlBoY19+D8a88+MCKrReHANKuFKOG08daaeyiGMJGiGeYiZBfCTULXfGvNPaya0V2CNQzQnQkHa+5huJAJQxGJgIWBgTi/MzBAYwAaIzAXMsE42PyM0xAkQLIXYK6FxQTWQERPPBhySADFOcSExaoUDYawOTewRyMskHAZcmvNPYYwNDEMLyCHNMzJsAAmZAFWgC03IosBAOPRYX05vo9jAAAAAElFTkSuQmCC); }
@@ -449,14 +453,14 @@ body.menu #bar button.more[data-ico]::after { left: 3px; transform: translateY(-
 #bar button[data-ico="up"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAdklEQVR4nGPUkhL4z4AEjNREGM7deoOTjw5YsAkaqYng1ECUAeguwAeYiLaKgYGhjYuLoY2LC0WMEV1RjIPKf3SxJQfuMG5QkUIRD7jzDEMvVgPQ+egGkeQFbABrIGLzBkkGLDlwB+4/QoaNeoEKXiComeZeAADgjCpCm41KyAAAAABJRU5ErkJggg==); }
 #bar button[data-ico="zoom_out"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAl0lEQVR4nGNgoBAwogtoSQn8Rxe79uwDhjqsBsA0b9kwBS7mE5CD1xC4oJaUwH9kjejAJyAHqyFMuJyNDWBTxwRj4LMdnzwLugDMz8RoxmoAIZegA7gXsNlMyGVwA/DFMwMDA0NdWQMDLnVEpQMjNREGBgYGhiUH7uA3ANkQZHDt2QfGGAeV/7gMIRrEOKj8hxk0DAyBAQAvpD/8H5YKSAAAAABJRU5ErkJggg==); }
 #bar button[data-ico="zoom_in"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAnUlEQVR4nGNgoBAwogtoSQn8Rxe79uwDhjqsBsA0b9kwBS7mE5CD1xC4oJaUwH9kjejAJyAHqyFMuJwNsxmbCzEMQHc2NoBLngWfzTA2PsMxDIAp9gnIIegqBgYkL2DzMy6XYRiALXSRba8ra2DApY6odGCkJsLAwMDAsOTAHfwGIBuCDK49+8AY46DyH5chRIMYB5X/MIOGgSEwAACLDUcEKSYR/AAAAABJRU5ErkJggg==); }
-#bar button[data-ico="orders"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAgElEQVR4nGNkgAItKYH/DCSAa88+MDIwMDAwwjTX5QWQop+hadIGhmvPPjAykaQLC2CEMWBeOHFmF14NFiZuDAwMaF5ANkQtRImBgYGBYVHFDIZti6ZhNSSiYgFcHws+27zisnC6AKcBiypm4DMTA4x6gQpeoE5CGlx5gVgA8wIA1A9B0l9A2fMAAAAASUVORK5CYII=); }
-#bar button[data-ico="move"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAbElEQVR4nGNgGAUDAzaoSP2HsRlJ1YAMAu48w9T/rELu/7MKOawasBnIRIwL8NmMYgAhm7EBFnQBkSgbiGEMR/5LdTwiGEZkeQGrAc8q5P7DbIe5hBgvMTIwMDDEOKgQVLjkwB2s3qHYCxQDAMzgIJFQgYDrAAAAAElFTkSuQmCC); }
-#bar button[data-ico="company"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAArklEQVR4nGPUkhL438bFxUAOqPr2jYEJnwKJGjEGiRoxvIbgNYAYwIJP8kXLK4IGMDIwMDBoSQn8J8f2a88+MDLCOMiGXHv2gRGbBmxqWGASfnYqCJWH7qC46NqzD4zY1Fx79oERZxgYqYkgc3F6keJYwHQaFDx58QHOPnfrDQM2NZsO3cHuAmTNDAwY3kEBFHuB8jBgYMBMSNicfO7WGwwxlISEDLClTFyJi2IAAEgMPJx0ZkX3AAAAAElFTkSuQmCC); }
-#bar button[data-ico="rooms"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAXUlEQVR4nGNgoBAwMjAwMGhJCfwnR/O1Zx8YWWCcE2d24VRoYeKGIW9h4sbAwMDAwESOzchgGBgAD0RYoMACC8Yn2gD0UEbm4zOMPmGAL43QxwU0DQOKMxOlDmAAABr+GiHAwPULAAAAAElFTkSuQmCC); }
-#bar button[data-ico="bestiary"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAaElEQVR4nGNgIAJsUJH6j43NwMDAwESMAVQBuFxBPxfgcgXFLmBEF9CSEviPLnbt2Qe4ug0qUv8D7jxjhLFZ8GlEl0M2CMMFyAagK8RnAAu6ACHDcLoAm2ZiDKE4FgahAej+JRSIFAMAnYgwQupcyBgAAAAASUVORK5CYII=); }
-#bar button[data-ico="wardrobe"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAPElEQVR4nGNgoDXQkhL4j0+eiRjNhAzBqZksjVQHFLmC4jAgyyX4Ao9gwBJrC1Z1pPoTpp6RHM2jABUAAKTRGS3iTjnLAAAAAElFTkSuQmCC); }
+#bar button[data-ico="orders"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAn0lEQVR4nGNkgAItKYH/DCSAa88+MDIwMDAwwjTX5QWQop+hadIGhmvPPjAykaQLC2CEMWBeOHFmF14NFiZuDAwMaF5ANkQtRImBgYGBYVHFDIZti6ahaPaKy2KwMHGDa2ZgYGBgwWebV1wWQS9gGLCoYgZBTXgNiOvIgBuEzQsEDSCkgaABFHsBFk0nzuyisxeITUgwtYM4LxALYF4AAI4UQWZ8pNWBAAAAAElFTkSuQmCC); }
+#bar button[data-ico="move"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAVklEQVR4nGNgGJlAS0rgv5aUwH8GBgYGpoF2DJ0Bst9hYJCFwbMKuf/PKuRQnIjN2ciAel54ViH3/9elqP+/LkVhuAIfoNgFjDEOKnhtW3LgDiNNXQAAEi8cNNKn3wQAAAAASUVORK5CYII=); }
+#bar button[data-ico="company"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAs0lEQVR4nGNkwAG0pAT+G6mJMIQ8+QYXq/oGYV979oERJsaEywBsoI2Li6GNi4tBS0rgP0yMhRQDsLmAKAOwaSTagKpv37BqhAGSwoAmBrAwMDCghCo+52JTx6IlJfDfz04FoerQnf/YDMGlDmsgwhIRAwMDA5T+j00dAwM1AhHFWQwMDOh8XOJ+dioMWlIC/7G6AOZ8XHwUFxDlTjyAYgMYkeMWBrA5+dytNxhi1559YAQATohAmnxslqcAAAAASUVORK5CYII=); }
+#bar button[data-ico="rooms"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAWElEQVR4nGNgoBAwMjAwMMQ4qPwnR/OSA3cYWWCcpq4GnArryhow5OvKIHwmcmxGBsPAAHggwgIFFlgwPtEGoIcyMh+fYfQJA3xphD4uoGkYUJyZKHUAAwDobRohsfwzoQAAAABJRU5ErkJggg==); }
+#bar button[data-ico="bestiary"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAXElEQVR4nGNgoBXQkhL4ryUl8B8XHwYYcWnGZ/i1Zx/g+pgocSWKC5BtvfbsAyOMD7MNm6uuPfvAyEKMM/EZRD0voANcTkYXw+oCXLGATZxiLwxXA7CFNj7xgQUAoDgoEbE6smcAAAAASUVORK5CYII=); }
+#bar button[data-ico="wardrobe"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAeElEQVR4nGNkwAO0pAT+w9jXnn1gxKcWq2ZkAwYOUOQKmGayDEHXRLQh+AIPmxwjsiQpLoRFKyNMcxsXF9Gaq759gxvCSKpmdEOYyNHMwMDAANPHiOx3YgyD2czAAPECCywwSAlE5HzBRKwmXIBiA1CyKDHeQM/WAL1xNNZO4u9RAAAAAElFTkSuQmCC); }
 #bar button[data-ico="save"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAdElEQVR4nGNgGAWMyBwtKYH/MPa1Zx8YMZXjMUBLSuD/vDYFuERS1QOiDWHQkhL4f2KBwX8tKQE4hvEJugBmM7qNyOL4AAshG5C9hQ0wETKAKIAvDNAxTBxGszAwQKIsqeoBwVggGKjINhHjUrK9S5ZGmgEAk0pUo+c5zDIAAAAASUVORK5CYII=); }
-#bar button[data-ico="debug"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAg0lEQVR4nGNkIBJoSQn8Rxe79uwDIyOxmrvmrcMQL0sKYmAh1gXImpBdwESqAeiAZBcge6UsKeg/xS4gGIjIAYjsfwYGSBgQ1Lxlx77/W3bs+48tGgeHZkZkTTA2sp8J+ZMRphk9pRGjmYGBgQFrNBKrGacBpADqJSTkQCTW+QwMDAwAmetIAbjXzEQAAAAASUVORK5CYII=); }
+#bar button[data-ico="debug"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA0UlEQVR4nGNkIBJoSQn8Rxe79uwDIyMuSWRFWlIC/7vmrcOQK0sKYmCBcfySSjAUbJrXg1UTsuFMhB2PH1DHC9eefWCECWpJCfz3s1NhYGBgYNh06A5xLkAH6IbAbEf2P7rFWA2piDD5v2XHvv9bduz7j8ubeAPRJqGLgYGBgeHIgjKcarAagBxoMGf72algDWyUwIOxkTXDYgE5TJD9Do9G9GiCaUa2AJshWL2ArpmBARLisGhF9g5JKRGbISwE9GA1hOHQnf8wNtZAxJtA0AAAcgh6us3N7FcAAAAASUVORK5CYII=); }
 
 /* the Chronicle's wax seal on the ledger's tabs (v2.156.0) */
 #ledger .ltabs button.seal { width: 24px; height: 24px; padding: 0; border-radius: 50%; background: radial-gradient(circle at 40% 38%, #c84a34 0 30%, #9a2818 31% 62%, #6a1810 63%); border: 2px solid #4a1008; margin-left: 6px; vertical-align: middle; }
@@ -487,7 +491,7 @@ button { cursor: pointer; }
 </style>
 </head>
 <body class="sounds">
-<h1>Sounds <small>v2.156.0</small></h1>
+<h1>Sounds <small>v2.156.1</small></h1>
 <div class="lead">Fifty slots, the most needed first. Drop sound files onto a slot (several files make variations; the game picks one at random each time). They are kept in this browser and the game, opened from the same address, plays them straight away. A slot with nothing in it is silent. Tap anywhere on the game once so the browser lets it make sound.</div>
 <div class="bar"><span class="count" id="count"></span><button id="stop">Stop all</button><a href="index.html" style="color:#e8a020">back to the game</a></div>
 <div id="list"></div>
