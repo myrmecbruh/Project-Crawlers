@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Sounds v2.155.0</title>
+<title>Crawlers Sounds v2.156.0</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -423,6 +423,45 @@ button:active, button.on { background: var(--ink-soft); color: var(--parch); box
 /* v2.155.0: every tag is its own darker chip, and they sit in one place: the row under the name (a permanent rule) */
 #panel .tags { display: flex; flex-wrap: wrap; gap: 3px; margin: 2px 0 6px; min-height: 18px; }
 #panel .tg { background: rgba(58, 38, 22, 0.16); color: var(--ink); padding: 0 5px; border-radius: 2px; font-size: 15px; line-height: 18px; white-space: nowrap; }
+
+/* v2.156.0: the bar's buttons are pictures with no frame (the user: "if we have great icons we won't need the button look");
+   each picture is 16 x 16, drawn at 2x on a big screen and 1x on a phone. In the open menu a picture has its word beside it. */
+#bar button { background: transparent !important; border: none !important; box-shadow: none !important; position: relative; }
+#bar button:hover { filter: brightness(1.18) drop-shadow(0 0 2px rgba(255, 220, 150, .5)); }
+#bar button.on::before { content: ''; position: absolute; left: 20%; right: 20%; bottom: 0; height: 3px; background: var(--red); }
+#bar button[data-ico] { font-size: 0 !important; width: 36px; height: 36px; min-width: 0; }
+#bar button[data-ico] .tx, #bar button[data-ico] .mk { display: none !important; }
+#bar button[data-ico]::after { content: ''; position: absolute; left: 50%; top: 50%; width: 32px; height: 32px; transform: translate(-50%, -50%); background: no-repeat center / 32px 32px; image-rendering: pixelated; border: none !important; }
+#bar button.dn::after, #bar button.up::after { border: none !important; }
+body.menu #bar button.more[data-ico] { font-size: 14px !important; width: auto; height: 36px; padding: 0 8px 0 38px !important; }
+body.menu #bar button.more[data-ico] .tx { display: inline !important; }
+body.menu #bar button.more[data-ico]::after { left: 3px; transform: translateY(-50%); }
+@media (max-width: 600px), (max-height: 500px) {
+  #bar button[data-ico] { width: 24px; height: 26px; }
+  #bar button[data-ico]::after { width: 16px; height: 16px; background-size: 16px 16px; }
+  body.menu #bar button.more[data-ico] { padding-left: 24px !important; height: 26px; }
+}
+#bar button[data-ico="pause"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA1ElEQVR4nGNkgAItKYH/DCSAa88+MDIwMDCwwDQbqYmQop+BgYHh/7VnHxiZYDwZCQEGGQkBgrrQ1bGgK5i2bBleA9qKslD4TOgKLEzccGrGJofhApjCeW0KcL6W2yycBmO4gIEBEsJJVQ9QDISFOlEuQDLkP4yNSx1WFzAwQKL2xJldDCfO7MKbRrAaANMMA/gMwekCYgHWMDhxZhfDtV1pGGLYYgLDBdg0MzAwMFzblcaA7C2cLsiKisLt3gVRGMkdbsCTFx9wa0QC6Org8UtudgYAoDJNA89GAyMAAAAASUVORK5CYII=); }
+#bar button[data-ico="turn_l"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAArklEQVR4nGNgoDXQkhL4j0+ehZAmtRAlBoY19+D8a88+MCKrReHANKuFKOG08daaeyiGMJGiGeYiZBfCTULXfGvNPaya0V2CNQzQnQkHa+5huJAJQxGJgIWBgTi/MzBAYwAaIzAXMsE42PyM0xAkQLIXYK6FxQTWQERPPBhySADFOcSExaoUDYawOTewRyMskHAZcmvNPYYwNDEMLyCHNMzJsAAmZAFWgC03IosBAOPRYX05vo9jAAAAAElFTkSuQmCC); }
+#bar button[data-ico="turn_r"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAr0lEQVR4nLWSsQ2EMAxFfyIGoKZMEZ2YJ2ICxmIClHnQiSIlNRtwTQDZcUgozl0if/v72cA/o+/ao5TTPImsM4AP13vZdsXzyUfftYd1Jttt9SEpomvFpyM+lpLEqw+iWHKSMJBsAgB8EB3q5OdlNECkG2mL3Vmc21m2XREHNWKAjqmBG2LN4YgjcGtZ26UC8/jBUOjIt0QYDNNXvIGcOHFwJcQxrDOk4CNkCWAN1B9js2HwWNI8lQAAAABJRU5ErkJggg==); }
+#bar button[data-ico="angle"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA1klEQVR4nNWTIRKDMBREHwwHQKA4AAKJ6AE6lQgOwiArmU6P0OlBEAgEg0JVIBEcAIXgBqlKh6RNQ2VXZfKz+5PdH9ggDn0Rh77gBziSCFBXdwDSLAdgnFfHKhCHvpBEHWmWW0XcssiMxSQKsD3JA3h0LQCH4wmA8nz5xnkXkHh0LXXT7yYDuNdbZSwO02L1QEmhLDLqpmeYFkBNYevFdl9Rl4f0rnpS25gVDz5dNw59oSeVRIFcCk8nmCCT0k129wqY8AcC47w6+qwM0/KaEetvkzDNwROt+lgRUh0M9AAAAABJRU5ErkJggg==); }
+#bar button[data-ico="down"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAkUlEQVR4nGNgQAMxDir/8fHRAQs2QUKa8AJSXcBEtk1QQLIXNqhI/Q+484wRrwFLDtyBKxh8XiDKALp6gRFdAJuNIU++YdUccOcZI1FeCLjzjHGDihSKwbCoZNGSEsCwEV1MS0rgf9W3bwxtXFwMDAwMDFXfvsHVYHWBkZoIVidXfcP0ClYDzt16Q9AwGKA4FgAXJjj+mm8n+gAAAABJRU5ErkJggg==); }
+#bar button[data-ico="up"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAdklEQVR4nGPUkhL4z4AEjNREGM7deoOTjw5YsAkaqYng1ECUAeguwAeYiLaKgYGhjYuLoY2LC0WMEV1RjIPKf3SxJQfuMG5QkUIRD7jzDEMvVgPQ+egGkeQFbABrIGLzBkkGLDlwB+4/QoaNeoEKXiComeZeAADgjCpCm41KyAAAAABJRU5ErkJggg==); }
+#bar button[data-ico="zoom_out"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAl0lEQVR4nGNgoBAwogtoSQn8Rxe79uwDhjqsBsA0b9kwBS7mE5CD1xC4oJaUwH9kjejAJyAHqyFMuJyNDWBTxwRj4LMdnzwLugDMz8RoxmoAIZegA7gXsNlMyGVwA/DFMwMDA0NdWQMDLnVEpQMjNREGBgYGhiUH7uA3ANkQZHDt2QfGGAeV/7gMIRrEOKj8hxk0DAyBAQAvpD/8H5YKSAAAAABJRU5ErkJggg==); }
+#bar button[data-ico="zoom_in"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAnUlEQVR4nGNgoBAwogtoSQn8Rxe79uwDhjqsBsA0b9kwBS7mE5CD1xC4oJaUwH9kjejAJyAHqyFMuJwNsxmbCzEMQHc2NoBLngWfzTA2PsMxDIAp9gnIIegqBgYkL2DzMy6XYRiALXSRba8ra2DApY6odGCkJsLAwMDAsOTAHfwGIBuCDK49+8AY46DyH5chRIMYB5X/MIOGgSEwAACLDUcEKSYR/AAAAABJRU5ErkJggg==); }
+#bar button[data-ico="orders"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAgElEQVR4nGNkgAItKYH/DCSAa88+MDIwMDAwwjTX5QWQop+hadIGhmvPPjAykaQLC2CEMWBeOHFmF14NFiZuDAwMaF5ANkQtRImBgYGBYVHFDIZti6ZhNSSiYgFcHws+27zisnC6AKcBiypm4DMTA4x6gQpeoE5CGlx5gVgA8wIA1A9B0l9A2fMAAAAASUVORK5CYII=); }
+#bar button[data-ico="move"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAbElEQVR4nGNgGAUDAzaoSP2HsRlJ1YAMAu48w9T/rELu/7MKOawasBnIRIwL8NmMYgAhm7EBFnQBkSgbiGEMR/5LdTwiGEZkeQGrAc8q5P7DbIe5hBgvMTIwMDDEOKgQVLjkwB2s3qHYCxQDAMzgIJFQgYDrAAAAAElFTkSuQmCC); }
+#bar button[data-ico="company"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAArklEQVR4nGPUkhL438bFxUAOqPr2jYEJnwKJGjEGiRoxvIbgNYAYwIJP8kXLK4IGMDIwMDBoSQn8J8f2a88+MDLCOMiGXHv2gRGbBmxqWGASfnYqCJWH7qC46NqzD4zY1Fx79oERZxgYqYkgc3F6keJYwHQaFDx58QHOPnfrDQM2NZsO3cHuAmTNDAwY3kEBFHuB8jBgYMBMSNicfO7WGwwxlISEDLClTFyJi2IAAEgMPJx0ZkX3AAAAAElFTkSuQmCC); }
+#bar button[data-ico="rooms"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAXUlEQVR4nGNgoBAwMjAwMGhJCfwnR/O1Zx8YWWCcE2d24VRoYeKGIW9h4sbAwMDAwESOzchgGBgAD0RYoMACC8Yn2gD0UEbm4zOMPmGAL43QxwU0DQOKMxOlDmAAABr+GiHAwPULAAAAAElFTkSuQmCC); }
+#bar button[data-ico="bestiary"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAaElEQVR4nGNgIAJsUJH6j43NwMDAwESMAVQBuFxBPxfgcgXFLmBEF9CSEviPLnbt2Qe4ug0qUv8D7jxjhLFZ8GlEl0M2CMMFyAagK8RnAAu6ACHDcLoAm2ZiDKE4FgahAej+JRSIFAMAnYgwQupcyBgAAAAASUVORK5CYII=); }
+#bar button[data-ico="wardrobe"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAPElEQVR4nGNgoDXQkhL4j0+eiRjNhAzBqZksjVQHFLmC4jAgyyX4Ao9gwBJrC1Z1pPoTpp6RHM2jABUAAKTRGS3iTjnLAAAAAElFTkSuQmCC); }
+#bar button[data-ico="save"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAdElEQVR4nGNgGAWMyBwtKYH/MPa1Zx8YMZXjMUBLSuD/vDYFuERS1QOiDWHQkhL4f2KBwX8tKQE4hvEJugBmM7qNyOL4AAshG5C9hQ0wETKAKIAvDNAxTBxGszAwQKIsqeoBwVggGKjINhHjUrK9S5ZGmgEAk0pUo+c5zDIAAAAASUVORK5CYII=); }
+#bar button[data-ico="debug"]::after { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAg0lEQVR4nGNkIBJoSQn8Rxe79uwDIyOxmrvmrcMQL0sKYmAh1gXImpBdwESqAeiAZBcge6UsKeg/xS4gGIjIAYjsfwYGSBgQ1Lxlx77/W3bs+48tGgeHZkZkTTA2sp8J+ZMRphk9pRGjmYGBgQFrNBKrGacBpADqJSTkQCTW+QwMDAwAmetIAbjXzEQAAAAASUVORK5CYII=); }
+
+/* the Chronicle's wax seal on the ledger's tabs (v2.156.0) */
+#ledger .ltabs button.seal { width: 24px; height: 24px; padding: 0; border-radius: 50%; background: radial-gradient(circle at 40% 38%, #c84a34 0 30%, #9a2818 31% 62%, #6a1810 63%); border: 2px solid #4a1008; margin-left: 6px; vertical-align: middle; }
+#ledger .ltabs button.seal.on { box-shadow: 0 0 0 2px var(--ink); }
+#ledger .ev.chron i { opacity: .7; margin-right: 4px; }
 </style>
 <style>
 html, body { margin: 0; background: #120d08; color: #e8dcc0; overflow: auto; height: auto; }
@@ -448,7 +487,7 @@ button { cursor: pointer; }
 </style>
 </head>
 <body class="sounds">
-<h1>Sounds <small>v2.155.0</small></h1>
+<h1>Sounds <small>v2.156.0</small></h1>
 <div class="lead">Fifty slots, the most needed first. Drop sound files onto a slot (several files make variations; the game picks one at random each time). They are kept in this browser and the game, opened from the same address, plays them straight away. A slot with nothing in it is silent. Tap anywhere on the game once so the browser lets it make sound.</div>
 <div class="bar"><span class="count" id="count"></span><button id="stop">Stop all</button><a href="index.html" style="color:#e8a020">back to the game</a></div>
 <div id="list"></div>
