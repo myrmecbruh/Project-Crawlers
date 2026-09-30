@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Sounds v2.156.5</title>
+<title>Crawlers Sounds v2.156.6</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -493,6 +493,15 @@ body.menu #bar button.more[data-ico]::after { left: 3px; transform: translateY(-
   #bar .floors { gap: calc(var(--ic) / 8); padding: 0 1px; }
   #bar button, #bar button[data-ico], #bar button.mapico { width: var(--ic) !important; }
 }
+
+/* v2.156.6: the floor patch reaches one picture-pixel past the pictures' edges, and is a little darker (the user) */
+#bar .floors { background: rgba(40, 24, 12, 0.34) !important; padding: 2px !important; border-radius: 2px; }
+#bar .floors button[data-ico] { height: 32px !important; }
+#bar .floors .story { height: 32px; }
+@media (max-width: 600px) {
+  #bar .floors { padding: calc(var(--ic) / 16) !important; }
+  #bar .floors button[data-ico], #bar .floors .story { height: var(--ic) !important; }
+}
 </style>
 <style>
 html, body { margin: 0; background: #120d08; color: #e8dcc0; overflow: auto; height: auto; }
@@ -518,7 +527,7 @@ button { cursor: pointer; }
 </style>
 </head>
 <body class="sounds">
-<h1>Sounds <small>v2.156.5</small></h1>
+<h1>Sounds <small>v2.156.6</small></h1>
 <div class="lead">Fifty slots, the most needed first. Drop sound files onto a slot (several files make variations; the game picks one at random each time). They are kept in this browser and the game, opened from the same address, plays them straight away. A slot with nothing in it is silent. Tap anywhere on the game once so the browser lets it make sound.</div>
 <div class="bar"><span class="count" id="count"></span><button id="stop">Stop all</button><a href="index.html" style="color:#e8a020">back to the game</a></div>
 <div id="list"></div>
