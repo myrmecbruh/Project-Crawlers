@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Sounds v2.154.0</title>
+<title>Crawlers Sounds v2.155.0</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -419,6 +419,10 @@ button:active, button.on { background: var(--ink-soft); color: var(--parch); box
   #ledger:not(.open) .lbody { height: calc(3em + 9px); max-height: none !important; overflow: hidden; }
   #ledger.open .lbody { height: 45vh; }
 }
+
+/* v2.155.0: every tag is its own darker chip, and they sit in one place: the row under the name (a permanent rule) */
+#panel .tags { display: flex; flex-wrap: wrap; gap: 3px; margin: 2px 0 6px; min-height: 18px; }
+#panel .tg { background: rgba(58, 38, 22, 0.16); color: var(--ink); padding: 0 5px; border-radius: 2px; font-size: 15px; line-height: 18px; white-space: nowrap; }
 </style>
 <style>
 html, body { margin: 0; background: #120d08; color: #e8dcc0; overflow: auto; height: auto; }
@@ -444,7 +448,7 @@ button { cursor: pointer; }
 </style>
 </head>
 <body class="sounds">
-<h1>Sounds <small>v2.154.0</small></h1>
+<h1>Sounds <small>v2.155.0</small></h1>
 <div class="lead">Fifty slots, the most needed first. Drop sound files onto a slot (several files make variations; the game picks one at random each time). They are kept in this browser and the game, opened from the same address, plays them straight away. A slot with nothing in it is silent. Tap anywhere on the game once so the browser lets it make sound.</div>
 <div class="bar"><span class="count" id="count"></span><button id="stop">Stop all</button><a href="index.html" style="color:#e8a020">back to the game</a></div>
 <div id="list"></div>
