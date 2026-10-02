@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Props v2.170.0</title>
+<title>Crawlers Props v2.170.1</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -527,7 +527,8 @@ body.menu #bar button.more[data-ico]::after { left: 3px; transform: translateY(-
 /* v2.158.3: the frame rate, always, just right of the top bar on a PC (the user); not on a phone */
 body > .fps { position: fixed; z-index: 5; transform: translateY(-50%); font-weight: 700; color: var(--red); font-size: 14px; pointer-events: auto; white-space: nowrap;
   text-shadow: 0 0 2px #000, 0 0 2px #000; }
-@media (max-width: 600px), (max-height: 500px) { body > .fps { display: none; } }
+/* on a phone, just under the top bar (v2.170.1, the user) */
+@media (max-width: 600px), (max-height: 500px) { body > .fps { transform: none; font-size: 12px; } }
 
 /* v2.160.0: the mixer, in the game's own tab */
 #mixer { position: fixed; right: 8px; top: 60px; width: min(460px, calc(100vw - 16px)); max-height: calc(100vh - 80px); overflow-y: auto; padding: 8px 10px; z-index: 7; display: none; font-size: 14px; }
@@ -591,7 +592,7 @@ body.propspage { display: flex; flex-direction: row; font-size: 14px; }
 </head>
 <body class="propspage">
 <aside id="side" class="parch">
-  <h1>Props <small>v2.170.0</small></h1>
+  <h1>Props <small>v2.170.1</small></h1>
   <div class="row"><a href="index.html" style="color:#e8c880">the game</a> · <a href="wardrobe.html" style="color:#e8c880">the wardrobe</a> · <a href="bestiary.html" style="color:#e8c880">the bestiary</a></div>
   <div class="row">Every room is furnished from the props of its tags. Click a prop to see it; untick it and the labyrinth stops using it (new pieces of the labyrinth, in this browser). <b>L</b> large, <b>S</b> small.</div>
   <div class="row"><button id="allon">Everything on</button><span id="count"></span></div>
