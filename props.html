@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Props v2.172.7</title>
+<title>Crawlers Props v2.172.8</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -37,15 +37,13 @@ button { font: inherit; color: var(--ink); background: var(--parch-dark); border
 button:hover { background: #cdb57f; }
 button:active, button.on { background: var(--ink-soft); color: var(--parch); box-shadow: inset 2px 2px 0 rgba(0,0,0,.35); }
 #ledger { position: fixed; right: 8px; bottom: 8px; width: min(560px, calc(100vw - 32px)); padding: 6px 8px; font-size: 16px; z-index: 4; display: flex; flex-direction: column; }
-/* the ledger's tabs as folder tabs (v2.172.5, the user): square-shouldered tabs standing on a ruled line, the picked one
-   the colour of the page and open into it, the others darker and set back */
-#ledger .ltabs { display: flex; gap: 3px; margin-bottom: 4px; align-items: flex-end; border-bottom: var(--px) solid var(--edge); padding-left: 6px; }
-#ledger .ltabs button { position: relative; margin-bottom: calc(var(--px) * -1); padding: 1px 12px 2px; background: var(--parch-dark); color: var(--ink-soft);
-  border: var(--px) solid var(--edge); border-bottom: none; box-shadow: inset 2px 2px 0 rgba(255,255,255,.25);
-  clip-path: polygon(0 100%, 0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% 100%); }
-#ledger .ltabs button:hover { background: #cdb57f; }
-#ledger .ltabs button.on { background: var(--parch); color: var(--ink); padding-top: 3px; z-index: 1; box-shadow: none;
-  border-bottom: var(--px) solid var(--parch); }
+/* the ledger's tabs are drawn as the ledger's own paper (parchment.js, v2.172.8): the buttons are only the words on them */
+#ledger .ltabs { display: flex; gap: 6px; margin: 0 0 4px; align-items: flex-end; padding-left: 4px; }
+#ledger .ltabs button { background: none; border: none; box-shadow: none; padding: 3px 12px 2px; color: var(--ink-soft); }
+#ledger .ltabs button:hover { background: none; color: var(--ink); text-decoration: underline; }
+#ledger .ltabs button.on { background: none; color: var(--ink); box-shadow: none; font-weight: 700; }
+#ledger.open { padding-top: 0; }
+#ledger.open .ltabs { order: -1; }   /* the tabs are the top of the ledger, its grip under them */
 #ledger .lbody { max-height: 30vh; overflow-y: auto; }
 #ledger .lhint { font-size: 16px; color: var(--ink-soft); margin-top: 3px; }
 #ledger .entry.more { cursor: pointer; }
@@ -602,7 +600,7 @@ body.propspage { display: flex; flex-direction: row; font-size: 14px; }
 </head>
 <body class="propspage">
 <aside id="side" class="parch">
-  <h1>Props <small>v2.172.7</small></h1>
+  <h1>Props <small>v2.172.8</small></h1>
   <div class="row"><a href="index.html" style="color:#e8c880">the game</a> · <a href="wardrobe.html" style="color:#e8c880">the wardrobe</a> · <a href="bestiary.html" style="color:#e8c880">the bestiary</a></div>
   <div class="row">Every room is furnished from the props of its tags. Click a prop to see it; untick it and the labyrinth stops using it (new pieces of the labyrinth, in this browser). <b>L</b> large, <b>S</b> small.</div>
   <div class="row"><button id="allon">Everything on</button><span id="count"></span></div>
