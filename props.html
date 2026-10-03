@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Props v2.172.85</title>
+<title>Crawlers Props v2.172.86</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -629,6 +629,18 @@ body > #newer { position: fixed; left: 50%; top: 50%; transform: translate(-50%,
   body.sheetCr #roster { z-index: 6; }
   body.sheetCr #roster .card-c.on { transform: translateY(8px); }
 }
+
+/* v2.172.86: the wound drops sit on the portrait card; and the column of cards never runs off the screen -- with more
+   crawlers than fit, each card's picture is cut shorter (cropped, not squeezed) until the column fits (the user) */
+#roster .portw { position: relative; }
+#roster .drops, #panel .drops { position: absolute; right: 2px; bottom: 2px; display: flex; gap: 2px; pointer-events: none; }
+#roster .drops i { display: block; width: 6px; height: 6px; background: #a01810; border: 1px solid #3a0604; border-radius: 0 50% 50% 50%; transform: rotate(45deg); margin-top: 3px; }
+@media (min-width: 601px) and (min-height: 501px) {
+  #roster { max-height: calc(100vh - 68px); }
+  #roster .card-c { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  #roster .card-c .portw { flex: 0 1 80px; height: 80px; min-height: 18px; overflow: hidden; }
+  #roster .card-c canvas { flex: none; height: 80px; }
+}
 </style>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: #120d08; color: #e8dcc0; }
@@ -661,7 +673,7 @@ body.propspage { display: flex; flex-direction: row; font-size: 14px; }
 </head>
 <body class="propspage">
 <aside id="side" class="parch">
-  <h1>Props <small>v2.172.85</small></h1>
+  <h1>Props <small>v2.172.86</small></h1>
   <div class="row"><a href="index.html" style="color:#e8c880">the game</a> · <a href="wardrobe.html" style="color:#e8c880">the wardrobe</a> · <a href="bestiary.html" style="color:#e8c880">the bestiary</a></div>
   <div class="row">Every room is furnished from the props of its tags. Click a prop to see it; untick it and the labyrinth stops using it (new pieces of the labyrinth, in this browser). <b>L</b> large, <b>S</b> small.</div>
   <div class="row"><button id="allon">Everything on</button><span id="count"></span></div>
