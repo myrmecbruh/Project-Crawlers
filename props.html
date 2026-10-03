@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Props v2.172.87</title>
+<title>Crawlers Props v2.172.88</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -641,6 +641,11 @@ body > #newer { position: fixed; left: 50%; top: 50%; transform: translate(-50%,
   #roster .card-c .portw { flex: 0 1 80px; height: 80px; min-height: 18px; overflow: hidden; }
   #roster .card-c canvas { flex: none; height: 80px; }
 }
+
+/* v2.172.88: turning or giving up a placement */
+#placebar { position: fixed; left: 50%; transform: translateX(-50%); top: 60px; z-index: 20; display: none; gap: 8px; align-items: center; padding: 6px 10px; font-size: 16px; }
+#placebar button { font-size: 15px; padding: 2px 8px; }
+@media (max-width: 600px) { #placebar { top: 52px; width: calc(100vw - 24px); flex-wrap: wrap; justify-content: center; } }
 </style>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: #120d08; color: #e8dcc0; }
@@ -673,7 +678,7 @@ body.propspage { display: flex; flex-direction: row; font-size: 14px; }
 </head>
 <body class="propspage">
 <aside id="side" class="parch">
-  <h1>Props <small>v2.172.87</small></h1>
+  <h1>Props <small>v2.172.88</small></h1>
   <div class="row"><a href="index.html" style="color:#e8c880">the game</a> · <a href="wardrobe.html" style="color:#e8c880">the wardrobe</a> · <a href="bestiary.html" style="color:#e8c880">the bestiary</a></div>
   <div class="row">Every room is furnished from the props of its tags. Click a prop to see it; untick it and the labyrinth stops using it (new pieces of the labyrinth, in this browser). <b>L</b> large, <b>S</b> small.</div>
   <div class="row"><button id="allon">Everything on</button><span id="count"></span></div>
