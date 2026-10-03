@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Props v2.172.58</title>
+<title>Crawlers Props v2.172.59</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -599,6 +599,9 @@ body > #newer { position: fixed; left: 50%; top: 50%; transform: translate(-50%,
 
 /* a kind's picture in the bestiary (v2.172.53): chunky, as in the world */
 #bestiary img.bport { float: right; width: 144px; height: 144px; image-rendering: pixelated; margin: 0 0 6px 8px; }
+
+/* an order given and not yet done stays pressed in (v2.172.59) */
+#panel .ord.pending { box-shadow: inset 2px 2px 0 rgba(0,0,0,.45), inset -1px -1px 0 rgba(255,255,255,.15); transform: translate(1px, 1px); filter: brightness(.82); }
 </style>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: #120d08; color: #e8dcc0; }
@@ -631,7 +634,7 @@ body.propspage { display: flex; flex-direction: row; font-size: 14px; }
 </head>
 <body class="propspage">
 <aside id="side" class="parch">
-  <h1>Props <small>v2.172.58</small></h1>
+  <h1>Props <small>v2.172.59</small></h1>
   <div class="row"><a href="index.html" style="color:#e8c880">the game</a> · <a href="wardrobe.html" style="color:#e8c880">the wardrobe</a> · <a href="bestiary.html" style="color:#e8c880">the bestiary</a></div>
   <div class="row">Every room is furnished from the props of its tags. Click a prop to see it; untick it and the labyrinth stops using it (new pieces of the labyrinth, in this browser). <b>L</b> large, <b>S</b> small.</div>
   <div class="row"><button id="allon">Everything on</button><span id="count"></span></div>
