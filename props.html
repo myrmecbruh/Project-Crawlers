@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Props v2.172.124</title>
+<title>Crawlers Props v2.172.125</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -682,6 +682,17 @@ body.sheetCr #panel { height: calc(72vh - 90px); max-height: none; }
   #panel .ptabs button { font-size: 13px; padding: 4px 3px 1px; }
 }
 @media (max-height: 500px) and (min-width: 601px) { body.picked.sheetCr #panel { height: auto; } }
+
+/* v2.172.125: the foot of a crawler's sheet is a roll of its parchment (the user chose mockup D); tapping it unrolls the
+   sheet longer and rolls it up again. Three pictures, drawn at the game's own pixel and shown at two screen pixels each:
+   the two ends and a middle that repeats across. The phone's grip gives way to it on a crawler's sheet. */
+#panel .sroll { flex: 0 0 auto; display: flex; height: 26px; margin: 2px -12px -10px; cursor: pointer; image-rendering: pixelated; }
+#panel .sroll i { flex: 0 0 12px; background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAANCAYAAACKCx+LAAAAQ0lEQVR4nGM8scDtPwMasEjYxciY56CAIXHs3icGJnRBBgYGhkXLurBLMDAwkChx6dwZ7BJ6RiYDZ1RcVBkDI66wAgBBvhV71jKA7AAAAABJRU5ErkJggg==) no-repeat 0 0 / 12px 26px; }
+#panel .sroll i:last-child { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAANCAYAAACKCx+LAAAAQklEQVR4nGNkYGBgOLHA7T8DGmA0kRP6b6XEhy7OwLRoWReGIAMDAwMTVlG8EpfOncEuoWdkMmBG4fQ5IwMD9rACAJXqEN17psIWAAAAAElFTkSuQmCC); }
+#panel .sroll b { flex: 1 1 auto; background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAANCAYAAACgu+4kAAAAM0lEQVR4nGNgoBAwmsgJ/afIgGtH5lBkABMlmqliAMulc2coM0DPyIQiA0a9QIWUSDEAAJLuDBdKhBW3AAAAAElFTkSuQmCC) repeat-x 0 0 / 32px 26px; }
+#panel .sroll:hover { filter: brightness(1.08); }
+body.sheetCr #panel .sgrip { display: none; }
+@media (min-width: 601px) and (min-height: 501px) { body.sheetCr.sheetUp #panel { height: calc(100vh - 70px); } }
 </style>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: #120d08; color: #e8dcc0; }
@@ -714,7 +725,7 @@ body.propspage { display: flex; flex-direction: row; font-size: 14px; }
 </head>
 <body class="propspage">
 <aside id="side" class="parch">
-  <h1>Props <small>v2.172.124</small></h1>
+  <h1>Props <small>v2.172.125</small></h1>
   <div class="row"><a href="index.html" style="color:#e8c880">the game</a> · <a href="wardrobe.html" style="color:#e8c880">the wardrobe</a> · <a href="bestiary.html" style="color:#e8c880">the bestiary</a></div>
   <div class="row">Every room is furnished from the props of its tags. Click a prop to see it; untick it and the labyrinth stops using it (new pieces of the labyrinth, in this browser). <b>L</b> large, <b>S</b> small.</div>
   <div class="row"><button id="allon">Everything on</button><span id="count"></span></div>
