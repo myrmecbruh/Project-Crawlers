@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Props v2.172.160</title>
+<title>Crawlers Props v2.172.161</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -706,6 +706,42 @@ body.sheetCr #panel { height: calc(72vh - 90px); max-height: none; }
 #panel .sroll:hover { filter: brightness(1.08); }
 body.sheetCr #panel .sgrip { display: none; }
 @media (min-width: 601px) and (min-height: 501px) { body.sheetCr.sheetUp #panel { height: calc(100vh - 70px); } }
+/* the order ring (v2.172.161, the user chose "A -- Sims-style ring"): round the pointer, slices reaching out from a seal in the
+   middle; greyed ones say why, a red seal on what has been asked for and still stands */
+#ring { position: fixed; z-index: 40; width: 0; height: 0; }
+#ring .rc { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); width: 66px; height: 66px; border-radius: 50%; background: var(--parch);
+  border: calc(var(--px) * 2) solid var(--edge); box-shadow: 0 2px 8px rgba(0,0,0,.65); display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; font-size: 13px; line-height: 1.05; cursor: pointer; padding: 4px; box-sizing: border-box; overflow: hidden; }
+#ring .rc span { max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
+#ring .rc i { font-style: normal; font-size: 12px; color: var(--red); margin-top: 2px; }
+#ring .rs { position: absolute; white-space: nowrap; font-size: 16px; padding: 2px 8px; background: var(--parch); box-shadow: 0 2px 5px rgba(0,0,0,.6); display: inline-flex; align-items: center; }
+#ring .rs.r { transform: translate(0, -50%); } #ring .rs.l { transform: translate(-100%, -50%); } #ring .rs.m { transform: translate(-50%, -50%); }
+#ring .rs:hover { background: var(--gold); }
+#ring .rs.off { opacity: .45; filter: grayscale(.6); cursor: help; }
+#ring .rs.off:hover { background: var(--parch); }
+#ring .rs.grp { font-weight: 700; background: var(--parch-dark); }
+#ring .rs.grp b { margin-left: 4px; color: var(--red); }
+#ring .rs.issued { background: #ead2a2; box-shadow: inset 0 0 0 2px var(--red), 0 2px 5px rgba(0,0,0,.6); }
+#ring .rs.issued::after { content: '\2713'; position: absolute; right: -8px; top: -8px; width: 16px; height: 16px; border-radius: 50%; background: var(--red); color: var(--parch);
+  font-size: 11px; line-height: 16px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.cost { margin-left: 4px; display: inline-flex; gap: 2px; }
+.mc { display: inline-flex; align-items: center; font-size: 14px; }
+.mc img { width: 15px; height: 15px; image-rendering: pixelated; margin-right: 1px; }
+.mc.short { color: #c0281c; font-weight: 700; }
+#panel .qrow .x { padding: 0 5px; margin-left: 4px; }
+/* the line-up beside the picked face (v2.172.161) */
+#lineup { position: fixed; z-index: 5; display: flex; flex-direction: column; gap: 3px; pointer-events: none; max-width: 260px; }
+#lineup .lu { pointer-events: auto; background: var(--parch); border: var(--px) solid var(--edge); font-size: 14px; padding: 1px 6px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; box-shadow: 0 1px 3px rgba(0,0,0,.5); align-self: flex-start; max-width: 100%; }
+#lineup .lu b { color: var(--red); margin-right: 5px; }
+#lineup .lu small { color: var(--ink-soft); margin-left: 4px; }
+#lineup .lu i { font-style: normal; cursor: pointer; margin-left: 7px; color: var(--red); font-weight: 700; }
+@media (max-width: 600px), (max-height: 500px) {
+  #ring .rs { font-size: 14px; padding: 3px 6px; }
+  #ring .rc { width: 54px; height: 54px; font-size: 11px; }
+  #lineup { flex-direction: row; flex-wrap: wrap; max-width: calc(100vw - 16px); }
+  #lineup .lu { font-size: 13px; }
+}
 </style>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: #120d08; color: #e8dcc0; }
@@ -738,7 +774,7 @@ body.propspage { display: flex; flex-direction: row; font-size: 14px; }
 </head>
 <body class="propspage">
 <aside id="side" class="parch">
-  <h1>Props <small>v2.172.160</small></h1>
+  <h1>Props <small>v2.172.161</small></h1>
   <div class="row"><a href="index.html" style="color:#e8c880">the game</a> · <a href="wardrobe.html" style="color:#e8c880">the wardrobe</a> · <a href="bestiary.html" style="color:#e8c880">the bestiary</a></div>
   <div class="row">Every room is furnished from the props of its tags. Click a prop to see it; untick it and the labyrinth stops using it (new pieces of the labyrinth, in this browser). <b>L</b> large, <b>S</b> small.</div>
   <div class="row"><button id="allon">Everything on</button><span id="count"></span></div>
