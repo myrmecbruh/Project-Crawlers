@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Props v2.172.148</title>
+<title>Crawlers Props v2.172.149</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -63,7 +63,15 @@ button:active, button.on { background: var(--ink-soft); color: var(--parch); box
 #roster .card-c .nm { font-size: 16px; margin-top: 2px; }
 #roster .card-c.on { background-color: var(--gold); outline: calc(var(--px) * 2) solid var(--red); outline-offset: calc(var(--px) * 2); transform: translateX(6px); }
 #roster .card-c.on .nm { color: var(--red); font-weight: 700; }
-#debug { position: fixed; left: 90px; top: 60px; width: 270px; max-height: calc(100vh - 80px); overflow-y: auto; padding: 8px 10px; z-index: 7; display: none; font-size: 16px; }
+#debug { position: fixed; left: 116px; top: 60px; width: 490px; z-index: 7; display: none; font-size: 16px; }
+/* tabbed like the bestiary (v2.172.149): its sections down the left side, one open at a time */
+#debug[style*="block"] { display: flex !important; align-items: stretch; }
+#debug .btabs { display: flex; flex-direction: column; gap: 4px; padding-top: 70px; max-height: calc(100vh - 100px); overflow-y: auto; overflow-x: hidden; flex: 0 0 auto; max-width: 150px; }
+#debug .btabs button { background: none; border: none; box-shadow: none; text-align: left; padding: 4px 10px 4px 12px; color: var(--ink-soft); font-size: 15px; margin: 0; width: auto; white-space: normal; line-height: 1.05; }
+#debug .btabs button:hover { background: none; color: var(--ink); }
+#debug .btabs button.on { background: none; color: var(--ink); box-shadow: none; }
+#debug .bbody { flex: 1 1 auto; min-width: 0; padding-left: 10px; max-height: calc(100vh - 100px); overflow-y: auto; }
+@media (max-width: 600px), (max-height: 500px) { #debug { left: 4px; right: 4px; width: auto; } #debug .btabs button { padding: 4px 6px 4px 8px; } #debug .btabs { max-width: 110px; } }
 #debug .ph { display: flex; justify-content: space-between; font-size: 16px; }
 #debug .x { cursor: pointer; padding: 0 4px; border: var(--px) solid var(--edge); background: var(--parch-dark); }
 #debug #fps { font-weight: 700; color: var(--red); margin: 4px 0; }
@@ -572,8 +580,8 @@ body > #newer { position: fixed; left: 50%; top: 50%; transform: translate(-50%,
 
 #bestiary .khead { cursor: pointer; }   /* a kind's heading opens and folds it (v2.172.5) */
 /* the debug menu's tabs (v2.172.9) */
-#debug .dtabs { display: flex; gap: 4px; margin: 6px 0 2px; }
-#debug .dtabs button { margin: 0; width: auto; flex: 1; padding: 2px 4px; }
+#debug .dtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+#debug .dtabs button { margin: 0; width: auto; flex: 1 1 auto; padding: 2px 4px; }
 #debug .dtabs button.on { font-weight: 700; color: var(--red); }
 #debug .drow1 { margin-top: 6px; }
 #debug pre.dfreeze { white-space: pre-wrap; word-break: break-word; font-size: 13px; max-height: 50vh; overflow-y: auto; margin: 6px 0 0; }
@@ -596,6 +604,7 @@ body > #newer { position: fixed; left: 50%; top: 50%; transform: translate(-50%,
 #bestiary .bbody { flex: 1 1 auto; min-width: 0; padding-left: 10px; max-height: 70vh; overflow-y: auto; }
 #bestiary .kind { border-top: none; }
 @media (max-width: 600px), (max-height: 500px) { #bestiary { left: 4px; right: 4px; width: auto; } #bestiary .btabs button { padding: 4px 6px 4px 8px; } }
+#debug { padding: 8px 10px 8px 0; }   /* its tabs start at the paper's left edge, as the bestiary's do (v2.172.149) */
 
 /* a kind's picture in the bestiary (v2.172.53): chunky, as in the world */
 #bestiary img.bport { float: right; width: 144px; height: 144px; image-rendering: pixelated; margin: 0 0 6px 8px; }
@@ -725,7 +734,7 @@ body.propspage { display: flex; flex-direction: row; font-size: 14px; }
 </head>
 <body class="propspage">
 <aside id="side" class="parch">
-  <h1>Props <small>v2.172.148</small></h1>
+  <h1>Props <small>v2.172.149</small></h1>
   <div class="row"><a href="index.html" style="color:#e8c880">the game</a> · <a href="wardrobe.html" style="color:#e8c880">the wardrobe</a> · <a href="bestiary.html" style="color:#e8c880">the bestiary</a></div>
   <div class="row">Every room is furnished from the props of its tags. Click a prop to see it; untick it and the labyrinth stops using it (new pieces of the labyrinth, in this browser). <b>L</b> large, <b>S</b> small.</div>
   <div class="row"><button id="allon">Everything on</button><span id="count"></span></div>
