@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crawlers Props v2.172.202</title>
+<title>Crawlers Props v2.172.203</title>
 <style>/* Retro pixel parchment. */
 :root {
   --parch: #d8c393; --parch-dark: #b89f6c; --ink: #2b1d10; --ink-soft: #5a4128;
@@ -144,6 +144,8 @@ button:active, button.on { background: var(--ink-soft); color: var(--parch); box
 #map .x { cursor: pointer; padding: 0 4px; border: var(--px) solid var(--edge); background: var(--parch-dark); }
 #map canvas { display: block; width: 280px; height: 220px; image-rendering: pixelated; border: var(--px) solid var(--edge); }
 #map .mn { color: var(--ink-soft); margin-top: 4px; max-width: 280px; }
+#map .rz { position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, var(--edge) 50%, var(--edge) 60%, transparent 60%, transparent 72%, var(--edge) 72%, var(--edge) 82%, transparent 82%); }
+#map .ph .x + .x { margin-left: 2px; }
 #rooms .room.gone { opacity: .55; text-decoration: line-through; }
 #rooms .room .feel { color: var(--red); font-size: 16px; }
 .card .credit { font-size: 16px; color: var(--ink-soft); }
@@ -792,7 +794,7 @@ body.propspage { display: flex; flex-direction: row; font-size: 14px; }
 </head>
 <body class="propspage">
 <aside id="side" class="parch">
-  <h1>Props <small>v2.172.202</small></h1>
+  <h1>Props <small>v2.172.203</small></h1>
   <div class="row"><a href="index.html" style="color:#e8c880">the game</a> · <a href="wardrobe.html" style="color:#e8c880">the wardrobe</a> · <a href="bestiary.html" style="color:#e8c880">the bestiary</a></div>
   <div class="row">Every room is furnished from the props of its tags. Click a prop to see it; untick it and the labyrinth stops using it (new pieces of the labyrinth, in this browser). <b>L</b> large, <b>S</b> small.</div>
   <div class="row"><button id="allon">Everything on</button><span id="count"></span></div>
