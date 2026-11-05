@@ -30,6 +30,6 @@ if [ ${#missing[@]} -gt 0 ]; then
   say "NOT READY -- missing: ${missing[*]}"
   say "tests may not run. Build still works."
 else
-  say "ready. The game is Crawlers v2, in /home/user/crawlers_v2 (python3 build.py; python3 publish.py). This folder is the first game, for reference."
+  say "ready. The games are Crawlers v2 (/home/user/crawlers_v2) and Crawlers v3 (/home/user/crawlers-v3); each: python3 build.py; python3 publish.py. This folder is the first game, for reference."
 fi
 exit 0
